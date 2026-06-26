@@ -1,0 +1,6 @@
+{
+  "name": "Music Madras",
+  "description": "Enterprise-class portal for Music Madras, capturing live Western & Indian classical concerts, church services, and sacred recitals with studio-grade sound and high-fidelity 4K video.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
