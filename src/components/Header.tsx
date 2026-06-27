@@ -26,7 +26,7 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
 
   return (
     <header className="sticky top-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80 py-3 px-4 md:px-8 shadow-md">
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         
         {/* Logo and Channel Title */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('home')}>
