@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, Music, Radio, Sliders, Calendar, Award, Home } from 'lucide-react';
 import { CHANNEL_INFO } from '../data';
 
@@ -10,6 +10,32 @@ interface HeaderProps {
 
 export default function Header({ activeTab, setActiveTab, onOpenBooking }: HeaderProps) {
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [showButtons, setShowButtons] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      if (window.innerWidth < 768) {
+        if (currentScrollY > lastScrollY && currentScrollY > 40) {
+          // Scrolling down - hide buttons
+          setShowButtons(false);
+        } else {
+          // Scrolling up - show buttons
+          setShowButtons(true);
+        }
+      } else {
+        // Desktop always shown
+        setShowButtons(true);
+      }
+      
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
 
   const handleSubscribe = () => {
     setIsSubscribed(!isSubscribed);
@@ -26,7 +52,7 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
 
   return (
     <header className="sticky top-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80 py-3 px-4 md:px-8 shadow-md">
-      <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="w-full max-w-7xl mx-auto flex flex-col items-start md:flex-row md:items-center justify-between gap-4">
         
         {/* Logo and Channel Title */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('home')}>
@@ -40,7 +66,7 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
             />
           </div>
           
-          <div>
+          <div className="text-left">
             <h1 className="font-serif text-lg md:text-xl font-bold text-zinc-100 tracking-tight leading-none flex items-center gap-1.5">
               Music Madras
               <span className="inline-block w-2 h-2 rounded-full bg-[#0D9488] animate-pulse" title="Recording Sound Live"></span>
@@ -52,7 +78,7 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
         </div>
 
         {/* Desktop Navigation */}
-        <nav className="flex flex-wrap items-center justify-center gap-1 bg-zinc-900/80 p-1 rounded-full border border-zinc-800">
+        <nav className="flex flex-wrap items-center justify-center gap-1 bg-zinc-900/80 p-1 rounded-2xl md:rounded-full border border-zinc-800 w-full md:w-auto">
           <button
             onClick={() => setActiveTab('home')}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
@@ -115,7 +141,11 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
         </nav>
 
         {/* Subscription and Booking CTA */}
-        <div className="flex items-center gap-2.5">
+        <div className={`flex items-center gap-2.5 transition-all duration-300 origin-top overflow-hidden md:!opacity-100 md:!max-h-[50px] md:!scale-100 md:!mt-0 ${
+          showButtons 
+            ? 'opacity-100 max-h-[50px] scale-100 mt-0' 
+            : 'opacity-0 max-h-0 scale-95 -mt-4 pointer-events-none'
+        }`}>
           <a
             href={CHANNEL_INFO.url}
             target="_blank"
