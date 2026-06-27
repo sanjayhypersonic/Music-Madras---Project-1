@@ -963,7 +963,7 @@ export default function BookingForm({ isOpen, onClose, defaultMode = 'booking' }
                               <input
                                 type="text"
                                 required
-                                placeholder="e.g. Kalyan Subrahmanyam"
+                                placeholder="e.g. Ramesh Sundar"
                                 value={inquireName}
                                 onChange={(e) => setInquireName(e.target.value)}
                                 className="w-full pl-9 pr-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-medium text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"

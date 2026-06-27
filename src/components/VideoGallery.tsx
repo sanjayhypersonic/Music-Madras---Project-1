@@ -1,20 +1,46 @@
-import { useState, useEffect, MouseEvent } from 'react';
-import { Search, Heart, Sparkles, Sliders, Youtube, Volume2, Maximize2, X, AlertCircle, Link, Check } from 'lucide-react';
+import { useState, useEffect, useRef, MouseEvent } from 'react';
+import { Search, Heart, Sparkles, Sliders, Youtube, Volume2, Maximize2, X, AlertCircle, Link, Check, ExternalLink } from 'lucide-react';
 import { Video } from '../types';
 import { VIDEOS_DATA, CHANNEL_INFO } from '../data';
+
+const categoryDisplayNames: Record<string, string> = {
+  all: 'All Highlights',
+  Concert: 'Concerts',
+  Organ: 'Pipe Organ',
+  Choral: 'Choirs and Ensembles',
+  Vocal: 'Solo Vocals',
+  Instrumental: 'Orchestra & Classical Instruments',
+};
 
 interface VideoGalleryProps {
   selectedCategory: string;
   setSelectedCategory: (cat: string) => void;
   likedVideos: string[];
   toggleLikeVideo: (id: string) => void;
+  activeVideoId: string | null;
+  setActiveVideoId: (id: string | null) => void;
 }
 
-export default function VideoGallery({ selectedCategory, setSelectedCategory, likedVideos, toggleLikeVideo }: VideoGalleryProps) {
+export default function VideoGallery({ 
+  selectedCategory, 
+  setSelectedCategory, 
+  likedVideos, 
+  toggleLikeVideo,
+  activeVideoId,
+  setActiveVideoId
+}: VideoGalleryProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeVideo, setActiveVideo] = useState<Video | null>(null);
   const [videos, setVideos] = useState<Video[]>(VIDEOS_DATA);
   const [copiedVideoId, setCopiedVideoId] = useState<string | null>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
+
+  const activeVideo = videos.find(v => v.id === activeVideoId) || null;
+
+  useEffect(() => {
+    if (activeVideo && playerRef.current) {
+      playerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [activeVideo]);
 
   // Sync state for actual likes count in session memory
   useEffect(() => {
@@ -40,7 +66,7 @@ export default function VideoGallery({ selectedCategory, setSelectedCategory, li
 
   // Handle active video auto-selection if none is active
   const handlePlayVideo = (video: Video) => {
-    setActiveVideo(video);
+    setActiveVideoId(video.id);
   };
 
   // Filter videos based on category tab and search query
@@ -84,17 +110,17 @@ export default function VideoGallery({ selectedCategory, setSelectedCategory, li
       {/* Category Tabs & Sub-Filters */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-1.5 bg-zinc-900/60 p-1 rounded-2xl border border-zinc-800">
-          {['all', 'Organ', 'Choral', 'Vocal', 'Instrumental', 'Concert'].map((cat) => (
+          {['Concert', 'Organ', 'Choral', 'Vocal', 'Instrumental', 'all'].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all ${
+              className={`text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
                 selectedCategory === cat
                   ? 'bg-amber-500 text-zinc-950 shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-100'
               }`}
             >
-              {cat === 'all' ? 'All Highlights' : cat}
+              {categoryDisplayNames[cat] || cat}
             </button>
           ))}
         </div>
@@ -108,7 +134,7 @@ export default function VideoGallery({ selectedCategory, setSelectedCategory, li
 
       {/* Theatre View (Active Player Mode) */}
       {activeVideo && (
-        <div className="bg-zinc-900 text-zinc-100 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 p-4 md:p-6 space-y-4 md:space-y-6">
+        <div ref={playerRef} className="bg-zinc-900 text-zinc-100 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 p-4 md:p-6 space-y-4 md:space-y-6">
           <div className="flex justify-between items-center border-b border-zinc-800/60 pb-3">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 bg-amber-500 text-zinc-950 text-[10px] font-extrabold uppercase rounded-md tracking-wider">
@@ -119,7 +145,7 @@ export default function VideoGallery({ selectedCategory, setSelectedCategory, li
               </p>
             </div>
             <button
-              onClick={() => setActiveVideo(null)}
+              onClick={() => setActiveVideoId(null)}
               className="text-zinc-400 hover:text-zinc-100 p-1 rounded-full bg-zinc-800 hover:bg-zinc-750 transition-all"
               title="Close Player"
             >
@@ -208,12 +234,12 @@ export default function VideoGallery({ selectedCategory, setSelectedCategory, li
                 </div>
 
                 <a
-                  href={`${CHANNEL_INFO.url}/search?query=${encodeURIComponent(activeVideo.artist)}`}
+                  href={`https://www.youtube.com/watch?v=${activeVideo.youtubeId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-[#FF0000] hover:text-white transition-all bg-[#FF0000]/10 hover:bg-[#FF0000] px-3.5 py-2 rounded-xl font-bold"
+                  className="flex items-center gap-1.5 text-xs text-[#FF0000] hover:text-white transition-all bg-[#FF0000]/10 hover:bg-[#FF0000] px-3.5 py-2 rounded-xl font-bold cursor-pointer"
                 >
-                  <Youtube className="w-3.5 h-3.5" fill="currentColor" />
+                  <ExternalLink className="w-3.5 h-3.5" />
                   Watch on YouTube
                 </a>
               </div>
@@ -247,7 +273,7 @@ export default function VideoGallery({ selectedCategory, setSelectedCategory, li
                     {/* Top row */}
                     <div className="flex justify-between items-center">
                       <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full tracking-wider uppercase">
-                        {video.category}
+                        {categoryDisplayNames[video.category] || video.category}
                       </span>
                       <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
                         4K HD
