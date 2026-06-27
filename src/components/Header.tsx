@@ -141,7 +141,7 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
         </nav>
 
         {/* Subscription and Booking CTA */}
-        <div className={`flex items-center gap-2.5 transition-all duration-300 origin-top overflow-hidden md:!opacity-100 md:!max-h-[50px] md:!scale-100 md:!mt-0 ${
+        <div className={`flex items-center justify-center w-full md:w-auto gap-2.5 transition-all duration-300 origin-top overflow-hidden md:!opacity-100 md:!max-h-[50px] md:!scale-100 md:!mt-0 ${
           showButtons 
             ? 'opacity-100 max-h-[50px] scale-100 mt-0' 
             : 'opacity-0 max-h-0 scale-95 -mt-4 pointer-events-none'
