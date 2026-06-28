@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Bell, Music, Radio, Sliders, Calendar, Award, Home, Sun, Moon } from 'lucide-react';
 import { CHANNEL_INFO } from '../data';
 
@@ -13,31 +13,72 @@ interface HeaderProps {
 export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, setTheme }: HeaderProps) {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [showButtons, setShowButtons] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
+
+  const lastToggleTime = useRef(0);
 
   useEffect(() => {
-    const handleScroll = () => {
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+
+    const updateScrollDir = () => {
       const currentScrollY = window.scrollY;
+      const now = Date.now();
       
       if (window.innerWidth < 768) {
-        if (currentScrollY > lastScrollY && currentScrollY > 40) {
-          // Scrolling down - hide buttons
-          setShowButtons(false);
-        } else {
-          // Scrolling up - show buttons
-          setShowButtons(true);
+        // If close to the top of the viewport, always show the CTA buttons
+        if (currentScrollY <= 20) {
+          if (!showButtons) {
+            setShowButtons(true);
+            lastToggleTime.current = now;
+          }
+          lastScrollY = currentScrollY > 0 ? currentScrollY : 0;
+          ticking = false;
+          return;
+        }
+
+        // 20px threshold to prevent accidental triggering during light scrolls
+        const threshold = 20;
+        const diff = currentScrollY - lastScrollY;
+
+        if (Math.abs(diff) >= threshold) {
+          const scrollingDown = diff > 0;
+          
+          // Only allow toggling if at least 500ms has passed since the last toggle.
+          // This avoids responding to layout-shift scroll events triggered while the 300ms CSS max-height transition runs.
+          if (now - lastToggleTime.current > 500) {
+            if (scrollingDown && showButtons) {
+              setShowButtons(false);
+              lastToggleTime.current = now;
+            } else if (!scrollingDown && !showButtons) {
+              setShowButtons(true);
+              lastToggleTime.current = now;
+            }
+          }
         }
       } else {
-        // Desktop always shown
-        setShowButtons(true);
+        // Desktop displays buttons persistently
+        if (!showButtons) {
+          setShowButtons(true);
+        }
       }
       
-      setLastScrollY(currentScrollY);
+      // Clamp to positive values to handle elastic scrolling/iOS rubber-banding nicely
+      lastScrollY = currentScrollY > 0 ? currentScrollY : 0;
+      ticking = false;
+    };
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(updateScrollDir);
+        ticking = true;
+      }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [showButtons]);
 
   const handleSubscribe = () => {
     setIsSubscribed(!isSubscribed);
