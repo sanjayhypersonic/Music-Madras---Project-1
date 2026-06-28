@@ -26,6 +26,36 @@ export default function sitemap(): SitemapItem[] {
       priority: 0.8,
     },
     {
+      url: 'https://www.musicmadras.com/?tab=Organ',
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: 'https://www.musicmadras.com/?tab=Choral',
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: 'https://www.musicmadras.com/?tab=Vocal',
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: 'https://www.musicmadras.com/?tab=Instrumental',
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: 'https://www.musicmadras.com/?tab=all',
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
       url: 'https://www.musicmadras.com/?tab=playlists',
       lastModified: currentDate,
       changeFrequency: 'weekly',

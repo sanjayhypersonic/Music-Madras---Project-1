@@ -1,6 +1,5 @@
 User-agent: *
 Allow: /
-Disallow:
 
 Sitemap: https://www.musicmadras.com/sitemap.xml
 Host: https://www.musicmadras.com

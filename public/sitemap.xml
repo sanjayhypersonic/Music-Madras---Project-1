@@ -15,6 +15,36 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://www.musicmadras.com/?tab=Organ</loc>
+    <lastmod>2026-06-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.musicmadras.com/?tab=Choral</loc>
+    <lastmod>2026-06-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.musicmadras.com/?tab=Vocal</loc>
+    <lastmod>2026-06-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.musicmadras.com/?tab=Instrumental</loc>
+    <lastmod>2026-06-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.musicmadras.com/?tab=all</loc>
+    <lastmod>2026-06-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://www.musicmadras.com/?tab=playlists</loc>
     <lastmod>2026-06-28</lastmod>
     <changefreq>weekly</changefreq>
