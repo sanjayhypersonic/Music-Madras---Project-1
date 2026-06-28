@@ -7,6 +7,8 @@ import VideoGallery from './components/VideoGallery';
 import BookingForm from './components/BookingForm';
 import TechSpecs from './components/TechSpecs';
 import PlaylistsSection from './components/PlaylistsSection';
+import SchemaMarkup from './components/SchemaMarkup';
+import useSEO from './hooks/useSEO';
 import { CHANNEL_INFO, VIDEOS_DATA } from './data';
 
 export default function App() {
@@ -31,43 +33,8 @@ export default function App() {
     return (saved as 'dark' | 'light') || 'dark';
   });
 
-  // Dynamic Canonical URLs and SEO Document Title Synchronization
-  useEffect(() => {
-    // Synchronize query parameters dynamically to enable search crawler deep-links
-    const url = new URL(window.location.href);
-    if (activeTab === 'home') {
-      url.searchParams.delete('tab');
-    } else {
-      url.searchParams.set('tab', activeTab);
-    }
-    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
-
-    // Dynamic Canonical Link update
-    let canonicalLink = document.querySelector('link[rel="canonical"]');
-    if (!canonicalLink) {
-      canonicalLink = document.createElement('link');
-      canonicalLink.setAttribute('rel', 'canonical');
-      document.head.appendChild(canonicalLink);
-    }
-    canonicalLink.setAttribute('href', activeTab === 'home' ? 'https://www.musicmadras.com/' : `https://www.musicmadras.com/?tab=${activeTab}`);
-
-    // Dynamic document title update representing current active archives
-    const sectionNames: Record<string, string> = {
-      'home': 'Home',
-      'playlists': 'Curated Classical Playlists',
-      'tech-specs': 'Studio Rig & Gear Specifications',
-      'artist-program': 'Free Recording Artist Program',
-      'Concert': 'Live Performance Showcases',
-      'Organ': 'Pipe Organ Recitals',
-      'Choral': 'Choirs & Sacred Ensembles',
-      'Vocal': 'Solo Vocal Performances',
-      'Instrumental': 'Classical Orchestras & Instruments',
-      'all': 'All Recorded Works'
-    };
-    const suffix = 'MusicMadras — Live Classical, Choral, & Organ Recording Studio Chennai';
-    const name = sectionNames[activeTab] || activeTab;
-    document.title = activeTab === 'home' ? suffix : `${name} | ${suffix}`;
-  }, [activeTab]);
+  // Dynamic Canonical URLs, SEO Document Title, and Description Synchronization
+  useSEO({ activeTab, activeVideoId });
 
   // Local storage synchronization for theme
   useEffect(() => {
@@ -141,6 +108,9 @@ export default function App() {
         ? 'bg-[#fafafa] text-zinc-900 selection:bg-amber-500/10 selection:text-amber-600' 
         : 'bg-zinc-950 text-zinc-100 selection:bg-amber-500/20 selection:text-amber-400'
     }`}>
+      
+      {/* Structured Dynamic SEO Schema Data */}
+      <SchemaMarkup activeTab={activeTab} activeVideoId={activeVideoId} />
       
       {/* Header element */}
       <Header

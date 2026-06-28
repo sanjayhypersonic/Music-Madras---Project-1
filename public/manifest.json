@@ -1,0 +1,19 @@
+{
+  "name": "Music Madras",
+  "short_name": "Music Madras",
+  "description": "Music Madras is Chennai's premier home for Western classical music, professional concert recordings, and sacred choir archives.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "portrait-primary",
+  "categories": ["music", "education", "entertainment"],
+  "icons": [
+    {
+      "src": "https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s250-c-k-c0x00ffffff-no-rj",
+      "sizes": "250x250",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
