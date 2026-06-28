@@ -10,11 +10,98 @@ import PlaylistsSection from './components/PlaylistsSection';
 import { CHANNEL_INFO, VIDEOS_DATA } from './data';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('home'); // 'home', 'playlists', 'tech-specs', 'artist-program', category tabs
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam) {
+      return tabParam;
+    }
+    const hash = window.location.hash.replace('#', '');
+    if (hash) {
+      return hash;
+    }
+    return 'home';
+  });
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [bookingFormMode, setBookingFormMode] = useState<'booking' | 'inquire'>('booking');
   const [likedVideos, setLikedVideos] = useState<string[]>([]);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('music_madras_theme');
+    return (saved as 'dark' | 'light') || 'dark';
+  });
+
+  // Dynamic Canonical URLs and SEO Document Title Synchronization
+  useEffect(() => {
+    // Synchronize query parameters dynamically to enable search crawler deep-links
+    const url = new URL(window.location.href);
+    if (activeTab === 'home') {
+      url.searchParams.delete('tab');
+    } else {
+      url.searchParams.set('tab', activeTab);
+    }
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+
+    // Dynamic Canonical Link update
+    let canonicalLink = document.querySelector('link[rel="canonical"]');
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalLink);
+    }
+    canonicalLink.setAttribute('href', activeTab === 'home' ? 'https://www.musicmadras.com/' : `https://www.musicmadras.com/?tab=${activeTab}`);
+
+    // Dynamic document title update representing current active archives
+    const sectionNames: Record<string, string> = {
+      'home': 'Home',
+      'playlists': 'Curated Classical Playlists',
+      'tech-specs': 'Studio Rig & Gear Specifications',
+      'artist-program': 'Free Recording Artist Program',
+      'Concert': 'Live Performance Showcases',
+      'Organ': 'Pipe Organ Recitals',
+      'Choral': 'Choirs & Sacred Ensembles',
+      'Vocal': 'Solo Vocal Performances',
+      'Instrumental': 'Classical Orchestras & Instruments',
+      'all': 'All Recorded Works'
+    };
+    const suffix = 'MusicMadras — Live Classical, Choral, & Organ Recording Studio Chennai';
+    const name = sectionNames[activeTab] || activeTab;
+    document.title = activeTab === 'home' ? suffix : `${name} | ${suffix}`;
+  }, [activeTab]);
+
+  // Local storage synchronization for theme
+  useEffect(() => {
+    const body = window.document.body;
+    if (theme === 'light') {
+      body.classList.add('light');
+    } else {
+      body.classList.remove('light');
+    }
+    localStorage.setItem('music_madras_theme', theme);
+  }, [theme]);
+
+  // Global keyboard shortcut (Shift+T) to toggle theme
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl) {
+        const tagName = activeEl.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || activeEl.hasAttribute('contenteditable')) {
+          return;
+        }
+      }
+
+      if (e.shiftKey && (e.key === 'T' || e.key === 't')) {
+        e.preventDefault();
+        setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Local storage synchronization for liked videos
   useEffect(() => {
@@ -49,7 +136,11 @@ export default function App() {
     activeTab === 'liked';
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between selection:bg-amber-500/20 selection:text-amber-400">
+    <div className={`min-h-screen flex flex-col justify-between transition-colors duration-300 ${
+      theme === 'light' 
+        ? 'bg-[#fafafa] text-zinc-900 selection:bg-amber-500/10 selection:text-amber-600' 
+        : 'bg-zinc-950 text-zinc-100 selection:bg-amber-500/20 selection:text-amber-400'
+    }`}>
       
       {/* Header element */}
       <Header
@@ -61,6 +152,8 @@ export default function App() {
           setBookingFormMode('booking');
           setIsBookingOpen(true);
         }}
+        theme={theme}
+        setTheme={setTheme}
       />
 
       {/* Main Body */}
@@ -259,7 +352,8 @@ export default function App() {
                           setActiveVideoId(VIDEOS_DATA[0].id);
                         }
                       }}
-                      className="text-xs font-bold text-amber-500 hover:underline flex items-center gap-1 cursor-pointer"
+                      aria-label="View all live concert highlights"
+                      className="text-xs font-bold text-amber-500 hover:underline flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1"
                     >
                       View All Highlights →
                     </button>
@@ -326,13 +420,15 @@ export default function App() {
                   <div className="flex gap-3">
                     <button 
                       onClick={() => { setBookingFormMode('inquire'); setIsBookingOpen(true); }}
-                      className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                      aria-label="Inquire about a live recording date"
+                      className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 text-xs font-bold rounded-xl transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                     >
                       Inquire About Your Date
                     </button>
                     <button 
                       onClick={() => setActiveTab('artist-program')}
-                      className="px-5 py-2.5 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                      aria-label="Learn how our free live recording program works"
+                      className="px-5 py-2.5 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold rounded-xl transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-450"
                     >
                       How It Works
                     </button>
@@ -457,7 +553,8 @@ export default function App() {
                           setBookingFormMode('inquire');
                           setIsBookingOpen(true);
                         }}
-                        className="w-full mt-2 py-3 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                        aria-label="Inquire about a live recording date for your classical performance"
+                        className="w-full mt-2 py-3 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs rounded-xl transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                       >
                         Inquire About Your Date
                       </button>
@@ -502,10 +599,34 @@ export default function App() {
               Live Categories
             </h4>
             <div className="flex flex-col gap-2 text-xs text-zinc-400 font-semibold">
-              <button onClick={() => setActiveTab('Organ')} className="hover:text-amber-400 transition-colors text-left cursor-pointer">Pipe Organ Recitals</button>
-              <button onClick={() => setActiveTab('Choral')} className="hover:text-amber-400 transition-colors text-left cursor-pointer">Choirs and Ensembles</button>
-              <button onClick={() => setActiveTab('Vocal')} className="hover:text-amber-400 transition-colors text-left cursor-pointer">Solo Vocals</button>
-              <button onClick={() => setActiveTab('Instrumental')} className="hover:text-amber-400 transition-colors text-left cursor-pointer">Orchestra & Classical Instruments</button>
+              <button 
+                onClick={() => setActiveTab('Organ')} 
+                aria-label="Filter showcases by Pipe Organ Recitals"
+                className="hover:text-amber-400 transition-colors text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1"
+              >
+                Pipe Organ Recitals
+              </button>
+              <button 
+                onClick={() => setActiveTab('Choral')} 
+                aria-label="Filter showcases by Choirs and Ensembles"
+                className="hover:text-amber-400 transition-colors text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1"
+              >
+                Choirs and Ensembles
+              </button>
+              <button 
+                onClick={() => setActiveTab('Vocal')} 
+                aria-label="Filter showcases by Solo Vocals"
+                className="hover:text-amber-400 transition-colors text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1"
+              >
+                Solo Vocals
+              </button>
+              <button 
+                onClick={() => setActiveTab('Instrumental')} 
+                aria-label="Filter showcases by Orchestra and Classical Instruments"
+                className="hover:text-amber-400 transition-colors text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1"
+              >
+                Orchestra & Classical Instruments
+              </button>
             </div>
           </div>
 
@@ -520,7 +641,8 @@ export default function App() {
               href={CHANNEL_INFO.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#FF0000] hover:bg-[#CC0000] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+              aria-label="Visit the official @MusicMadras YouTube channel (opens in a new tab)"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#FF0000] hover:bg-[#CC0000] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             >
               <Youtube className="w-4 h-4" fill="currentColor" />
               Visit @MusicMadras YouTube

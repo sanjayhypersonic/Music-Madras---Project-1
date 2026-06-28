@@ -407,7 +407,9 @@ export default function BookingForm({ isOpen, onClose, defaultMode = 'booking' }
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowAdmin(false); setFormMode('booking'); }}
-                className={`text-xs font-extrabold uppercase tracking-wider pb-1 transition-all ${
+                aria-label="Switch to Book Recording Form"
+                aria-current={!showAdmin && formMode === 'booking' ? 'true' : 'false'}
+                className={`text-xs font-extrabold uppercase tracking-wider pb-1 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1 ${
                   !showAdmin && formMode === 'booking'
                     ? 'border-b-2 border-amber-500 text-zinc-100'
                     : 'text-zinc-500 hover:text-zinc-300'
@@ -417,7 +419,9 @@ export default function BookingForm({ isOpen, onClose, defaultMode = 'booking' }
               </button>
               <button
                 onClick={() => { setShowAdmin(false); setFormMode('inquire'); }}
-                className={`text-xs font-extrabold uppercase tracking-wider pb-1 transition-all ${
+                aria-label="Switch to Inquire Date Form"
+                aria-current={!showAdmin && formMode === 'inquire' ? 'true' : 'false'}
+                className={`text-xs font-extrabold uppercase tracking-wider pb-1 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1 ${
                   !showAdmin && formMode === 'inquire'
                     ? 'border-b-2 border-amber-500 text-zinc-100'
                     : 'text-zinc-500 hover:text-zinc-300'
@@ -430,7 +434,8 @@ export default function BookingForm({ isOpen, onClose, defaultMode = 'booking' }
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowAdmin(!showAdmin)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-full text-[10px] font-bold transition-all ${
+                aria-label={showAdmin ? "Switch to Visitor View" : "Switch to Google Forms Admin View"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-full text-[10px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                   showAdmin 
                     ? 'bg-amber-500 text-zinc-950 border-amber-400' 
                     : 'bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 border-zinc-800'
@@ -442,7 +447,8 @@ export default function BookingForm({ isOpen, onClose, defaultMode = 'booking' }
 
               <button
                 onClick={onClose}
-                className="text-xs font-bold text-zinc-400 hover:text-zinc-100 transition-colors px-1"
+                aria-label="Close form modal"
+                className="text-xs font-bold text-zinc-400 hover:text-zinc-100 transition-colors px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded"
               >
                 Close
               </button>

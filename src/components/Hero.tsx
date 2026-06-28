@@ -100,8 +100,7 @@ export default function Hero({ onOpenBooking, onBrowseVideos }: HeroProps) {
 
         {/* Narrative */}
         <p className="text-sm sm:text-base text-zinc-200 max-w-2xl leading-relaxed drop-shadow-md">
-          Music Madras preserves live classical music recitals, pipe organ showcases, church music, and sacred choral services across Chennai. 
-          We record with studio-quality matched condenser microphones to preserve natural acoustics, paired with discrete, silent single/multi-cam 4K capture.
+          Music Madras is dedicated to preserving, promoting, and documenting the rich tradition of Western classical music in Chennai through world-class recordings that preserve natural acoustics, educational resources, historical archives, and digital storytelling.
         </p>
 
         {/* Key Value Pillars Row */}
@@ -174,13 +173,15 @@ export default function Hero({ onOpenBooking, onBrowseVideos }: HeroProps) {
         <div className="flex flex-wrap justify-center items-center gap-4 pt-4">
           <button
             onClick={onOpenBooking}
-            className="px-7 py-3.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold text-sm rounded-full shadow-lg hover:shadow-xl transition-all flex items-center gap-2 cursor-pointer"
+            aria-label="Inquire and apply for the free live recording program"
+            className="px-7 py-3.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold text-sm rounded-full shadow-lg hover:shadow-xl transition-all flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
             Get Recorded For Free
           </button>
           <button
             onClick={onBrowseVideos}
-            className="px-7 py-3.5 border border-zinc-700 hover:bg-zinc-800/60 text-zinc-200 font-semibold text-sm rounded-full transition-all cursor-pointer"
+            aria-label="Browse the live classical recording archives"
+            className="px-7 py-3.5 border border-zinc-700 hover:bg-zinc-800/60 text-zinc-200 font-semibold text-sm rounded-full transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
           >
             Browse Highlights
           </button>

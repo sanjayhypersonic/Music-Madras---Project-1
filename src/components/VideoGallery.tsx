@@ -102,19 +102,23 @@ export default function VideoGallery({
             placeholder="Search artists, organ, choral, or instruments..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-zinc-900/60 border border-zinc-800 rounded-full text-xs font-medium text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+            aria-label="Search recordings by artist, instrument, or description"
+            className="w-full pl-9 pr-4 py-2 bg-zinc-900/60 border border-zinc-800 rounded-full text-xs font-medium text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
           />
         </div>
       </div>
 
       {/* Category Tabs & Sub-Filters */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap gap-1.5 bg-zinc-900/60 p-1 rounded-2xl border border-zinc-800">
+        <div className="flex flex-wrap gap-1.5 bg-zinc-900/60 p-1 rounded-2xl border border-zinc-800" role="tablist" aria-label="Recording categories">
           {['Concert', 'Organ', 'Choral', 'Vocal', 'Instrumental', 'all'].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+              role="tab"
+              aria-selected={selectedCategory === cat}
+              aria-label={`Filter showcases by ${categoryDisplayNames[cat] || cat}`}
+              className={`text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                 selectedCategory === cat
                   ? 'bg-amber-500 text-zinc-950 shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-100'
@@ -146,7 +150,8 @@ export default function VideoGallery({
             </div>
             <button
               onClick={() => setActiveVideoId(null)}
-              className="text-zinc-400 hover:text-zinc-100 p-1 rounded-full bg-zinc-800 hover:bg-zinc-750 transition-all"
+              aria-label="Close active video player"
+              className="text-zinc-400 hover:text-zinc-100 p-1 rounded-full bg-zinc-800 hover:bg-zinc-750 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
               title="Close Player"
             >
               <X className="w-4 h-4" />
@@ -201,7 +206,8 @@ export default function VideoGallery({
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={() => toggleLikeVideo(activeVideo.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                    aria-label={likedVideos.includes(activeVideo.id) ? "Remove this video from your favorites" : "Save this video to your favorites"}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                       likedVideos.includes(activeVideo.id)
                         ? 'bg-amber-500 text-zinc-950'
                         : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-750 border border-zinc-700'
@@ -213,7 +219,8 @@ export default function VideoGallery({
 
                   <button
                     onClick={(e) => handleCopyLink(activeVideo, e)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                    aria-label="Copy YouTube video link to clipboard"
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                       copiedVideoId === activeVideo.id
                         ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                         : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-750 border border-zinc-700'
@@ -237,7 +244,8 @@ export default function VideoGallery({
                   href={`https://www.youtube.com/watch?v=${activeVideo.youtubeId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-[#FF0000] hover:text-white transition-all bg-[#FF0000]/10 hover:bg-[#FF0000] px-3.5 py-2 rounded-xl font-bold cursor-pointer"
+                  aria-label="Watch this original recital on YouTube in a new browser tab"
+                  className="flex items-center gap-1.5 text-xs text-[#FF0000] hover:text-white transition-all bg-[#FF0000]/10 hover:bg-[#FF0000] px-3.5 py-2 rounded-xl font-bold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   Watch on YouTube
@@ -260,7 +268,19 @@ export default function VideoGallery({
                 className="group bg-zinc-900/40 border border-zinc-800/80 hover:border-zinc-700/80 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
               >
                 {/* Custom Thumbnail Layout with Overlay Play Trigger */}
-                <div className="relative aspect-video bg-zinc-950 overflow-hidden cursor-pointer" onClick={() => handlePlayVideo(video)}>
+                <div 
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Play recital video: ${video.title} by ${video.artist}`}
+                  className="relative aspect-video bg-zinc-950 overflow-hidden cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  onClick={() => handlePlayVideo(video)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handlePlayVideo(video);
+                    }
+                  }}
+                >
                   {/* Real visual background using YouTube thumbnail */}
                   <img
                     src={video.thumbnailUrl}
@@ -321,7 +341,8 @@ export default function VideoGallery({
                     <span>{video.views} views • {video.publishedAt}</span>
                     <button
                       onClick={(e) => handleCopyLink(video, e)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg transition-colors ${
+                      aria-label={`Copy YouTube link for ${video.title}`}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                         copiedVideoId === video.id
                           ? 'bg-emerald-500/15 text-emerald-400 font-bold'
                           : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200'

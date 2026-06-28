@@ -1,6 +1,6 @@
 {
   "name": "Music Madras",
-  "description": "Enterprise-class portal for Music Madras, capturing live Western & Indian classical concerts, church services, and sacred recitals with studio-grade sound and high-fidelity 4K video.",
+  "description": "Music Madras is dedicated to preserving, promoting, and documenting the rich tradition of Western classical music in Chennai through world-class recordings that preserve natural acoustics, educational resources, historical archives, and digital storytelling.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Bell, Music, Radio, Sliders, Calendar, Award, Home } from 'lucide-react';
+import { Bell, Music, Radio, Sliders, Calendar, Award, Home, Sun, Moon } from 'lucide-react';
 import { CHANNEL_INFO } from '../data';
 
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onOpenBooking: () => void;
+  theme: 'dark' | 'light';
+  setTheme: (theme: 'dark' | 'light') => void;
 }
 
-export default function Header({ activeTab, setActiveTab, onOpenBooking }: HeaderProps) {
+export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, setTheme }: HeaderProps) {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [showButtons, setShowButtons] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
@@ -55,7 +57,19 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
       <div className="w-full max-w-7xl mx-auto flex flex-col items-start md:flex-row md:items-center justify-between gap-4">
         
         {/* Logo and Channel Title */}
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('home')}>
+        <div 
+          role="button"
+          tabIndex={0}
+          aria-label="Music Madras, Back to Home"
+          className="flex items-center gap-3 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-lg p-1" 
+          onClick={() => setActiveTab('home')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setActiveTab('home');
+            }
+          }}
+        >
           {/* High-Fidelity SVG Replication of the Music Madras circular emblem */}
           <div className="relative w-12 h-12 md:w-14 md:h-14 flex-shrink-0 rounded-full overflow-hidden border border-zinc-700/50 shadow-md bg-[#f4c21b]">
             <img 
@@ -78,10 +92,12 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
         </div>
 
         {/* Desktop Navigation */}
-        <nav className="flex flex-wrap items-center justify-center gap-1 bg-zinc-900/80 p-1 rounded-2xl md:rounded-full border border-zinc-800 w-full md:w-auto">
+        <nav className="flex flex-wrap items-center justify-center gap-1 bg-zinc-900/80 p-1 rounded-2xl md:rounded-full border border-zinc-800 w-full md:w-auto" aria-label="Main Navigation">
           <button
             onClick={() => setActiveTab('home')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+            aria-label="Home Tab"
+            aria-current={activeTab === 'home' ? 'page' : undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
               activeTab === 'home'
                 ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold'
                 : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
@@ -93,7 +109,9 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
 
           <button
             onClick={() => setActiveTab('Concert')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+            aria-label="Performance Showcases Tab"
+            aria-current={isShowcasesActive ? 'page' : undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
               isShowcasesActive
                 ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold'
                 : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
@@ -105,7 +123,9 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
 
           <button
             onClick={() => setActiveTab('playlists')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+            aria-label="Curated Playlists Tab"
+            aria-current={activeTab === 'playlists' ? 'page' : undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
               activeTab === 'playlists'
                 ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold'
                 : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
@@ -117,7 +137,9 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
 
           <button
             onClick={() => setActiveTab('tech-specs')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+            aria-label="Studio Rig and Gear Specifications Tab"
+            aria-current={activeTab === 'tech-specs' ? 'page' : undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
               activeTab === 'tech-specs'
                 ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold'
                 : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
@@ -129,7 +151,9 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
 
           <button
             onClick={() => setActiveTab('artist-program')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+            aria-label="Free Recording Artist Program Tab"
+            aria-current={activeTab === 'artist-program' ? 'page' : undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
               activeTab === 'artist-program'
                 ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold'
                 : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'
@@ -146,12 +170,21 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
             ? 'opacity-100 max-h-[50px] scale-100 mt-0' 
             : 'opacity-0 max-h-0 scale-95 -mt-4 pointer-events-none'
         }`}>
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label={`Switch to ${theme === 'dark' ? 'high-contrast light' : 'dark'} theme`}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-zinc-100 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-zinc-500" />}
+          </button>
+
           <a
             href={CHANNEL_INFO.url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleSubscribe}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+            aria-label={isSubscribed ? "Subscribed to YouTube Channel" : "Subscribe to YouTube Channel"}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 ${
               isSubscribed
                 ? 'bg-zinc-850 text-zinc-300 border border-zinc-700'
                 : 'bg-[#FF0000] text-white hover:bg-[#CC0000] shadow-sm shadow-[#FF0000]/20'
@@ -163,7 +196,8 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking }: Heade
 
           <button
             onClick={onOpenBooking}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#0D9488] hover:bg-[#0b7a70] text-white text-xs font-bold rounded-full shadow-md hover:shadow-lg transition-all cursor-pointer"
+            aria-label="Open Booking Form"
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#0D9488] hover:bg-[#0b7a70] text-white text-xs font-bold rounded-full shadow-md hover:shadow-lg transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
           >
             <Calendar className="w-3.5 h-3.5" />
             Book Recording
