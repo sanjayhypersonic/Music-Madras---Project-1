@@ -25,6 +25,5 @@ export default function robots(): Robots {
       allow: '/',
     },
     sitemap: 'https://www.musicmadras.com/sitemap.xml',
-    host: 'https://www.musicmadras.com',
   };
 }
