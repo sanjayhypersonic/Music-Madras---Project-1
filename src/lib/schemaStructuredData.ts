@@ -209,7 +209,7 @@ export function getOrganizationSchema() {
     "@id": "https://www.musicmadras.com/#organization",
     "name": "Music Madras",
     "url": "https://www.musicmadras.com",
-    "logo": "https://www.musicmadras.com/logo.jpg",
+    "logo": "https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s800-c-k-c0x00ffffff-no-rj",
     "description": "Music Madras is Chennai's premier digital platform dedicated to preserving, promoting, and documenting Western classical music traditions.",
     "address": {
       "@type": "PostalAddress",
@@ -493,7 +493,7 @@ export function getVideoObjectSchema(options: VideoObjectOptions) {
       "name": "Music Madras",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.musicmadras.com/logo.jpg"
+        "url": "https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s800-c-k-c0x00ffffff-no-rj"
       }
     }
   };
