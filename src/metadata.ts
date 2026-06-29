@@ -134,12 +134,12 @@ export const globalMetadata: Metadata = {
     },
   },
   icons: {
-    icon: 'https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s250-c-k-c0x00ffffff-no-rj',
-    apple: 'https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s250-c-k-c0x00ffffff-no-rj',
+    icon: '/logo.png',
+    apple: '/logo.png',
     other: [
       {
         rel: 'mask-icon',
-        url: 'https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s250-c-k-c0x00ffffff-no-rj'
+        url: '/logo.png'
       }
     ]
   },
@@ -152,7 +152,7 @@ export const globalMetadata: Metadata = {
     siteName: 'Music Madras',
     images: [
       {
-        url: 'https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s250-c-k-c0x00ffffff-no-rj',
+        url: '/logo.png',
         width: 1200,
         height: 630,
         alt: "Music Madras — Chennai's Home for Western Classical Music"
@@ -164,7 +164,7 @@ export const globalMetadata: Metadata = {
     title: "Music Madras | Chennai's Home for Western Classical Music",
     description: HOME_DESCRIPTION,
     creator: '@musicmadras',
-    images: ['https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s250-c-k-c0x00ffffff-no-rj'],
+    images: ['/logo.png'],
   },
   verification: {
     google: 'google-site-verification-placeholder-code',

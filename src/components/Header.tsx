@@ -112,10 +112,10 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, 
             }
           }}
         >
-          {/* High-Fidelity SVG Replication of the Music Madras circular emblem */}
+          {/* Official Music Madras circular emblem */}
           <div className="relative w-12 h-12 md:w-14 md:h-14 flex-shrink-0 rounded-full overflow-hidden border border-zinc-700/50 shadow-md bg-[#f4c21b]">
             <SafeImage 
-              src="https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s250-c-k-c0x00ffffff-no-rj"
+              src="/logo.png"
               alt="Music Madras Logo"
               fallbackType="logo"
               className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
