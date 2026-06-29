@@ -134,12 +134,12 @@ export const globalMetadata: Metadata = {
     },
   },
   icons: {
-    icon: '/favicon.ico',
-    apple: '/favicon.ico',
+    icon: '/logo.jpg',
+    apple: '/logo.jpg',
     other: [
       {
         rel: 'mask-icon',
-        url: '/favicon.ico'
+        url: '/logo.jpg'
       }
     ]
   },
