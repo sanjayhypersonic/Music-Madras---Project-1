@@ -135,11 +135,12 @@ export const globalMetadata: Metadata = {
   },
   icons: {
     icon: '/favicon-32x32.png',
-    apple: '/logo-192.png',
+    shortcut: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
     other: [
       {
         rel: 'mask-icon',
-        url: '/logo-192.png'
+        url: '/android-chrome-512x512.png'
       }
     ]
   },
