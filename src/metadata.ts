@@ -134,12 +134,12 @@ export const globalMetadata: Metadata = {
     },
   },
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png',
+    icon: '/logo.jpg',
+    apple: '/logo.jpg',
     other: [
       {
         rel: 'mask-icon',
-        url: '/logo.png'
+        url: '/logo.jpg'
       }
     ]
   },
@@ -152,7 +152,7 @@ export const globalMetadata: Metadata = {
     siteName: 'Music Madras',
     images: [
       {
-        url: '/logo.png',
+        url: '/logo.jpg',
         width: 1200,
         height: 630,
         alt: "Music Madras — Chennai's Home for Western Classical Music"
@@ -164,7 +164,7 @@ export const globalMetadata: Metadata = {
     title: "Music Madras | Chennai's Home for Western Classical Music",
     description: HOME_DESCRIPTION,
     creator: '@musicmadras',
-    images: ['/logo.png'],
+    images: ['/logo.jpg'],
   },
   verification: {
     google: 'google-site-verification-placeholder-code',

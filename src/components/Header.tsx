@@ -115,7 +115,7 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, 
           {/* Official Music Madras circular emblem */}
           <div className="relative w-12 h-12 md:w-14 md:h-14 flex-shrink-0 rounded-full overflow-hidden border border-zinc-700/50 shadow-md bg-[#f4c21b]">
             <SafeImage 
-              src="/logo.png"
+              src="/logo.jpg"
               alt="Music Madras Logo"
               fallbackType="logo"
               className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
