@@ -15,10 +15,18 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, 
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [showButtons, setShowButtons] = useState(true);
 
+  const showButtonsRef = useRef(true);
+  const lastScrollYRef = useRef(0);
   const lastToggleTime = useRef(0);
 
+  // Sync reference value of showButtons state to avoid re-binding scroll listener
   useEffect(() => {
-    let lastScrollY = window.scrollY;
+    showButtonsRef.current = showButtons;
+  }, [showButtons]);
+
+  useEffect(() => {
+    // Initialize scroll position on mount
+    lastScrollYRef.current = window.scrollY;
     let ticking = false;
 
     const updateScrollDir = () => {
@@ -28,43 +36,45 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, 
       if (window.innerWidth < 768) {
         // If close to the top of the viewport, always show the CTA buttons
         if (currentScrollY <= 20) {
-          if (!showButtons) {
+          if (!showButtonsRef.current) {
             setShowButtons(true);
             lastToggleTime.current = now;
           }
-          lastScrollY = currentScrollY > 0 ? currentScrollY : 0;
+          lastScrollYRef.current = currentScrollY > 0 ? currentScrollY : 0;
           ticking = false;
           return;
         }
 
-        // 20px threshold to prevent accidental triggering during light scrolls
-        const threshold = 20;
-        const diff = currentScrollY - lastScrollY;
+        // Extremely responsive 8px threshold for instant "scroll once" reaction
+        const threshold = 8;
+        const diff = currentScrollY - lastScrollYRef.current;
 
         if (Math.abs(diff) >= threshold) {
           const scrollingDown = diff > 0;
           
-          // Only allow toggling if at least 500ms has passed since the last toggle.
-          // This avoids responding to layout-shift scroll events triggered while the 300ms CSS max-height transition runs.
-          if (now - lastToggleTime.current > 500) {
-            if (scrollingDown && showButtons) {
+          // Only allow toggling if at least 250ms has passed since the last toggle.
+          // This avoids layout-shift feedback loops while keeping the controls hyper-responsive.
+          if (now - lastToggleTime.current > 250) {
+            if (scrollingDown && showButtonsRef.current) {
               setShowButtons(false);
               lastToggleTime.current = now;
-            } else if (!scrollingDown && !showButtons) {
+            } else if (!scrollingDown && !showButtonsRef.current) {
               setShowButtons(true);
               lastToggleTime.current = now;
             }
           }
+          
+          // Update baseline scroll position only when threshold is met
+          lastScrollYRef.current = currentScrollY;
         }
       } else {
         // Desktop displays buttons persistently
-        if (!showButtons) {
+        if (!showButtonsRef.current) {
           setShowButtons(true);
         }
+        lastScrollYRef.current = currentScrollY;
       }
       
-      // Clamp to positive values to handle elastic scrolling/iOS rubber-banding nicely
-      lastScrollY = currentScrollY > 0 ? currentScrollY : 0;
       ticking = false;
     };
 
@@ -79,7 +89,7 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, 
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [showButtons]);
+  }, []); // Empty dependency array prevents tearing down/re-registering on state changes
 
   const handleSubscribe = () => {
     setIsSubscribed(!isSubscribed);
