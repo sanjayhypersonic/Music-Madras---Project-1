@@ -63,6 +63,12 @@ body.light .bg-zinc-850 {
 body.light .bg-zinc-800 {
   background-color: #e4e4e7;
 }
+body.light .bg-zinc-900\/15 {
+  background-color: rgba(244, 244, 245, 0.55);
+}
+body.light .bg-zinc-900\/30 {
+  background-color: rgba(244, 244, 245, 0.65);
+}
 body.light .bg-zinc-900\/40 {
   background-color: rgba(244, 244, 245, 0.75);
 }
@@ -107,6 +113,10 @@ body.light .via-zinc-950\/20 {
   --tw-gradient-to: rgba(250, 250, 250, 0.2) var(--tw-gradient-to-position);
   --tw-gradient-stops: var(--tw-gradient-from), rgba(250, 250, 250, 0.2) var(--tw-gradient-via-position), var(--tw-gradient-to);
 }
+body.light .via-zinc-950\/60 {
+  --tw-gradient-to: rgba(250, 250, 250, 0.6) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(250, 250, 250, 0.6) var(--tw-gradient-via-position), var(--tw-gradient-to);
+}
 body.light .to-zinc-950 {
   --tw-gradient-to: #fafafa var(--tw-gradient-to-position);
 }
@@ -127,6 +137,9 @@ body.light .from-zinc-950\/90 {
 body.light .via-zinc-950\/50 {
   --tw-gradient-to: rgba(250, 250, 250, 0.5) var(--tw-gradient-to-position);
   --tw-gradient-stops: var(--tw-gradient-from), rgba(250, 250, 250, 0.5) var(--tw-gradient-via-position), var(--tw-gradient-to);
+}
+body.light .bg-\[radial-gradient\(circle_at_center\,transparent_30\%\,\#09090b_85\%\)\] {
+  background-image: radial-gradient(circle at center, transparent 30%, #fafafa 85%) !important;
 }
 
 /* Hover background modifications */
@@ -150,6 +163,9 @@ body.light .group:hover .group-hover\:bg-zinc-900\/80 {
 }
 
 /* Text color high-contrast overrides */
+body.light .text-zinc-50 {
+  color: #111827;
+}
 body.light .text-zinc-100 {
   color: #111827;
 }
@@ -197,6 +213,15 @@ body.light .hover\:text-amber-400:hover {
 body.light .border-zinc-800 {
   border-color: #e4e4e7;
 }
+body.light .border-zinc-750 {
+  border-color: #e4e4e7;
+}
+body.light .border-zinc-850 {
+  border-color: #e4e4e7;
+}
+body.light .border-zinc-900 {
+  border-color: #e4e4e7;
+}
 body.light .border-zinc-700 {
   border-color: #d4d4d8;
 }
@@ -206,8 +231,20 @@ body.light .border-zinc-700\/50 {
 body.light .border-zinc-800\/80 {
   border-color: rgba(228, 228, 230, 0.8);
 }
+body.light .border-zinc-800\/85 {
+  border-color: rgba(228, 228, 230, 0.85);
+}
+body.light .border-zinc-800\/50 {
+  border-color: rgba(228, 228, 230, 0.5);
+}
+body.light .border-zinc-800\/60 {
+  border-color: rgba(228, 228, 230, 0.6);
+}
 body.light .border-zinc-800\/40 {
   border-color: rgba(228, 228, 230, 0.4);
+}
+body.light .hover\:border-amber-500\/50:hover {
+  border-color: rgba(180, 83, 9, 0.5);
 }
 body.light .divide-zinc-800 > * + * {
   border-color: #e4e4e7;
