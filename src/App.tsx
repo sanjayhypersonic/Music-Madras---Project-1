@@ -8,6 +8,7 @@ import BookingForm from './components/BookingForm';
 import TechSpecs from './components/TechSpecs';
 import PlaylistsSection from './components/PlaylistsSection';
 import SchemaMarkup from './components/SchemaMarkup';
+import SafeImage from './components/SafeImage';
 import useSEO from './hooks/useSEO';
 import { CHANNEL_INFO, VIDEOS_DATA } from './data';
 
@@ -167,17 +168,19 @@ export default function App() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Card 1: MusicMadras Archive */}
+                  {/* Card 1: Showcases */}
                   <div 
                     onClick={() => setActiveTab('Concert')}
                     className="group bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/50 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
                   >
                     <div>
                       <div className="relative h-32 w-full overflow-hidden">
-                        <img 
-                          src="https://img.youtube.com/vi/zEQmnmwr5UE/maxresdefault.jpg"
+                        <SafeImage 
+                          src="https://img.youtube.com/vi/zEQmnmwr5UE/hqdefault.jpg"
                           alt="MusicMadras Archive"
+                          fallbackType="music"
+                          title="MusicMadras Archive"
                           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-85"
-                          referrerPolicy="no-referrer"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                         <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center text-amber-400 border border-zinc-800">
@@ -207,11 +210,12 @@ export default function App() {
                   >
                     <div>
                       <div className="relative h-32 w-full overflow-hidden">
-                        <img 
+                        <SafeImage 
                           src="https://images.unsplash.com/photo-1507838153414-b4b713384a76?auto=format&fit=crop&w=600&q=80"
                           alt="Curated Playlists"
+                          fallbackType="playlist"
+                          title="Curated Playlists"
                           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
-                          referrerPolicy="no-referrer"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                         <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center text-amber-400 border border-zinc-800">
@@ -241,11 +245,12 @@ export default function App() {
                   >
                     <div>
                       <div className="relative h-32 w-full overflow-hidden">
-                        <img 
+                        <SafeImage 
                           src="https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=600&q=80"
                           alt="Focusrite Studio Rig"
+                          fallbackType="gear"
+                          title="Studio Recording Rig"
                           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
-                          referrerPolicy="no-referrer"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                         <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center text-amber-400 border border-zinc-800">
@@ -275,11 +280,12 @@ export default function App() {
                   >
                     <div>
                       <div className="relative h-32 w-full overflow-hidden">
-                        <img 
+                        <SafeImage 
                           src="https://images.unsplash.com/photo-1511192336575-5a79af67a629?auto=format&fit=crop&w=600&q=80"
                           alt="Artist Program"
+                          fallbackType="artist"
+                          title="Artist Program"
                           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
-                          referrerPolicy="no-referrer"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                         <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center text-amber-400 border border-zinc-800">
@@ -341,11 +347,12 @@ export default function App() {
                       >
                         {/* Video Thumbnail Wrapper */}
                         <div className="relative aspect-video w-full overflow-hidden bg-black">
-                          <img
+                          <SafeImage
                             src={video.thumbnailUrl}
                             alt={video.title}
+                            fallbackType="video"
+                            title={video.title}
                             className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-                            referrerPolicy="no-referrer"
                           />
                           {/* Hover Play Button Overlay */}
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">

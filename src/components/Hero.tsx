@@ -1,5 +1,6 @@
 import { Sparkles, Mic, Play, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
+import SafeImage from './SafeImage';
 
 interface HeroProps {
   onOpenBooking: () => void;
@@ -107,11 +108,11 @@ export default function Hero({ onOpenBooking, onBrowseVideos }: HeroProps) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-3xl pt-4">
           <div className="group bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl overflow-hidden shadow-lg transition-all duration-300 text-left flex flex-col">
             <div className="relative h-28 w-full overflow-hidden">
-              <img 
+              <SafeImage 
                 src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=600&q=80" 
                 alt="Studio Microphone" 
+                fallbackType="gear"
                 className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
-                referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/40 to-transparent" />
               <div className="absolute bottom-3 left-3 w-8 h-8 rounded-full bg-red-600/90 backdrop-blur-sm flex items-center justify-center text-white border border-red-500/30">
@@ -128,11 +129,11 @@ export default function Hero({ onOpenBooking, onBrowseVideos }: HeroProps) {
 
           <div className="group bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl overflow-hidden shadow-lg transition-all duration-300 text-left flex flex-col">
             <div className="relative h-28 w-full overflow-hidden">
-              <img 
+              <SafeImage 
                 src="https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=600&q=80" 
                 alt="Western Classical Concert Stage" 
+                fallbackType="video"
                 className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
-                referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/40 to-transparent" />
               <div className="absolute bottom-3 left-3 w-8 h-8 rounded-full bg-amber-500/90 backdrop-blur-sm flex items-center justify-center text-zinc-950 border border-amber-500/30">
@@ -149,11 +150,11 @@ export default function Hero({ onOpenBooking, onBrowseVideos }: HeroProps) {
 
           <div className="group bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl overflow-hidden shadow-lg transition-all duration-300 text-left flex flex-col">
             <div className="relative h-28 w-full overflow-hidden">
-              <img 
+              <SafeImage 
                 src="https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=600&q=80" 
                 alt="Recording Console Studio" 
+                fallbackType="gear"
                 className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
-                referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/40 to-transparent" />
               <div className="absolute bottom-3 left-3 w-8 h-8 rounded-full bg-red-600/90 backdrop-blur-sm flex items-center justify-center text-white border border-red-500/30">

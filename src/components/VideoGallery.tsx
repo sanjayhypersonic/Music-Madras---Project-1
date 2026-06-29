@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, MouseEvent } from 'react';
 import { Search, Heart, Sparkles, Sliders, Youtube, Volume2, Maximize2, X, AlertCircle, Link, Check, ExternalLink } from 'lucide-react';
 import { Video } from '../types';
 import { VIDEOS_DATA, CHANNEL_INFO } from '../data';
+import SafeImage from './SafeImage';
 
 const categoryDisplayNames: Record<string, string> = {
   all: 'All Highlights',
@@ -282,11 +283,12 @@ export default function VideoGallery({
                   }}
                 >
                   {/* Real visual background using YouTube thumbnail */}
-                  <img
+                  <SafeImage
                     src={video.thumbnailUrl}
                     alt={video.title}
+                    fallbackType="video"
+                    title={video.title}
                     className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
                   />
                   {/* Dark overlay gradient for legibility */}
                   <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-transparent to-black/45 flex flex-col justify-between p-3">

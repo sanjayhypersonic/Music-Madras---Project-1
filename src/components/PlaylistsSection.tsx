@@ -1,5 +1,6 @@
 import { Radio, Youtube, Layers, ArrowUpRight } from 'lucide-react';
 import { PLAYLISTS_DATA, CHANNEL_INFO } from '../data';
+import SafeImage from './SafeImage';
 
 export default function PlaylistsSection() {
   return (
@@ -38,11 +39,12 @@ export default function PlaylistsSection() {
           >
             {/* Folder Art Representation */}
             <div className="relative aspect-video bg-zinc-950 overflow-hidden">
-              <img
+              <SafeImage
                 src={playlist.thumbnailUrl}
                 alt={playlist.title}
+                fallbackType="playlist"
+                title={playlist.title}
                 className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40 flex flex-col justify-between p-4">
                 {/* Folder corner notch */}
