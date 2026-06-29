@@ -33,9 +33,13 @@ export default function PlaylistsSection() {
       {/* Playlist Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {PLAYLISTS_DATA.map((playlist) => (
-          <div
+          <a
             key={playlist.id}
-            className="group bg-zinc-900/40 border border-zinc-800/85 hover:border-zinc-700/80 rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
+            href={playlist.youtubeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open YouTube playlist: ${playlist.title} (opens in a new tab)`}
+            className="group bg-zinc-900/40 border border-zinc-800/85 hover:border-zinc-700/80 rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
             {/* Folder Art Representation */}
             <div className="relative aspect-video bg-zinc-950 overflow-hidden">
@@ -81,20 +85,16 @@ export default function PlaylistsSection() {
                   @MusicMadras Curated
                 </span>
                 
-                <a
-                  href={playlist.youtubeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Open YouTube playlist: ${playlist.title} (opens in a new tab)`}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-[#FF0000] hover:text-[#FF3333] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded px-1.5 py-0.5"
+                <span
+                  className="inline-flex items-center gap-1 text-xs font-bold text-[#FF0000] group-hover:text-[#FF3333] transition-colors rounded px-1.5 py-0.5"
                 >
                   <Youtube className="w-3.5 h-3.5" fill="currentColor" />
                   Open Playlist
-                </a>
+                </span>
               </div>
             </div>
 
-          </div>
+          </a>
         ))}
       </div>
 
