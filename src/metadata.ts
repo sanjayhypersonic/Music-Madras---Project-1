@@ -37,11 +37,12 @@ export interface Metadata {
     languages: Record<string, string>;
   };
   icons: {
-    icon: string;
+    icon: string | Array<{ url: string; sizes?: string; type?: string }>;
     shortcut?: string;
-    apple?: string;
+    apple?: string | Array<{ url: string; sizes?: string; type?: string }>;
     other?: Array<{ rel: string; url: string }>;
   };
+  manifest?: string;
   openGraph: {
     type: string;
     locale: string;
@@ -134,16 +135,16 @@ export const globalMetadata: Metadata = {
     },
   },
   icons: {
-    icon: '/favicon-32x32.png',
-    shortcut: '/favicon.ico',
-    apple: '/apple-touch-icon.png',
-    other: [
-      {
-        rel: 'mask-icon',
-        url: '/android-chrome-512x512.png'
-      }
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' }
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
     ]
   },
+  manifest: '/site.webmanifest',
   openGraph: {
     type: 'website',
     locale: 'en_IN',
@@ -209,7 +210,12 @@ export function generatePageMetadata(options: PageMetadataOptions = {}): Metadat
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   const canonicalUrl = `https://www.musicmadras.com/${cleanPath}`;
   const mergedKeywords = Array.from(new Set([...globalMetadata.keywords, ...keywords]));
-  const imageUrl = ogImage || globalMetadata.icons.icon;
+  const defaultIcon = typeof globalMetadata.icons.icon === 'string'
+    ? globalMetadata.icons.icon
+    : (Array.isArray(globalMetadata.icons.icon) && globalMetadata.icons.icon[0]
+        ? globalMetadata.icons.icon[0].url
+        : '/favicon-32x32.png');
+  const imageUrl = ogImage || defaultIcon;
   const finalDescription = description || globalMetadata.description;
 
   const displayTitle = title 
