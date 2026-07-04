@@ -15,11 +15,13 @@ export default function SafeImage({ src, fallbackType = 'video', title, alt, cla
 
   // Sync state if src changes
   useEffect(() => {
+    console.log('[SafeImage Debug] src prop changed to:', src);
     setImgSrc(src);
     setError(false);
   }, [src]);
 
   if (error || !imgSrc) {
+    console.log('[SafeImage Debug] Rendering fallback placeholder for:', src, 'with fallbackType:', fallbackType);
     // Return a pristine, luxury themed CSS fallback
     if (fallbackType === 'logo') {
       return (
@@ -77,12 +79,18 @@ export default function SafeImage({ src, fallbackType = 'video', title, alt, cla
     );
   }
 
+  console.log('[SafeImage Debug] Rendering img element with src:', imgSrc);
+
   return (
     <img
       src={imgSrc}
       alt={alt}
       className={className}
-      onError={() => {
+      onLoad={() => {
+        console.log('[SafeImage Debug] Image loaded successfully:', imgSrc);
+      }}
+      onError={(e) => {
+        console.error('[SafeImage Debug] Image failed to load:', imgSrc, '; Event details:', e);
         setError(true);
       }}
       referrerPolicy="no-referrer"
