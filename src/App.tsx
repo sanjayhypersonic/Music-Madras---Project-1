@@ -11,6 +11,8 @@ import SchemaMarkup from './components/SchemaMarkup';
 import SafeImage from './components/SafeImage';
 import useSEO from './hooks/useSEO';
 import { CHANNEL_INFO, VIDEOS_DATA } from './data';
+import MusicMadrasStudio from './components/studio/MusicMadrasStudio';
+import { KnowledgePack } from './components/studio/types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -33,6 +35,11 @@ export default function App() {
     const saved = localStorage.getItem('music_madras_theme');
     return (saved as 'dark' | 'light') || 'dark';
   });
+  const [studioPublishedPacks, setStudioPublishedPacks] = useState<KnowledgePack[]>([]);
+
+  const handlePublishPack = (pack: KnowledgePack) => {
+    setStudioPublishedPacks(prev => [...prev, pack]);
+  };
 
   // Dynamic Canonical URLs, SEO Document Title, and Description Synchronization
   useSEO({ activeTab, activeVideoId });
@@ -538,6 +545,22 @@ export default function App() {
                     </div>
                   </div>
                 </section>
+              </motion.div>
+            )}
+
+            {/* View 5: Internal Music Madras Studio (MMS) Publisher Portal */}
+            {activeTab === 'studio' && (
+              <motion.div
+                key="studio-view"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.35 }}
+              >
+                <MusicMadrasStudio 
+                  onPublishPack={handlePublishPack} 
+                  publishedPacks={studioPublishedPacks} 
+                />
               </motion.div>
             )}
 

@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "knowledgePacks": {
+      "title": "Knowledge Pack",
+      "description": "A draft or published collection of MMKE archival metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string", "enum": ["Detected", "Draft", "Metadata Required", "In Review", "Ready to Publish", "Published", "Enriched", "Archived"] },
+        "youtubeId": { "type": "string" },
+        "title": { "type": "string" },
+        "artist": { "type": "string" },
+        "category": { "type": "string" },
+        "duration": { "type": "string" },
+        "publishedAt": { "type": "string" },
+        "description": { "type": "string" },
+        "composer": { "type": "string" },
+        "venue": { "type": "string" },
+        "choir": { "type": "string" },
+        "conductor": { "type": "string" },
+        "works": { "type": "string" },
+        "programmeNotes": { "type": "string" },
+        "listeningGuide": { "type": "string" },
+        "seoKeywords": { "type": "string" },
+        "relationshipsCount": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "status", "youtubeId", "title"]
+    },
+    "auditLogs": {
+      "title": "Audit Log",
+      "description": "Recording editorial operations within the Studio.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "role": { "type": "string" },
+        "action": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "userEmail", "action"]
+    }
+  },
+  "firestore": {
+    "/knowledgePacks/{packId}": {
+      "schema": "knowledgePacks",
+      "description": "Store draft and published MMKE recordings metadata."
+    },
+    "/auditLogs/{logId}": {
+      "schema": "auditLogs",
+      "description": "Security audit trails for editorial work."
+    }
+  }
+}

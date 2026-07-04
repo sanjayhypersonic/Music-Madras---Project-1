@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.email == "sanjay.hypersonic@gmail.com");
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Rules for Knowledge Packs
+    match /knowledgePacks/{packId} {
+      allow read: if true; // Public read is allowed to display on the main site
+      allow write: if isEmailVerified() && isValidId(packId);
+    }
+
+    // Rules for Audit Logs
+    match /auditLogs/{logId} {
+      allow read: if isEmailVerified();
+      allow create: if isEmailVerified() && isValidId(logId);
+      allow update, delete: if false; // Audit logs are immutable once written!
+    }
+  }
+}
