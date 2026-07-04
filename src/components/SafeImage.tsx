@@ -81,6 +81,8 @@ export default function SafeImage({ src, fallbackType = 'video', title, alt, cla
 
   console.log('[SafeImage Debug] Rendering img element with src:', imgSrc);
 
+  const isExternal = imgSrc.startsWith('http://') || imgSrc.startsWith('https://');
+
   return (
     <img
       src={imgSrc}
@@ -93,7 +95,7 @@ export default function SafeImage({ src, fallbackType = 'video', title, alt, cla
         console.error('[SafeImage Debug] Image failed to load:', imgSrc, '; Event details:', e);
         setError(true);
       }}
-      referrerPolicy="no-referrer"
+      referrerPolicy={isExternal ? "no-referrer" : undefined}
       {...props}
     />
   );

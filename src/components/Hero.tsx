@@ -109,7 +109,7 @@ export default function Hero({ onOpenBooking, onBrowseVideos }: HeroProps) {
           <div className="group bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl overflow-hidden shadow-lg transition-all duration-300 text-left flex flex-col">
             <div className="relative h-28 w-full overflow-hidden">
               <SafeImage 
-                src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=600&q=80" 
+                src="/images/studio-grade-mics.jpg" 
                 alt="Studio Microphone" 
                 fallbackType="gear"
                 className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
@@ -130,7 +130,7 @@ export default function Hero({ onOpenBooking, onBrowseVideos }: HeroProps) {
           <div className="group bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl overflow-hidden shadow-lg transition-all duration-300 text-left flex flex-col">
             <div className="relative h-28 w-full overflow-hidden">
               <SafeImage 
-                src="https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=600&q=80" 
+                src="/images/flagship-4k-video.jpg" 
                 alt="Western Classical Concert Stage" 
                 fallbackType="video"
                 className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
@@ -151,7 +151,7 @@ export default function Hero({ onOpenBooking, onBrowseVideos }: HeroProps) {
           <div className="group bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl overflow-hidden shadow-lg transition-all duration-300 text-left flex flex-col">
             <div className="relative h-28 w-full overflow-hidden">
               <SafeImage 
-                src="https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=600&q=80" 
+                src="/images/2-3-day-delivery.jpg" 
                 alt="Recording Console Studio" 
                 fallbackType="gear"
                 className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
