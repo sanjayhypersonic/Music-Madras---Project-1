@@ -183,7 +183,7 @@ export default function App() {
                     <div>
                       <div className="relative h-32 w-full overflow-hidden">
                         <SafeImage 
-                          src="/images/music-madras-archive.jpg"
+                          src="https://img.youtube.com/vi/zEQmnmwr5UE/hqdefault.jpg"
                           alt="MusicMadras Archive"
                           fallbackType="music"
                           title="MusicMadras Archive"
@@ -218,7 +218,7 @@ export default function App() {
                     <div>
                       <div className="relative h-32 w-full overflow-hidden">
                         <SafeImage 
-                          src="/images/curated-playlists.jpg"
+                          src="https://images.unsplash.com/photo-1507838153414-b4b713384a76?auto=format&fit=crop&w=600&q=80"
                           alt="Curated Playlists"
                           fallbackType="playlist"
                           title="Curated Playlists"
@@ -253,7 +253,7 @@ export default function App() {
                     <div>
                       <div className="relative h-32 w-full overflow-hidden">
                         <SafeImage 
-                          src="/images/studio-recording-rig.jpg"
+                          src="https://images.unsplash.com/photo-1603048588665-791ca8aea617?auto=format&fit=crop&w=600&q=80"
                           alt="Focusrite Studio Rig"
                           fallbackType="gear"
                           title="Studio Recording Rig"
@@ -288,7 +288,7 @@ export default function App() {
                     <div>
                       <div className="relative h-32 w-full overflow-hidden">
                         <SafeImage 
-                          src="/images/artist-program.jpg"
+                          src="https://images.unsplash.com/photo-1511192336575-5a79af67a629?auto=format&fit=crop&w=600&q=80"
                           alt="Artist Program"
                           fallbackType="artist"
                           title="Artist Program"
