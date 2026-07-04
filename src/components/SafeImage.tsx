@@ -43,8 +43,6 @@ export default function SafeImage({ src, fallbackType = 'video', title, alt, cla
           return <Sliders className="w-8 h-8 text-emerald-500/80" />;
         case 'artist':
           return <Award className="w-8 h-8 text-amber-500/80" />;
-        case 'gear':
-          return <Mic className="w-8 h-8 text-red-500/80" />;
         default:
           return <Video className="w-8 h-8 text-amber-500/80" />;
       }
