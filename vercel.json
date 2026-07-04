@@ -137,6 +137,9 @@
   ],
   "rewrites": [
     {
+      "handle": "filesystem"
+    },
+    {
       "source": "/((?!assets/|images/|sitemap\\.xml|robots\\.txt|manifest\\.json|site\\.webmanifest|favicon.*|apple-touch-icon.*|android-chrome.*|web-app-manifest.*|logo.*).*)",
       "destination": "/index.html"
     }
