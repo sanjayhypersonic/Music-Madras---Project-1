@@ -110,7 +110,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com https://img.youtube.com https://yt3.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://*.firebaseapp.com https://forms.googleapis.com https://*.firestore.googleapis.com wss://*.firestore.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'self' https://*.run.app https://ai.studio https://*.google.com https://*.googleusercontent.com; object-src 'none'; base-uri 'self'; upgrade-insecure-requests;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com https://img.youtube.com https://yt3.googleusercontent.com https://images.unsplash.com; connect-src 'self' https://*.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://*.firebaseapp.com https://forms.googleapis.com https://*.firestore.googleapis.com wss://*.firestore.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'self' https://*.run.app https://ai.studio https://*.google.com https://*.googleusercontent.com; object-src 'none'; base-uri 'self'; upgrade-insecure-requests;"
         },
         {
           "key": "Strict-Transport-Security",
@@ -137,39 +137,7 @@
   ],
   "rewrites": [
     {
-      "source": "/sitemap.xml",
-      "destination": "/sitemap.xml"
-    },
-    {
-      "source": "/robots.txt",
-      "destination": "/robots.txt"
-    },
-    {
-      "source": "/manifest.json",
-      "destination": "/manifest.json"
-    },
-    {
-      "source": "/site.webmanifest",
-      "destination": "/site.webmanifest"
-    },
-    {
-      "source": "/favicon.ico",
-      "destination": "/favicon.ico"
-    },
-    {
-      "source": "/favicon.svg",
-      "destination": "/favicon.svg"
-    },
-    {
-      "source": "/favicon-96x96.png",
-      "destination": "/favicon-96x96.png"
-    },
-    {
-      "source": "/apple-touch-icon.png",
-      "destination": "/apple-touch-icon.png"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!assets/|images/|sitemap\\.xml|robots\\.txt|manifest\\.json|site\\.webmanifest|favicon.*|apple-touch-icon.*|android-chrome.*|web-app-manifest.*|logo.*).*)",
       "destination": "/index.html"
     }
   ]
