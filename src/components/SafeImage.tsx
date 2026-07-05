@@ -91,8 +91,8 @@ export default function SafeImage({ src, fallbackType = 'video', title, alt, cla
       onLoad={() => {
         console.log('[SafeImage Debug] Image loaded successfully:', imgSrc);
       }}
-      onError={(e) => {
-        console.error('[SafeImage Debug] Image failed to load:', imgSrc, '; Event details:', e);
+      onError={() => {
+        console.error('[SafeImage Debug] Image failed to load:', imgSrc);
         setError(true);
       }}
       referrerPolicy={isExternal ? "no-referrer" : undefined}
