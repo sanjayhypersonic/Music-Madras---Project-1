@@ -146,3 +146,10 @@ export function findProgrammeById(id: string) {
     include: { items: { include: { musicalWork: true }, orderBy: { order: "asc" } } },
   });
 }
+
+export function listProgrammes(): Promise<Programme[]> {
+  return prisma.programme.findMany({
+    where: { archivedAt: null },
+    orderBy: { title: "asc" },
+  });
+}

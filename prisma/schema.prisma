@@ -128,13 +128,24 @@ enum CollectionStatus {
 // ---------------------------------------------------------------------------
 
 model StudioUser {
-  id        String           @id @default(uuid())
-  email     String           @unique
-  name      String
-  role      StudioRole
-  status    StudioUserStatus @default(INVITED)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id           String           @id @default(uuid())
+  email        String           @unique
+  name         String
+  role         StudioRole
+  status       StudioUserStatus @default(INVITED)
+  // Phase 4: nullable because an account may exist before a password is
+  // set (freshly invited, or a future Google-only account) — the ADR's
+  // Credentials provider checks this directly; Auth.js's own "User" model
+  // is deliberately NOT used for identity (see docs/phase-4-studio.md) so
+  // there is exactly one user-identity table, not two.
+  passwordHash String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  sessions            StudioSession[]
+  accounts            StudioAccount[]
+  invitationsSent     Invitation[]         @relation("InvitationInvitedBy")
+  passwordResetTokens PasswordResetToken[]
 
   composersCreated          Composer[]           @relation("ComposerCreatedBy")
   composersUpdated          Composer[]           @relation("ComposerUpdatedBy")
@@ -171,6 +182,100 @@ model StudioUser {
   auditLogEntries           AuditLogEntry[]      @relation("AuditLogActor")
 
   @@map("studio_users")
+}
+
+// ---------------------------------------------------------------------------
+// Authentication (Phase 4, ADR §7) — session/OAuth-linkage bookkeeping only.
+//
+// These are NOT Auth.js's own generic "Session"/"Account" Prisma models.
+// The off-the-shelf @auth/prisma-adapter hardcodes calls against models
+// literally named User/Session/Account/VerificationToken (its documented
+// @map() naming-convention support only renames columns/tables, not the
+// Prisma Client model itself) — adopting it as-is would have required
+// either renaming StudioUser to User throughout three already-completed
+// phases, or maintaining a second, duplicate user-identity table (email/
+// name held in both "User" and "StudioUser"), which this project has
+// consistently avoided everywhere else (see e.g. the Venue/Organisation
+// and MediaResource FK decisions in docs/phase-2-mmke-domain.md).
+//
+// Instead, modules/auth/ implements a custom Auth.js Adapter (an
+// officially-supported extension point, not a workaround) against these
+// two tables plus the existing StudioUser — see docs/phase-4-studio.md.
+// No VerificationToken table exists because this project uses only the
+// Credentials and (optional) Google OAuth providers, never Auth.js's
+// email/magic-link provider, which is the only thing that model is for.
+// ---------------------------------------------------------------------------
+
+model StudioSession {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  studioUserId String
+  expires      DateTime
+
+  studioUser StudioUser @relation(fields: [studioUserId], references: [id], onDelete: Cascade)
+
+  @@index([studioUserId])
+  @@map("studio_sessions")
+}
+
+model StudioAccount {
+  id                String  @id @default(uuid())
+  studioUserId      String
+  type              String // Auth.js AdapterAccount.type, e.g. "oauth"
+  provider          String // e.g. "google"
+  providerAccountId String
+  refreshToken      String? @db.Text
+  accessToken       String? @db.Text
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?
+  idToken           String? @db.Text
+  sessionState      String?
+
+  studioUser StudioUser @relation(fields: [studioUserId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([studioUserId])
+  @@map("studio_accounts")
+}
+
+// ---------------------------------------------------------------------------
+// Invitation & password reset (Phase 4, ADR §7) — Music Madras's own
+// tables, unrelated to Auth.js. Studio is invite-only: there is no
+// /studio/register route anywhere in app/(studio), and account creation
+// only ever happens through modules/auth's invitation-acceptance flow.
+// ---------------------------------------------------------------------------
+
+model Invitation {
+  id          String     @id @default(uuid())
+  email       String
+  role        StudioRole
+  invitedById String
+  // Only the hash is stored — the raw token exists only in the invite
+  // link/email at issuance time, exactly like PasswordResetToken below.
+  tokenHash   String     @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime   @default(now())
+
+  invitedBy StudioUser @relation("InvitationInvitedBy", fields: [invitedById], references: [id])
+
+  @@index([email])
+  @@map("invitations")
+}
+
+model PasswordResetToken {
+  id           String    @id @default(uuid())
+  studioUserId String
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  studioUser StudioUser @relation(fields: [studioUserId], references: [id], onDelete: Cascade)
+
+  @@index([studioUserId])
+  @@map("password_reset_tokens")
 }
 
 // ---------------------------------------------------------------------------

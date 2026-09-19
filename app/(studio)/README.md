@@ -1,5 +1,5 @@
-# app/(studio) — later-phase scope
+# app/(studio) — Music Madras Studio
 
-Reserved for the authenticated Studio route group (ADR §3, §7, §8): `studio/accept-invite`, `studio/reset-password`, `studio/dashboard`, `studio/recordings/[id]` (the editorial wizard), `studio/catalogue/[entity]`, `studio/youtube-sync`, `studio/sheet-music-requests`, `studio/users`, `studio/settings`, `studio/audit-log`.
+The authenticated content-management application (ADR §3, §7, §8), built in Phase 4 — see [`docs/phase-4-studio.md`](../../docs/phase-4-studio.md) for the full route map, the authentication architecture, and what remains deferred.
 
-Deliberately empty in Phase 1 per the guardrails ("do NOT implement Studio screens" / "authentication screens"). No `/studio/register` route will ever exist — Studio is invite-only (ADR §7).
+No `/studio/register` route exists, or ever will — Studio is invite-only (ADR §7). YouTube sync (`youtube-sync`) has no UI yet; it depends on the Phase 3 sync engine, which has no live credentials in this environment.

@@ -2,6 +2,13 @@ import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { canForkNewDraft, canPublishCurrentDraft } from "../../publishing/revisionTransitions";
 import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
+import { computeNextOrder } from "../../mmke/programme/reorderProgrammeItems";
+import {
+  checkRecordingRevisionCompleteness,
+  computeRecordingReadiness,
+  type CompletenessReportItem,
+  type RecordingReadiness,
+} from "../../mmke/completeness/checkRecordingRevisionCompleteness";
 import type { Recording, RecordingRevision } from "@prisma/client";
 
 // Recording / RecordingRevision repository — the mechanical core of the
@@ -295,6 +302,129 @@ export function findRecordingById(id: string): Promise<RecordingWithRevisions | 
 }
 
 /**
+ * Studio recordings list (Phase 4, brief §4/§22) — every recording with
+ * enough of its current draft/published revision to render a list and
+ * decide "needs attention," without each list row issuing its own query.
+ */
+export function listRecordingsForStudio(): Promise<RecordingWithRevisions[]> {
+  return prisma.recording.findMany({
+    include: { currentDraftRevision: true, currentPublishedRevision: true },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+/**
+ * Editorial submission (Phase 4, brief §5): moves a Recording that has
+ * never been published out of plain DRAFT and into IN_REVIEW so an
+ * Editor/Reviewer picks it up. Distinct from forkDraftFromPublished, which
+ * sets the same aggregate status for a different reason (a published
+ * recording gaining a pending update) — modules/publishing/editorialPhase
+ * tells the two apart for display using hasPublishedRevision.
+ */
+export async function submitRecordingForReview(recordingId: string, actorId: string): Promise<Recording> {
+  const recording = await prisma.recording.findUnique({ where: { id: recordingId } });
+  if (!recording) {
+    throw new Error(`Recording ${recordingId} does not exist.`);
+  }
+  if (recording.status !== "DRAFT") {
+    throw new Error(`Recording ${recordingId} is not in DRAFT status (currently ${recording.status}).`);
+  }
+
+  const updated = await prisma.recording.update({
+    where: { id: recordingId },
+    data: { status: "IN_REVIEW", updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "RECORDING_SUBMITTED_FOR_REVIEW",
+    entityType: "Recording",
+    entityId: recordingId,
+  });
+
+  return updated;
+}
+
+export async function archiveRecording(recordingId: string, actorId: string): Promise<Recording> {
+  const updated = await prisma.recording.update({
+    where: { id: recordingId },
+    data: { status: "ARCHIVED", updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "RECORDING_ARCHIVED",
+    entityType: "Recording",
+    entityId: recordingId,
+  });
+
+  return updated;
+}
+
+/**
+ * Attaches a MusicalWork directly to a RecordingRevision (brief §4's
+ * "Composer/Works" wizard step) — distinct from ProgrammeItem, which
+ * orders works within a Programme's running order. This is "what this
+ * specific recording features," which is also what
+ * checkRecordingRevisionCompleteness's "Musical Works" category counts.
+ */
+export async function attachWorkToRevision(
+  revisionId: string,
+  musicalWorkId: string,
+  actorId: string
+) {
+  return prisma.$transaction(async (tx) => {
+    const existingLinks = await tx.recordingRevisionWork.findMany({
+      where: { revisionId },
+      select: { musicalWorkId: true, order: true },
+    });
+
+    if (existingLinks.some((link) => link.musicalWorkId === musicalWorkId)) {
+      throw new Error("This work is already attached to the recording.");
+    }
+
+    const link = await tx.recordingRevisionWork.create({
+      data: {
+        revisionId,
+        musicalWorkId,
+        order: computeNextOrder(existingLinks.map((l, index) => ({ id: String(index), order: l.order }))),
+      },
+    });
+
+    await writeAuditLog(
+      {
+        actorId,
+        action: "WORK_ATTACHED_TO_RECORDING_REVISION",
+        entityType: "RecordingRevision",
+        entityId: revisionId,
+        afterSnapshot: { musicalWorkId },
+      },
+      tx
+    );
+
+    return link;
+  });
+}
+
+export async function detachWorkFromRevision(
+  revisionId: string,
+  musicalWorkId: string,
+  actorId: string
+): Promise<void> {
+  await prisma.recordingRevisionWork.delete({
+    where: { revisionId_musicalWorkId: { revisionId, musicalWorkId } },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "WORK_DETACHED_FROM_RECORDING_REVISION",
+    entityType: "RecordingRevision",
+    entityId: revisionId,
+    beforeSnapshot: { musicalWorkId },
+  });
+}
+
+/**
  * Public-facing lookup (ADR §5.5 / §9): the Museum reads ONLY through
  * currentPublishedRevisionId, never by querying revisions directly by
  * status, so there is exactly one unambiguous definition of "what's live."
@@ -363,4 +493,43 @@ export async function getCanonicalContextForRevision(revisionId: string) {
     conductors: revision.performance?.conductors.map((link) => link.conductor) ?? [],
     mediaResources: revision.mediaResources,
   };
+}
+
+export interface RecordingRevisionCompletenessReport {
+  report: CompletenessReportItem[];
+  readiness: RecordingReadiness;
+}
+
+/**
+ * Loads a revision's canonical context and maps it into the pure
+ * completeness checker's input shape (ADR §4, brief §13) — the Studio
+ * wizard's Review & Publish step and the recording layout's status badge
+ * both need exactly this, so it lives here once rather than duplicated at
+ * each call site.
+ */
+export async function getRecordingRevisionCompletenessReport(
+  revisionId: string
+): Promise<RecordingRevisionCompletenessReport | null> {
+  const context = await getCanonicalContextForRevision(revisionId);
+  if (!context) {
+    return null;
+  }
+
+  const participantCount = context.performers.length + context.choirs.length + context.conductors.length;
+  const hasPrimaryVideo = context.mediaResources.some((media) => media.role === "PRIMARY_VIDEO");
+
+  const report = checkRecordingRevisionCompleteness({
+    title: context.revision.title,
+    linkedWorkCount: context.directWorks.length,
+    hasPerformance: context.performance !== null,
+    hasVenue: context.venue !== null,
+    participantCount,
+    hasPrimaryVideo,
+    hasEducationalContent: Boolean(
+      context.revision.educationalListeningGuide || context.revision.educationalAnalysis
+    ),
+    hasSeoMetaTitle: Boolean(context.revision.seoMetaTitle),
+  });
+
+  return { report, readiness: computeRecordingReadiness(report) };
 }

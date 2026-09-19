@@ -132,3 +132,11 @@ export function listPublishedCollections(): Promise<Collection[]> {
     orderBy: { title: "asc" },
   });
 }
+
+/** Studio-facing list (Phase 4): drafts too, not just what the Museum shows. */
+export function listCollections(): Promise<Collection[]> {
+  return prisma.collection.findMany({
+    where: { archivedAt: null },
+    orderBy: { title: "asc" },
+  });
+}
