@@ -789,8 +789,9 @@ model YouTubeVideo {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  playlistItems  YouTubePlaylistItem[]
-  mediaResources MediaResource[]
+  playlistItems         YouTubePlaylistItem[]
+  mediaResources        MediaResource[]
+  analyticsObservations YouTubeAnalyticsObservation[]
 
   @@map("youtube_videos")
 }
@@ -828,6 +829,91 @@ model YouTubePlaylistItem {
   @@unique([playlistId, youtubeVideoId])
   @@index([playlistId, position])
   @@map("youtube_playlist_items")
+}
+
+// ---------------------------------------------------------------------------
+// YouTube Analytics observations (Phase 3, brief §8-11) — normalized,
+// synchronized performance measurements from the YouTube Analytics API.
+// This is deliberately a *different* table from YouTubeVideo/Playlist
+// above: those answer "what exists" (YouTube Data API); this answers "how
+// is it performing" (YouTube Analytics API). YouTube Analytics remains
+// authoritative for these numbers — this table stores synchronized
+// observations, not a competing source of truth.
+//
+// One row per (scope, target, metric, period, dimension breakdown) rather
+// than one enormous row with a nullable column per possible metric —
+// avoids both the "one giant table" anti-pattern and a full data
+// warehouse. `dimensions` is a small JSON breakdown (e.g.
+// {"trafficSource":"YT_SEARCH"} or {"country":"IN","device":"MOBILE"})
+// because YouTube Analytics reports can be sliced by an open-ended
+// combination of dimensions (brief §8) — this is NOT the "JSON shadow
+// state" the project has been careful to avoid elsewhere, because there is
+// no ambiguity about a second source of truth: this JSON only ever holds
+// a reporting breakdown, never catalogue identity. `dimensionsHash` is a
+// deterministic hash of the canonicalized `dimensions` JSON, used because
+// Prisma/Postgres unique constraints are far more reliable on a plain
+// scalar column than directly on a JSON column — this is what makes
+// re-running a sync idempotent (brief §10).
+// ---------------------------------------------------------------------------
+
+enum YouTubeAnalyticsScope {
+  CHANNEL
+  VIDEO
+}
+
+enum YouTubeAnalyticsMetric {
+  VIEWS
+  WATCH_TIME_MINUTES
+  AVERAGE_VIEW_DURATION_SECONDS
+  AVERAGE_VIEW_PERCENTAGE
+  LIKES
+  COMMENTS
+  SHARES
+  SUBSCRIBERS_GAINED
+  SUBSCRIBERS_LOST
+}
+
+model YouTubeAnalyticsObservation {
+  id             String                 @id @default(uuid())
+  scope          YouTubeAnalyticsScope
+  // Postgres treats NULL as distinct from every other NULL in a unique
+  // constraint, so a nullable youtubeVideoId/channelId pair cannot safely
+  // sit inside @@unique below — two CHANNEL-scoped rows (where
+  // youtubeVideoId is null) would never collide and idempotency would
+  // silently break for exactly that scope. targetKey is a non-null
+  // application-computed value (youtubeVideoId when scope = VIDEO,
+  // channelId when scope = CHANNEL) used ONLY for uniqueness.
+  // youtubeVideoId/channelId below remain the real, nullable columns used
+  // for actual relational queries and joins.
+  targetKey      String
+  youtubeVideoId String? // the real FK, set when scope = VIDEO
+  channelId      String? // the external YouTube channel id; set when scope = CHANNEL,
+  // and also optionally stamped on VIDEO-scoped rows for convenient
+  // channel-wide queries. No dedicated YouTubeChannel table yet — Music
+  // Madras has exactly one channel today, so a full entity would be
+  // premature; add one if/when a second channel or richer channel
+  // metadata is actually needed.
+  metric         YouTubeAnalyticsMetric
+  periodStart    DateTime
+  periodEnd      DateTime
+  value          Float
+  dimensions     Json? // optional reporting breakdown — see note above
+  dimensionsHash String                 @default("") // canonicalized hash of `dimensions`; "" when there is none
+
+  // Loose forward-reference, not a foreign key: SyncJobRun (ADR §12-13)
+  // does not exist yet (deferred to the phase that builds the YouTube Data
+  // sync engine). This becomes a real FK once that table exists, rather
+  // than introducing a second, analytics-specific job-run table now.
+  syncJobRunId String?
+  source       String   @default("youtube_analytics_api")
+  syncedAt     DateTime @default(now())
+
+  video YouTubeVideo? @relation(fields: [youtubeVideoId], references: [id], onDelete: Cascade)
+
+  @@unique([scope, targetKey, metric, periodStart, periodEnd, dimensionsHash])
+  @@index([youtubeVideoId, metric, periodStart])
+  @@index([channelId, metric, periodStart])
+  @@map("youtube_analytics_observations")
 }
 
 // ---------------------------------------------------------------------------
