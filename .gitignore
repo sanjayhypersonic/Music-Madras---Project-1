@@ -1,8 +1,39 @@
+# Applies repo-wide (this app at the root, and legacy-prototype/).
+
+# dependencies
 node_modules/
-build/
-dist/
-coverage/
+/.pnp
+.pnp.*
+
+# build output
+/.next/
+/out/
+/build/
+/dist/
+
+# testing / coverage
+/coverage/
+
+# env files — never commit real secrets; .env.example is the template
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# misc
 .DS_Store
 *.log
-.env*
-!.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# prisma
+/prisma/generated/

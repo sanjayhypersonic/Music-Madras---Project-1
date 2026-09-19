@@ -1,0 +1,876 @@
+// Music Madras — Canonical MMKE Database Schema
+//
+// This is the ONE canonical persistent source of truth for the MMKE domain
+// model, per docs/architecture/ADR-0001-production-platform.md (sections
+// 4, 5, 6, 15, 16, 17).
+//
+// Phase 1 scope (see docs/phase-1-foundation.md for the full explanation):
+//   - The core canonical catalogue entities (ADR §4).
+//   - The Recording / RecordingRevision draft-and-publish model (ADR §5),
+//     with exactly one normalized representation of a recording's content
+//     at any point in time — no JSON shadow state, no draftPayload blob.
+//   - The YouTubeVideo / YouTubePlaylist / YouTubePlaylistItem resource
+//     tables, including their observabilityState column (ADR §15), because
+//     MediaResource and Collection reference them. Their *behaviour*
+//     (sync engine, field ownership, conflict resolution — ADR §11-16) is
+//     explicitly NOT implemented in Phase 1.
+//   - A minimal StudioUser table exists ONLY as the createdBy/updatedBy
+//     foreign-key target the ADR's entity pattern requires. It has no
+//     password/session/invitation fields — the full account lifecycle
+//     (ADR §7) is a later phase. This is a deliberate scope note, not a
+//     silent architecture change; see docs/phase-1-foundation.md.
+//
+// Explicitly OUT of scope for this schema (later phases, per the ADR):
+//   - FieldOwnership / SyncConflict (ADR §16)
+//   - ObservabilityTransition / SyncPolicy (ADR §15)
+//   - SyncCheckpoint / SyncJobRun (ADR §12, §13)
+//   - Session / Account / Invitation / PasswordResetToken (ADR §7)
+// These are added alongside the code that actually uses them, in the
+// phases where the YouTube sync engine and authentication are built.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Connection URLs are configured in prisma.config.ts (Prisma ORM 7+),
+// not here. The CLI (migrate/db push) uses DIRECT_URL; the application
+// runtime uses DATABASE_URL (pooled) via a driver adapter in
+// modules/db/client.ts. See ADR §6.3.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum StudioRole {
+  FOUNDER
+  SUPER_ADMINISTRATOR
+  ADMINISTRATOR
+  EDITOR
+  REVIEWER
+  CONTRIBUTOR
+}
+
+enum StudioUserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum RecordingAggregateStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum RevisionStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+}
+
+enum VenueType {
+  CHURCH
+  CATHEDRAL
+  CONCERT_HALL
+  STUDIO
+  OUTDOOR
+}
+
+enum MediaProvider {
+  YOUTUBE
+  UPLOAD
+}
+
+enum MediaRole {
+  PRIMARY_VIDEO
+  THUMBNAIL
+  POSTER
+  PROGRAMME_PDF
+  SHEET_MUSIC
+  AUDIO_MASTER
+}
+
+enum ObservabilityState {
+  OBSERVED
+  NOT_OBSERVED
+  PRIVATE
+  UNLISTED
+  UNAVAILABLE
+  DELETED
+  SYNC_ERROR
+}
+
+enum SheetMusicRequestStatus {
+  NEW
+  IN_REVIEW
+  FULFILLED
+  DECLINED
+}
+
+// ---------------------------------------------------------------------------
+// Studio identity (minimal — see file header note)
+// ---------------------------------------------------------------------------
+
+model StudioUser {
+  id        String           @id @default(uuid())
+  email     String           @unique
+  name      String
+  role      StudioRole
+  status    StudioUserStatus @default(INVITED)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  composersCreated          Composer[]           @relation("ComposerCreatedBy")
+  composersUpdated          Composer[]           @relation("ComposerUpdatedBy")
+  worksCreated              MusicalWork[]        @relation("MusicalWorkCreatedBy")
+  worksUpdated              MusicalWork[]        @relation("MusicalWorkUpdatedBy")
+  programmesCreated         Programme[]          @relation("ProgrammeCreatedBy")
+  programmesUpdated         Programme[]          @relation("ProgrammeUpdatedBy")
+  performancesCreated       Performance[]        @relation("PerformanceCreatedBy")
+  performancesUpdated       Performance[]        @relation("PerformanceUpdatedBy")
+  recordingsCreated         Recording[]          @relation("RecordingCreatedBy")
+  recordingsUpdated         Recording[]          @relation("RecordingUpdatedBy")
+  revisionsCreated          RecordingRevision[]  @relation("RevisionCreatedBy")
+  revisionsUpdated          RecordingRevision[]  @relation("RevisionUpdatedBy")
+  artistsCreated            Artist[]             @relation("ArtistCreatedBy")
+  artistsUpdated            Artist[]             @relation("ArtistUpdatedBy")
+  choirsCreated             Choir[]              @relation("ChoirCreatedBy")
+  choirsUpdated             Choir[]              @relation("ChoirUpdatedBy")
+  conductorsCreated         Conductor[]          @relation("ConductorCreatedBy")
+  conductorsUpdated         Conductor[]          @relation("ConductorUpdatedBy")
+  organisationsCreated      Organisation[]       @relation("OrganisationCreatedBy")
+  organisationsUpdated      Organisation[]       @relation("OrganisationUpdatedBy")
+  venuesCreated             Venue[]              @relation("VenueCreatedBy")
+  venuesUpdated             Venue[]              @relation("VenueUpdatedBy")
+  instrumentsCreated        Instrument[]         @relation("InstrumentCreatedBy")
+  instrumentsUpdated        Instrument[]         @relation("InstrumentUpdatedBy")
+  collectionsCreated        Collection[]         @relation("CollectionCreatedBy")
+  collectionsUpdated        Collection[]         @relation("CollectionUpdatedBy")
+  learningGuidesCreated     LearningGuide[]      @relation("LearningGuideCreatedBy")
+  learningGuidesUpdated     LearningGuide[]      @relation("LearningGuideUpdatedBy")
+  educationalContentCreated EducationalContent[] @relation("EducationalContentCreatedBy")
+  educationalContentUpdated EducationalContent[] @relation("EducationalContentUpdatedBy")
+  editorialContentCreated   EditorialContent[]   @relation("EditorialContentCreatedBy")
+  editorialContentUpdated   EditorialContent[]   @relation("EditorialContentUpdatedBy")
+  auditLogEntries           AuditLogEntry[]      @relation("AuditLogActor")
+
+  @@map("studio_users")
+}
+
+// ---------------------------------------------------------------------------
+// Canonical catalogue — Composer / MusicalWork / Programme / Performance
+// ---------------------------------------------------------------------------
+
+model Composer {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  name        String
+  bornDate    String?
+  diedDate    String?
+  era         String?
+  biography   String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("ComposerCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("ComposerUpdatedBy", fields: [updatedById], references: [id])
+
+  works          MusicalWork[]
+  mediaResources MediaResource[]
+
+  @@index([archivedAt])
+  @@map("composers")
+}
+
+model MusicalWork {
+  id              String    @id @default(uuid())
+  slug            String    @unique
+  title           String
+  catalogueNumber String?
+  keySignature    String?
+  composerId      String
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdById     String
+  updatedById     String
+
+  composer  Composer   @relation(fields: [composerId], references: [id], onDelete: Restrict)
+  createdBy StudioUser @relation("MusicalWorkCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("MusicalWorkUpdatedBy", fields: [updatedById], references: [id])
+
+  programmeItems         ProgrammeItem[]
+  recordingRevisionLinks RecordingRevisionWork[]
+  sheetMusicRequests     SheetMusicRequest[]
+  learningGuideLinks     LearningGuideWork[]
+  collectionLinks        CollectionWork[]
+
+  @@index([composerId])
+  @@index([archivedAt])
+  @@map("musical_works")
+}
+
+model Programme {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  title       String
+  notes       String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("ProgrammeCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("ProgrammeUpdatedBy", fields: [updatedById], references: [id])
+
+  items        ProgrammeItem[]
+  performances Performance[]
+
+  @@index([archivedAt])
+  @@map("programmes")
+}
+
+model ProgrammeItem {
+  id            String  @id @default(uuid())
+  programmeId   String
+  musicalWorkId String
+  order         Int
+  movement      String?
+  isEncore      Boolean @default(false)
+
+  programme   Programme   @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  musicalWork MusicalWork @relation(fields: [musicalWorkId], references: [id], onDelete: Restrict)
+
+  @@unique([programmeId, order])
+  @@index([musicalWorkId])
+  @@map("programme_items")
+}
+
+model Performance {
+  id              String    @id @default(uuid())
+  programmeId     String
+  venueId         String
+  performanceDate DateTime?
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdById     String
+  updatedById     String
+
+  programme Programme  @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  venue     Venue      @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  createdBy StudioUser @relation("PerformanceCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("PerformanceUpdatedBy", fields: [updatedById], references: [id])
+
+  revisions   RecordingRevision[]
+  instruments Instrument[]
+  performers  PerformancePerformer[]
+  choirs      PerformanceChoir[]
+  conductors  PerformanceConductor[]
+
+  @@index([programmeId])
+  @@index([venueId])
+  @@index([archivedAt])
+  @@map("performances")
+}
+
+// ---------------------------------------------------------------------------
+// Participants and their join tables to Performance (ADR §4 — explicit
+// relationships, not free-text strings)
+// ---------------------------------------------------------------------------
+
+model Artist {
+  id          String    @id @default(uuid())
+  name        String
+  instrument  String?
+  biography   String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("ArtistCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("ArtistUpdatedBy", fields: [updatedById], references: [id])
+
+  performances PerformancePerformer[]
+
+  @@map("artists")
+}
+
+model Choir {
+  id           String    @id @default(uuid())
+  name         String
+  directorName String?
+  description  String?   @db.Text
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdById  String
+  updatedById  String
+
+  createdBy StudioUser @relation("ChoirCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("ChoirUpdatedBy", fields: [updatedById], references: [id])
+
+  performances PerformanceChoir[]
+
+  @@map("choirs")
+}
+
+model Conductor {
+  id          String    @id @default(uuid())
+  name        String
+  biography   String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("ConductorCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("ConductorUpdatedBy", fields: [updatedById], references: [id])
+
+  performances PerformanceConductor[]
+
+  @@map("conductors")
+}
+
+model Organisation {
+  id          String    @id @default(uuid())
+  name        String
+  description String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("OrganisationCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("OrganisationUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("organisations")
+}
+
+model PerformancePerformer {
+  performanceId String
+  artistId      String
+
+  performance Performance @relation(fields: [performanceId], references: [id], onDelete: Cascade)
+  artist      Artist      @relation(fields: [artistId], references: [id], onDelete: Restrict)
+
+  @@id([performanceId, artistId])
+  @@map("performance_performers")
+}
+
+model PerformanceChoir {
+  performanceId String
+  choirId       String
+
+  performance Performance @relation(fields: [performanceId], references: [id], onDelete: Cascade)
+  choir       Choir       @relation(fields: [choirId], references: [id], onDelete: Restrict)
+
+  @@id([performanceId, choirId])
+  @@map("performance_choirs")
+}
+
+model PerformanceConductor {
+  performanceId String
+  conductorId   String
+
+  performance Performance @relation(fields: [performanceId], references: [id], onDelete: Cascade)
+  conductor   Conductor   @relation(fields: [conductorId], references: [id], onDelete: Restrict)
+
+  @@id([performanceId, conductorId])
+  @@map("performance_conductors")
+}
+
+// ---------------------------------------------------------------------------
+// Venue / Church (one table, per ADR §4) and Instrument
+// ---------------------------------------------------------------------------
+
+model Venue {
+  id              String    @id @default(uuid())
+  slug            String    @unique
+  name            String
+  type            VenueType
+  address         String?
+  city            String?
+  country         String?
+  capacity        Int?
+  acousticProfile String?
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdById     String
+  updatedById     String
+
+  createdBy StudioUser @relation("VenueCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("VenueUpdatedBy", fields: [updatedById], references: [id])
+
+  performances   Performance[]
+  instruments    Instrument[]
+  mediaResources MediaResource[]
+
+  @@index([archivedAt])
+  @@map("venues")
+}
+
+model Instrument {
+  id            String    @id @default(uuid())
+  name          String
+  manufacturer  String?
+  buildYear     String?
+  venueId       String
+  performanceId String?
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdById   String
+  updatedById   String
+
+  venue       Venue        @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  performance Performance? @relation(fields: [performanceId], references: [id], onDelete: SetNull)
+  createdBy   StudioUser   @relation("InstrumentCreatedBy", fields: [createdById], references: [id])
+  updatedBy   StudioUser   @relation("InstrumentUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([venueId])
+  @@map("instruments")
+}
+
+// ---------------------------------------------------------------------------
+// Recording identity + Draft/Revision model (ADR §5 — the one canonical
+// representation; no JSON shadow state, no draftPayload)
+// ---------------------------------------------------------------------------
+
+model Recording {
+  id                         String                   @id @default(uuid())
+  slug                       String                   @unique
+  status                     RecordingAggregateStatus @default(DRAFT)
+  currentDraftRevisionId     String?                  @unique
+  currentPublishedRevisionId String?                  @unique
+  createdAt                  DateTime                 @default(now())
+  updatedAt                  DateTime                 @updatedAt
+  createdById                String
+  updatedById                String
+
+  createdBy StudioUser @relation("RecordingCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("RecordingUpdatedBy", fields: [updatedById], references: [id])
+
+  // Pointers into the revision history below. Nullable and SetNull on
+  // delete because these are pointers, not ownership — the true ownership
+  // FK is RecordingRevision.recordingId (Cascade), the reverse direction.
+  currentDraftRevision     RecordingRevision? @relation("RecordingCurrentDraft", fields: [currentDraftRevisionId], references: [id], onDelete: SetNull)
+  currentPublishedRevision RecordingRevision? @relation("RecordingCurrentPublished", fields: [currentPublishedRevisionId], references: [id], onDelete: SetNull)
+
+  revisions          RecordingRevision[]      @relation("RecordingRevisions")
+  sheetMusicRequests SheetMusicRequest[]
+  collectionLinks    CollectionRecording[]
+  learningGuideLinks LearningGuideRecording[]
+
+  @@map("recordings")
+}
+
+model RecordingRevision {
+  id             String         @id @default(uuid())
+  recordingId    String
+  revisionNumber Int
+  revisionStatus RevisionStatus @default(DRAFT)
+
+  // Core content — see ADR §5.1. This IS the canonical representation;
+  // there is no parallel JSON document anywhere holding the same data.
+  title       String?
+  description String? @db.Text
+
+  performanceId String?
+  performance   Performance? @relation(fields: [performanceId], references: [id], onDelete: SetNull)
+
+  // SEO fields (ADR §19) — distinct, real columns; not a duplicate
+  // representation of catalogue data, just revision-specific metadata.
+  seoMetaTitle       String?
+  seoMetaDescription String? @db.Text
+  seoCanonicalPath   String?
+
+  // Educational content fields (ADR §4 Studio wizard "Educational" step).
+  educationalDifficultyLevel String?
+  educationalListeningGuide  String? @db.Text
+  educationalAnalysis        String? @db.Text
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  updatedById String
+
+  recording Recording  @relation("RecordingRevisions", fields: [recordingId], references: [id], onDelete: Cascade)
+  createdBy StudioUser @relation("RevisionCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("RevisionUpdatedBy", fields: [updatedById], references: [id])
+
+  // Reverse side of Recording.currentDraftRevisionId / currentPublishedRevisionId.
+  currentDraftOf     Recording? @relation("RecordingCurrentDraft")
+  currentPublishedOf Recording? @relation("RecordingCurrentPublished")
+
+  works          RecordingRevisionWork[]
+  mediaResources MediaResource[]
+
+  @@unique([recordingId, revisionNumber])
+  @@index([performanceId])
+  @@map("recording_revisions")
+}
+
+model RecordingRevisionWork {
+  revisionId              String
+  musicalWorkId           String
+  order                   Int
+  catalogueNumberOverride String?
+
+  revision    RecordingRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  musicalWork MusicalWork       @relation(fields: [musicalWorkId], references: [id], onDelete: Restrict)
+
+  @@id([revisionId, musicalWorkId])
+  @@map("recording_revision_works")
+}
+
+// ---------------------------------------------------------------------------
+// Collections (replaces the prototype's ad-hoc Playlist type — ADR §4/§14)
+// ---------------------------------------------------------------------------
+
+model Collection {
+  id                String    @id @default(uuid())
+  slug              String    @unique
+  title             String
+  description       String?   @db.Text
+  backingPlaylistId String?
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdById       String
+  updatedById       String
+
+  backingPlaylist YouTubePlaylist? @relation(fields: [backingPlaylistId], references: [id], onDelete: SetNull)
+  createdBy       StudioUser       @relation("CollectionCreatedBy", fields: [createdById], references: [id])
+  updatedBy       StudioUser       @relation("CollectionUpdatedBy", fields: [updatedById], references: [id])
+
+  recordingLinks CollectionRecording[]
+  workLinks      CollectionWork[]
+  mediaResources MediaResource[]
+
+  @@index([archivedAt])
+  @@map("collections")
+}
+
+model CollectionRecording {
+  collectionId String
+  recordingId  String
+  order        Int
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  recording  Recording  @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, recordingId])
+  @@map("collection_recordings")
+}
+
+model CollectionWork {
+  collectionId  String
+  musicalWorkId String
+  order         Int
+
+  collection  Collection  @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  musicalWork MusicalWork @relation(fields: [musicalWorkId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, musicalWorkId])
+  @@map("collection_works")
+}
+
+// ---------------------------------------------------------------------------
+// Educational content, Learning guides, Editorial content
+// ---------------------------------------------------------------------------
+
+model LearningGuide {
+  id                          String    @id @default(uuid())
+  slug                        String    @unique
+  title                       String
+  difficultyLevel             String?
+  contentMarkdown             String?   @db.Text
+  estimatedReadingTimeMinutes Int?
+  archivedAt                  DateTime?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  createdById                 String
+  updatedById                 String
+
+  createdBy StudioUser @relation("LearningGuideCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("LearningGuideUpdatedBy", fields: [updatedById], references: [id])
+
+  workLinks      LearningGuideWork[]
+  recordingLinks LearningGuideRecording[]
+  mediaResources MediaResource[]
+
+  @@index([archivedAt])
+  @@map("learning_guides")
+}
+
+model LearningGuideWork {
+  learningGuideId String
+  musicalWorkId   String
+
+  learningGuide LearningGuide @relation(fields: [learningGuideId], references: [id], onDelete: Cascade)
+  musicalWork   MusicalWork   @relation(fields: [musicalWorkId], references: [id], onDelete: Cascade)
+
+  @@id([learningGuideId, musicalWorkId])
+  @@map("learning_guide_works")
+}
+
+model LearningGuideRecording {
+  learningGuideId String
+  recordingId     String
+
+  learningGuide LearningGuide @relation(fields: [learningGuideId], references: [id], onDelete: Cascade)
+  recording     Recording     @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+
+  @@id([learningGuideId, recordingId])
+  @@map("learning_guide_recordings")
+}
+
+// A smaller, reusable educational content unit (ADR §4 lists this
+// separately from LearningGuide but does not detail its shape beyond one
+// line). Kept deliberately minimal — no public route/slug is specified
+// for it in ADR §3, unlike LearningGuide's `/learning/[slug]`.
+model EducationalContent {
+  id          String    @id @default(uuid())
+  title       String
+  body        String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("EducationalContentCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("EducationalContentUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("educational_content")
+}
+
+model EditorialContent {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  title       String
+  body        String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy      StudioUser      @relation("EditorialContentCreatedBy", fields: [createdById], references: [id])
+  updatedBy      StudioUser      @relation("EditorialContentUpdatedBy", fields: [updatedById], references: [id])
+  mediaResources MediaResource[]
+
+  @@index([archivedAt])
+  @@map("editorial_content")
+}
+
+// ---------------------------------------------------------------------------
+// Media (ADR §4, §18) — explicit nullable FK per attachable parent type,
+// rather than an unconstrained polymorphic (type, id) pair, so referential
+// integrity is real.
+// ---------------------------------------------------------------------------
+
+model MediaResource {
+  id                 String        @id @default(uuid())
+  provider           MediaProvider
+  providerResourceId String?
+  role               MediaRole
+  url                String?
+
+  recordingRevisionId String?
+  composerId          String?
+  venueId             String?
+  collectionId        String?
+  learningGuideId     String?
+  editorialContentId  String?
+
+  recordingRevision RecordingRevision? @relation(fields: [recordingRevisionId], references: [id], onDelete: Cascade)
+  composer          Composer?          @relation(fields: [composerId], references: [id], onDelete: Cascade)
+  venue             Venue?             @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  collection        Collection?        @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  learningGuide     LearningGuide?     @relation(fields: [learningGuideId], references: [id], onDelete: Cascade)
+  editorialContent  EditorialContent?  @relation(fields: [editorialContentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([recordingRevisionId])
+  @@map("media_resources")
+}
+
+// ---------------------------------------------------------------------------
+// YouTube resource tables — schema only (ADR §4 explicitly requires these
+// as foundations). No sync engine, adapter, ownership, or conflict logic
+// is implemented in Phase 1; see ADR §11-16 for that design.
+// ---------------------------------------------------------------------------
+
+model YouTubeVideo {
+  id                 String             @id @default(uuid())
+  youtubeVideoId     String             @unique
+  title              String?
+  description        String?            @db.Text
+  thumbnailUrl       String?
+  publishedAt        DateTime?
+  durationSeconds    Int?
+  etag               String?
+  contentHash        String?
+  observabilityState ObservabilityState @default(OBSERVED)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  playlistItems YouTubePlaylistItem[]
+
+  @@map("youtube_videos")
+}
+
+model YouTubePlaylist {
+  id                 String             @id @default(uuid())
+  youtubePlaylistId  String             @unique
+  title              String?
+  description        String?            @db.Text
+  etag               String?
+  contentHash        String?
+  observabilityState ObservabilityState @default(OBSERVED)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  items       YouTubePlaylistItem[]
+  collections Collection[]
+
+  @@map("youtube_playlists")
+}
+
+model YouTubePlaylistItem {
+  id                 String             @id @default(uuid())
+  playlistId         String
+  youtubeVideoId     String
+  position           Int
+  etag               String?
+  observabilityState ObservabilityState @default(OBSERVED)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  playlist YouTubePlaylist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  video    YouTubeVideo    @relation(fields: [youtubeVideoId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, youtubeVideoId])
+  @@index([playlistId, position])
+  @@map("youtube_playlist_items")
+}
+
+// ---------------------------------------------------------------------------
+// Sheet Music Requests (ADR §17)
+// ---------------------------------------------------------------------------
+
+model SheetMusicRequest {
+  id                String                  @id @default(uuid())
+  requesterName     String
+  requesterEmail    String
+  musicalWorkId     String?
+  recordingId       String?
+  instrumentOrVoice String?
+  intendedUse       String?
+  message           String?                 @db.Text
+  status            SheetMusicRequestStatus @default(NEW)
+  consentGivenAt    DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  musicalWork MusicalWork? @relation(fields: [musicalWorkId], references: [id], onDelete: SetNull)
+  recording   Recording?   @relation(fields: [recordingId], references: [id], onDelete: SetNull)
+
+  @@index([musicalWorkId])
+  @@index([status])
+  @@map("sheet_music_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Provenance — Source / Citation / RightsInformation (ADR §4), attached to
+// any entity via a generic entityType/entityId join, exactly as the ADR
+// itself specifies this one as a genuinely generic/polymorphic case.
+// ---------------------------------------------------------------------------
+
+model Source {
+  id        String   @id @default(uuid())
+  title     String?
+  url       String?
+  publisher String?
+  createdAt DateTime @default(now())
+
+  citations   Citation[]
+  entityLinks EntitySource[]
+
+  @@map("sources")
+}
+
+model Citation {
+  id        String   @id @default(uuid())
+  text      String?  @db.Text
+  sourceId  String?
+  createdAt DateTime @default(now())
+
+  source Source? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@map("citations")
+}
+
+model RightsInformation {
+  id          String   @id @default(uuid())
+  holder      String?
+  licenseType String?
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@map("rights_information")
+}
+
+model EntitySource {
+  id         String @id @default(uuid())
+  entityType String
+  entityId   String
+  sourceId   String
+
+  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId])
+  @@map("entity_sources")
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (ADR §20) — append-only, written by every mutating repository
+// call. Enforced as insert-only by application code in modules/audit
+// (modules/db is the only place Prisma is imported — see ADR §3 boundary
+// rule); a hard DB-level immutability trigger is a reasonable later
+// hardening step, not required for the Phase 1 foundation.
+// ---------------------------------------------------------------------------
+
+model AuditLogEntry {
+  id             String   @id @default(uuid())
+  actorId        String?
+  action         String
+  entityType     String
+  entityId       String
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  timestamp      DateTime @default(now())
+
+  actor StudioUser? @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([timestamp])
+  @@map("audit_log_entries")
+}

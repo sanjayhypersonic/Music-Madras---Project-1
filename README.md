@@ -1,20 +1,18 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Music Madras — Production Platform
 
-# Run and deploy your AI Studio app
+This is the production Next.js application for Music Madras, being built per [`docs/architecture/ADR-0001-production-platform.md`](docs/architecture/ADR-0001-production-platform.md).
 
-This contains everything you need to run your app locally.
+**Current status:** Phase 1 (application foundation) complete. No public Museum pages, Studio screens, authentication, or YouTube integration exist yet — see [`docs/phase-1-foundation.md`](docs/phase-1-foundation.md) for exactly what Phase 1 does and does not include.
 
-View your app in AI Studio: https://ai.studio/apps/459466ff-96ba-483e-aab5-31460d662dc2
+The original Google AI Studio–built prototype has been preserved, unmodified, in [`legacy-prototype/`](legacy-prototype/LEGACY_NOTICE.md) as a product/UX/content reference — it is not part of this application.
 
-## Run Locally
+## Quick start
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+cp .env.example .env.local   # then fill in real values as they become available
+npm run prisma:generate
+npm run dev
+```
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+See [`docs/phase-1-foundation.md`](docs/phase-1-foundation.md) for the full command reference, environment variable list, and architecture boundaries.
