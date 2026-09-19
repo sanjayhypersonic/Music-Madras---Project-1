@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checkRecordingRevisionCompleteness,
+  computeRecordingReadiness,
   isReadyToPublish,
   type RecordingRevisionCompletenessInput,
 } from "../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
@@ -76,5 +77,27 @@ describe("isReadyToPublish", () => {
   it("is false when any REQUIRED category is MISSING", () => {
     const report = checkRecordingRevisionCompleteness({ ...completeInput, hasPrimaryVideo: false });
     expect(isReadyToPublish(report)).toBe(false);
+  });
+});
+
+describe("computeRecordingReadiness (brief §12 — named categories, not a percentage)", () => {
+  it("is INCOMPLETE when a REQUIRED category is missing, regardless of everything else", () => {
+    const report = checkRecordingRevisionCompleteness({ ...completeInput, linkedWorkCount: 0 });
+    expect(computeRecordingReadiness(report)).toBe("INCOMPLETE");
+  });
+
+  it("is READY_FOR_REVIEW when all REQUIRED are complete but a RECOMMENDED one is missing", () => {
+    const report = checkRecordingRevisionCompleteness({ ...completeInput, hasVenue: false });
+    expect(computeRecordingReadiness(report)).toBe("READY_FOR_REVIEW");
+  });
+
+  it("is PUBLISHABLE when every REQUIRED and RECOMMENDED category is complete", () => {
+    const report = checkRecordingRevisionCompleteness(completeInput);
+    expect(computeRecordingReadiness(report)).toBe("PUBLISHABLE");
+  });
+
+  it("is still PUBLISHABLE when only the OPTIONAL category is missing", () => {
+    const report = checkRecordingRevisionCompleteness({ ...completeInput, hasEducationalContent: false });
+    expect(computeRecordingReadiness(report)).toBe("PUBLISHABLE");
   });
 });

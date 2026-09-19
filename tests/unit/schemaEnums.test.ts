@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ObservabilityState, RevisionStatus, RecordingAggregateStatus } from "@prisma/client";
+import {
+  ObservabilityState,
+  RevisionStatus,
+  RecordingAggregateStatus,
+  CollectionStatus,
+} from "@prisma/client";
 
 // This test does NOT touch a database — it only imports the generated
 // Prisma Client's runtime enum objects. Its purpose is to protect the
@@ -36,5 +41,11 @@ describe("RecordingAggregateStatus enum (ADR §5.1)", () => {
     expect(Object.values(RecordingAggregateStatus).sort()).toEqual(
       ["DRAFT", "IN_REVIEW", "PUBLISHED", "ARCHIVED"].sort()
     );
+  });
+});
+
+describe("CollectionStatus enum (Phase 2, brief §8)", () => {
+  it("has exactly DRAFT, PUBLISHED", () => {
+    expect(Object.values(CollectionStatus).sort()).toEqual(["DRAFT", "PUBLISHED"].sort());
   });
 });

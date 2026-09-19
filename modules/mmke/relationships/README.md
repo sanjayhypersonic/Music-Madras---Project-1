@@ -1,3 +1,3 @@
-# modules/mmke/relationships — later-phase scope
+# modules/mmke/relationships
 
-Structural placeholder for relationship-traversal helpers (e.g. "internal links generated from real MMKE relationships," ADR §19/§36) that are meaningful once real Museum pages exist to link between. All actual relationships are already modeled as real foreign keys and join tables in `prisma/schema.prisma` (Phase 1) — this directory is for higher-level query helpers built on top of those, not a place for duplicating the relationships themselves.
+**Boundary clarification (Phase 2):** this module holds pure helpers that operate on *already-loaded* relationship data (e.g. `formatComposerCredit.ts`, `dedupeById`). It never imports Prisma. The actual database traversal of the canonical chain — Recording → Works → Composers, and Recording → Performance → Programme/Venue/Performers (brief §3) — runs as real Prisma queries in `modules/db/repositories/recordingRepository.ts` (see `getCanonicalContextForRevision`), because only `modules/db` may import Prisma (ADR §3). This corrects an ambiguity in this README as originally written in Phase 1, which implied query helpers might live here.

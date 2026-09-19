@@ -23,3 +23,28 @@ export function isValidRevisionTransition(
 ): boolean {
   return VALID_TRANSITIONS[from].includes(to);
 }
+
+// Phase 2 — preconditions extracted out of recordingRepository so they are
+// directly unit-testable (ADR §5.3/§5.4) without a database.
+
+export interface RecordingPointerState {
+  hasOpenDraft: boolean;
+  hasPublishedRevision: boolean;
+}
+
+/**
+ * Edit-after-publish (ADR §5.3, third bullet) is only legal when there is
+ * a published revision to fork from, and no draft is already open — a
+ * Recording has exactly one current draft at a time (ADR §5.4).
+ */
+export function canForkNewDraft(state: RecordingPointerState): boolean {
+  return state.hasPublishedRevision && !state.hasOpenDraft;
+}
+
+/**
+ * Publishing by moving the pointer (ADR §5.3, second bullet) requires an
+ * open draft revision to promote.
+ */
+export function canPublishCurrentDraft(state: Pick<RecordingPointerState, "hasOpenDraft">): boolean {
+  return state.hasOpenDraft;
+}

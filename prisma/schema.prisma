@@ -111,6 +111,18 @@ enum SheetMusicRequestStatus {
   DECLINED
 }
 
+// Phase 2 (brief §8): a simple publish toggle for Collections, distinct
+// from the Recording Draft & Revision model — Collections are curated
+// groupings, not richly-authored content, so a full revision history
+// would be over-engineering (and would risk becoming "another
+// snapshot/versioning mechanism," which the Phase 2 brief explicitly
+// rules out). Archival still uses the existing archivedAt column, for
+// consistency with every other entity.
+enum CollectionStatus {
+  DRAFT
+  PUBLISHED
+}
+
 // ---------------------------------------------------------------------------
 // Studio identity (minimal — see file header note)
 // ---------------------------------------------------------------------------
@@ -193,6 +205,12 @@ model MusicalWork {
   id              String    @id @default(uuid())
   slug            String    @unique
   title           String
+  // Phase 2 additions (brief §5 — support the catalogue depth GAIS's own
+  // CANONICAL_MODELS.md aspired to for Western Classical + related
+  // choral/historical material, without assuming one musical tradition):
+  alternateTitles String[]  @default([])
+  language        String?
+  notes           String?   @db.Text
   catalogueNumber String?
   keySignature    String?
   composerId      String
@@ -356,12 +374,20 @@ model Organisation {
   createdBy StudioUser @relation("OrganisationCreatedBy", fields: [createdById], references: [id])
   updatedBy StudioUser @relation("OrganisationUpdatedBy", fields: [updatedById], references: [id])
 
+  venues Venue[]
+
   @@map("organisations")
 }
 
 model PerformancePerformer {
   performanceId String
   artistId      String
+  // Phase 2: e.g. "Soloist", "Organist", "Accompanist" — a free-text role
+  // label kept deliberately simple (brief §6: "extensible for future
+  // participant roles without creating an unnecessarily complex role
+  // engine"). A controlled enum would need a migration for every new role
+  // Music Madras wants to record; this does not.
+  role          String?
 
   performance Performance @relation(fields: [performanceId], references: [id], onDelete: Cascade)
   artist      Artist      @relation(fields: [artistId], references: [id], onDelete: Restrict)
@@ -406,20 +432,33 @@ model Venue {
   country         String?
   capacity        Int?
   acousticProfile String?
+  // Phase 2 (brief §7): a Church (or any Venue) may also be a meaningful
+  // organisation/entity in the cultural catalogue — e.g. the congregation
+  // or trust that operates the building, distinct from the physical place
+  // itself, and potentially operating more than one venue over time. This
+  // is deliberately the smallest justified addition: an OPTIONAL link,
+  // not a merge of Venue and Organisation into one table (which would
+  // wrongly conflate "a physical place" with "an institution") and not a
+  // second Church-specific table (which would risk duplicate venue/church
+  // records for the same building). See docs/phase-2-mmke-domain.md §7
+  // for the full reasoning.
+  organisationId  String?
   archivedAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   createdById     String
   updatedById     String
 
-  createdBy StudioUser @relation("VenueCreatedBy", fields: [createdById], references: [id])
-  updatedBy StudioUser @relation("VenueUpdatedBy", fields: [updatedById], references: [id])
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  createdBy    StudioUser    @relation("VenueCreatedBy", fields: [createdById], references: [id])
+  updatedBy    StudioUser    @relation("VenueUpdatedBy", fields: [updatedById], references: [id])
 
   performances   Performance[]
   instruments    Instrument[]
   mediaResources MediaResource[]
 
   @@index([archivedAt])
+  @@index([organisationId])
   @@map("venues")
 }
 
@@ -542,14 +581,15 @@ model RecordingRevisionWork {
 // ---------------------------------------------------------------------------
 
 model Collection {
-  id                String    @id @default(uuid())
-  slug              String    @unique
+  id                String           @id @default(uuid())
+  slug              String           @unique
   title             String
-  description       String?   @db.Text
+  description       String?          @db.Text
+  status            CollectionStatus @default(DRAFT)
   backingPlaylistId String?
   archivedAt        DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
   createdById       String
   updatedById       String
 
@@ -656,6 +696,9 @@ model EducationalContent {
   createdBy StudioUser @relation("EducationalContentCreatedBy", fields: [createdById], references: [id])
   updatedBy StudioUser @relation("EducationalContentUpdatedBy", fields: [updatedById], references: [id])
 
+  // Phase 2: generic attachment to any MMKE entity (see EntityEducationalContent).
+  linkedEntities EntityEducationalContent[]
+
   @@map("educational_content")
 }
 
@@ -687,6 +730,12 @@ model EditorialContent {
 model MediaResource {
   id                 String        @id @default(uuid())
   provider           MediaProvider
+  // Fallback for providers without a canonical table yet (e.g. a future
+  // Vimeo/Spotify adapter). When provider = YOUTUBE, prefer the real
+  // youtubeVideoId relation below instead — Phase 1 only had this loose
+  // string, which was exactly the "free text instead of a relationship"
+  // gap the Phase 2 relationship review flagged (ADR §3's Recording ->
+  // YouTubeVideo chain).
   providerResourceId String?
   role               MediaRole
   url                String?
@@ -697,6 +746,8 @@ model MediaResource {
   collectionId        String?
   learningGuideId     String?
   editorialContentId  String?
+  youtubeVideoId      String?
+  rightsInformationId String?
 
   recordingRevision RecordingRevision? @relation(fields: [recordingRevisionId], references: [id], onDelete: Cascade)
   composer          Composer?          @relation(fields: [composerId], references: [id], onDelete: Cascade)
@@ -704,11 +755,17 @@ model MediaResource {
   collection        Collection?        @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   learningGuide     LearningGuide?     @relation(fields: [learningGuideId], references: [id], onDelete: Cascade)
   editorialContent  EditorialContent?  @relation(fields: [editorialContentId], references: [id], onDelete: Cascade)
+  // Phase 2: real relationship instead of a bare string.
+  youtubeVideo      YouTubeVideo?      @relation(fields: [youtubeVideoId], references: [id], onDelete: SetNull)
+  // Phase 2: rights-aware by construction (ADR §17/§10).
+  rightsInformation RightsInformation? @relation(fields: [rightsInformationId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([recordingRevisionId])
+  @@index([youtubeVideoId])
+  @@index([rightsInformationId])
   @@map("media_resources")
 }
 
@@ -732,7 +789,8 @@ model YouTubeVideo {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  playlistItems YouTubePlaylistItem[]
+  playlistItems  YouTubePlaylistItem[]
+  mediaResources MediaResource[]
 
   @@map("youtube_videos")
 }
@@ -835,6 +893,14 @@ model RightsInformation {
   notes       String?  @db.Text
   createdAt   DateTime @default(now())
 
+  // Direct link for the common case (a specific media asset's rights —
+  // ADR §17's "attaching a MediaResource... with its own RightsInformation").
+  mediaResources MediaResource[]
+  // Generic link for entity-level rights (e.g. a MusicalWork's copyright
+  // status, independent of any one recording of it) — Phase 2, mirrors
+  // EntitySource's pattern.
+  entityLinks    EntityRights[]
+
   @@map("rights_information")
 }
 
@@ -848,6 +914,40 @@ model EntitySource {
 
   @@index([entityType, entityId])
   @@map("entity_sources")
+}
+
+// Generic entity-level rights attachment (Phase 2) — mirrors EntitySource
+// exactly, per ADR §10's rights-aware-publishing foundation. Used for
+// rights that belong to an entity itself (e.g. a MusicalWork's copyright
+// status) rather than to one specific MediaResource (which has its own
+// direct rightsInformationId instead).
+model EntityRights {
+  id                  String @id @default(uuid())
+  entityType          String
+  entityId            String
+  rightsInformationId String
+
+  rightsInformation RightsInformation @relation(fields: [rightsInformationId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId])
+  @@map("entity_rights")
+}
+
+// Generic entity-level educational content attachment (Phase 2) — mirrors
+// EntitySource/EntityRights. Lets an EducationalContent block contextualize
+// any entity (a Recording, a MusicalWork, a Composer, ...) without a
+// dedicated join table per entity type (brief §9: "associated with
+// relevant MMKE entities").
+model EntityEducationalContent {
+  id                   String @id @default(uuid())
+  entityType           String
+  entityId             String
+  educationalContentId String
+
+  educationalContent EducationalContent @relation(fields: [educationalContentId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId])
+  @@map("entity_educational_content")
 }
 
 // ---------------------------------------------------------------------------

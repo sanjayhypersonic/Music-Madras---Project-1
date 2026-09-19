@@ -1,12 +1,13 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
+import { DuplicateEntityError, findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
 import type { Composer } from "@prisma/client";
 
-// Minimal repository foundation for Composer — a simple direct-edit entity
-// (ADR §4), not part of the Draft/Revision model. This demonstrates the
-// module boundary (only modules/db imports Prisma) without implementing
-// Studio-facing business functionality such as duplicate detection, which
-// belongs to a later phase (ADR §4, brief §42) and lives in modules/mmke.
+// Repository foundation for Composer — a simple direct-edit entity (ADR
+// §4), not part of the Draft/Revision model. Demonstrates the module
+// boundary (only modules/db imports Prisma) and Phase 2's duplicate-name
+// guard (brief §42) — the fuzzy/similarity part of duplicate detection is
+// still deferred; see modules/mmke/duplicate-detection/README.md.
 
 export interface CreateComposerInput {
   slug: string;
@@ -19,6 +20,19 @@ export interface CreateComposerInput {
 }
 
 export async function createComposer(input: CreateComposerInput): Promise<Composer> {
+  const existing = await prisma.composer.findMany({
+    where: { archivedAt: null },
+    select: { name: true },
+  });
+
+  const duplicate = findExactNormalizedDuplicate(
+    input.name,
+    existing.map((c) => c.name)
+  );
+  if (duplicate) {
+    throw new DuplicateEntityError("Composer", duplicate);
+  }
+
   const composer = await prisma.composer.create({
     data: {
       slug: input.slug,

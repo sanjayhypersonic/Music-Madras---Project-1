@@ -1,5 +1,7 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
+import { canForkNewDraft, canPublishCurrentDraft } from "../../publishing/revisionTransitions";
+import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
 import type { Recording, RecordingRevision } from "@prisma/client";
 
 // Recording / RecordingRevision repository — the mechanical core of the
@@ -149,18 +151,24 @@ export async function forkDraftFromPublished(
     if (!recording) {
       throw new Error(`Recording ${recordingId} does not exist.`);
     }
-    if (recording.currentDraftRevisionId) {
+
+    const hasOpenDraft = recording.currentDraftRevisionId !== null;
+    const publishedRevision = recording.currentPublishedRevision;
+
+    if (!canForkNewDraft({ hasOpenDraft, hasPublishedRevision: publishedRevision !== null })) {
       throw new Error(
-        `Recording ${recordingId} already has an open draft revision; cannot fork a second one.`
+        hasOpenDraft
+          ? `Recording ${recordingId} already has an open draft revision; cannot fork a second one.`
+          : `Recording ${recordingId} has no published revision to fork from.`
       );
     }
-    if (!recording.currentPublishedRevision) {
-      throw new Error(
-        `Recording ${recordingId} has no published revision to fork from.`
-      );
+    if (!publishedRevision) {
+      // Unreachable: canForkNewDraft already guarantees this, but needed
+      // for TypeScript to narrow the type below.
+      throw new Error(`Recording ${recordingId} has no published revision to fork from.`);
     }
 
-    const published = recording.currentPublishedRevision;
+    const published = publishedRevision;
     const latest = await tx.recordingRevision.findFirst({
       where: { recordingId },
       orderBy: { revisionNumber: "desc" },
@@ -226,7 +234,11 @@ export async function publishCurrentDraft(
       include: { currentDraftRevision: true, currentPublishedRevision: true },
     });
 
-    if (!recording?.currentDraftRevision) {
+    if (!recording || !canPublishCurrentDraft({ hasOpenDraft: recording.currentDraftRevision !== null })) {
+      throw new Error(`Recording ${recordingId} has no open draft revision to publish.`);
+    }
+    if (!recording.currentDraftRevision) {
+      // Unreachable given the check above; needed for TypeScript narrowing.
       throw new Error(`Recording ${recordingId} has no open draft revision to publish.`);
     }
 
@@ -300,4 +312,55 @@ export async function findPublishedRecordingBySlug(
   }
 
   return { recording, publishedRevision: recording.currentPublishedRevision };
+}
+
+// ---------------------------------------------------------------------------
+// Relationship traversal (Phase 2, brief §3) — the canonical chain
+// Recording -> [Works -> Composers] and Recording -> Performance ->
+// [Programme -> ProgrammeItems -> Works, Venue, Performers/Choirs/Conductors].
+// These are real Prisma queries, so they live here (modules/db), not in
+// modules/mmke/relationships, which stays Prisma-free per the ADR §3
+// boundary rule — see that directory's README for the distinction.
+// ---------------------------------------------------------------------------
+
+export async function getCanonicalContextForRevision(revisionId: string) {
+  const revision = await prisma.recordingRevision.findUnique({
+    where: { id: revisionId },
+    include: {
+      works: {
+        include: { musicalWork: { include: { composer: true } } },
+        orderBy: { order: "asc" },
+      },
+      performance: {
+        include: {
+          venue: true,
+          programme: { include: { items: { include: { musicalWork: true }, orderBy: { order: "asc" } } } },
+          performers: { include: { artist: true } },
+          choirs: { include: { choir: true } },
+          conductors: { include: { conductor: true } },
+        },
+      },
+      mediaResources: { include: { youtubeVideo: true, rightsInformation: true } },
+    },
+  });
+
+  if (!revision) {
+    return null;
+  }
+
+  const directWorks = revision.works.map((link) => link.musicalWork);
+  const composers = dedupeById(directWorks.map((work) => work.composer));
+
+  return {
+    revision,
+    directWorks,
+    composers,
+    performance: revision.performance,
+    venue: revision.performance?.venue ?? null,
+    programme: revision.performance?.programme ?? null,
+    performers: revision.performance?.performers.map((link) => link.artist) ?? [],
+    choirs: revision.performance?.choirs.map((link) => link.choir) ?? [],
+    conductors: revision.performance?.conductors.map((link) => link.conductor) ?? [],
+    mediaResources: revision.mediaResources,
+  };
 }

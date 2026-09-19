@@ -87,3 +87,30 @@ export function checkRecordingRevisionCompleteness(
 export function isReadyToPublish(report: CompletenessReportItem[]): boolean {
   return report.every((item) => item.level !== "REQUIRED" || item.status === "COMPLETE");
 }
+
+// Phase 2 (brief §12): a named readiness category, not a numeric
+// percentage. This is a thin, explicit categorization on top of the same
+// report `checkRecordingRevisionCompleteness` already produces — it does
+// not introduce a second completeness mechanism.
+export type RecordingReadiness =
+  | "INCOMPLETE" // at least one REQUIRED category is MISSING
+  | "READY_FOR_REVIEW" // every REQUIRED category is COMPLETE, but some RECOMMENDED ones are MISSING
+  | "PUBLISHABLE"; // every REQUIRED and RECOMMENDED category is COMPLETE (OPTIONAL ones may still be MISSING)
+
+export function computeRecordingReadiness(report: CompletenessReportItem[]): RecordingReadiness {
+  const hasMissingRequired = report.some(
+    (item) => item.level === "REQUIRED" && item.status === "MISSING"
+  );
+  if (hasMissingRequired) {
+    return "INCOMPLETE";
+  }
+
+  const hasMissingRecommended = report.some(
+    (item) => item.level === "RECOMMENDED" && item.status === "MISSING"
+  );
+  if (hasMissingRecommended) {
+    return "READY_FOR_REVIEW";
+  }
+
+  return "PUBLISHABLE";
+}

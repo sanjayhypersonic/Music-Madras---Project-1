@@ -1,3 +1,5 @@
-# modules/mmke/duplicate-detection — later-phase scope
+# modules/mmke/duplicate-detection
 
-Structural placeholder. Real duplicate-prevention logic (brief §42 — "Johann Sebastian Bach" should not become several near-duplicate Composer rows) needs a similarity-matching strategy (e.g., trigram similarity against Postgres `pg_trgm`) that is meaningfully testable only against real data and real Studio entity-picker UX. Building it now, without the Studio "create new" flow it protects, would be speculative — deferred to the Studio phase, per the Phase 1 guardrails.
+**Implemented (Phase 2):** `detectDuplicateName.ts` — exact-normalized-match duplicate prevention (trim/lowercase/collapse-whitespace comparison), pure and DB-free, tested in `tests/unit/`. Used by repositories such as `composerRepository.createComposer` before inserting a new row.
+
+**Still deferred (later phase):** fuzzy/similarity matching (e.g. catching "J.S. Bach" as a likely duplicate of "Johann Sebastian Bach") needs a real similarity strategy — trigram matching via Postgres `pg_trgm` is the ADR's stated choice (§8) — and is only meaningfully buildable/testable against a live database and a real Studio entity-picker UX (brief §42), neither of which exist yet.
