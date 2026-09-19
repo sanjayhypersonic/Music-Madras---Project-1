@@ -1,6 +1,6 @@
 # ADR-0001: Music Madras Production Platform Architecture
 
-- **Status:** Proposed (Revision 2) — awaiting sign-off before Phase 1 implementation begins.
+- **Status:** Proposed (Revision 3) — awaiting sign-off before Phase 1 implementation begins.
 - **Branch:** `music-madras-production-rebuild` (created off `main`; `main` is untouched and remains the rollback point).
 - **Supersedes:** The AI-Studio-era prototype audited separately (two competing MMKE models, in-memory Studio, no YouTube integration, no per-entity public pages — see prior audit report).
 - **Input:** Approved decisions from the Master Engineering Brief (Next.js/App Router, PostgreSQL, Vercel, modular monolith, YouTube-as-adapter, field-ownership conflict model, Sheet Music Requests as MVP), refined per your Revision 2 review.
@@ -22,6 +22,14 @@ Nine substantive changes from Revision 1, each traced to your review comments:
 9. **§13** — the reconciliation algorithm is now spelled out concretely (uploads-playlist enumeration, batched `videos.list`, paginated playlists/items, checkpointing, and explicit behaviour under partial failure/quota exhaustion/retries/duplicate runs).
 
 Everything else from Revision 1 (framework choice, Postgres/Prisma, Vercel/Neon, modular monolith, adapter-not-domain-model for YouTube, Sheet Music Requests design, SEO approach, migration strategy) is unchanged and re-included below for a single coherent read.
+
+## Revision 3 Changelog
+
+One clarification, scoped to §15 only, per your review:
+
+1. **§15** — the "3 consecutive full passes" deletion/unavailability evidence threshold is no longer an implicit constant. It is named as an explicit, configurable synchronization policy setting, `deletionEvidenceRequiredPasses` (default `3`), and every transition into `DELETED`/`UNAVAILABLE` now records the specific evidence (contributing sync runs/checkpoints) behind that transition.
+
+No other section changed in this revision.
 
 ---
 
@@ -403,10 +411,39 @@ Every synced external resource (`YouTubeVideo`, `YouTubePlaylist`, `YouTubePlayl
 | `PRIVATE` | Exists, but visibility explicitly reported as private | API explicitly returns a private status for a known ID |
 | `UNLISTED` | Exists, visibility explicitly reported as unlisted | API explicitly returns an unlisted status |
 | `UNAVAILABLE` | API explicitly reports the resource as removed/blocked/terminated | A direct, definitive error/status response for a known ID — not inferred from absence |
-| `DELETED` | High-confidence, corroborated absence | Only after **N consecutive `FULL` reconciliation passes** (default: 3) record `NOT_OBSERVED` for this ID, **or** a direct confirming lookup for that specific ID returns a definitive not-found response |
+| `DELETED` | High-confidence, corroborated absence | Only after **`deletionEvidenceRequiredPasses` consecutive `FULL` reconciliation passes** (see below) record `NOT_OBSERVED` for this ID, **or** a direct confirming lookup for that specific ID returns a definitive not-found response |
 | `SYNC_ERROR` | This specific resource's status could not be determined this run | The run itself failed/was partial for this resource — never allowed to contribute toward a `DELETED`/`UNAVAILABLE` conclusion |
 
 **Escalation rule:** `NOT_OBSERVED` only accumulates from `FULL`-completeness runs (§13.2). A `PARTIAL`/`FAILED` run neither increments nor resets the `NOT_OBSERVED` counter — it simply contributes no evidence either way, so a flaky run can never accidentally push a resource toward `DELETED`.
+
+**Configurable policy, not a hardcoded rule.** The number of consecutive `FULL` reconciliation passes required before `NOT_OBSERVED` may escalate to `DELETED` is a named synchronization policy setting:
+
+```
+SyncPolicy {
+  key: 'deletionEvidenceRequiredPasses'
+  value: 3            // initial default
+}
+```
+
+held as configuration (a `SyncPolicy` key/value row, adjustable from Studio Settings without a code change or redeploy), not as a literal constant inside `modules/youtube/availability`. The same policy mechanism is the natural home for related future tuning values (e.g., a separate threshold for `UNAVAILABLE`-by-absence, if that's ever needed) without introducing a new configuration path each time.
+
+**Evidence recording.** Every transition of a resource's `observabilityState` into `DELETED` or `UNAVAILABLE` writes an explicit evidence record — an `ObservabilityTransition` row:
+
+```
+ObservabilityTransition {
+  id
+  resourceType
+  resourceId
+  fromState                   // e.g. NOT_OBSERVED
+  toState                     // DELETED | UNAVAILABLE
+  reason                      // 'consecutive_full_passes' | 'definitive_api_status'
+  requiredPasses              // the deletionEvidenceRequiredPasses value in effect at the time
+  contributingSyncJobRunIds   // the specific FULL SyncJobRun ids whose absence-observations satisfied the threshold
+  detectedAt
+}
+```
+
+This is what the Studio review screen (§8) shows an editor alongside a deletion/unavailability item — not just the resulting state, but exactly which reconciliation runs and checkpoints (§13.2) constitute the evidence for it, or, for a `UNAVAILABLE` determination based on a definitive API response rather than absence, which specific lookup produced it. Like any other consequential system decision, the transition itself is also written to `AuditLogEntry` (§20).
 
 **Editorial consequence policy:** reaching `DELETED` or `UNAVAILABLE` on a `YouTubeVideo` linked to a `PUBLISHED` Recording **never auto-unpublishes it.** It creates a high-priority item in the Studio Sync/Review screen (§8) for a human to decide: unpublish, keep as an archival record with a "no longer available on YouTube" notice, or mark as a false positive pending further investigation. `PRIVATE`/`UNLISTED` are lower-urgency informational flags in the same screen, since the resource still exists.
 
