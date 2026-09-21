@@ -25,6 +25,12 @@ Instead, `modules/auth/studioAuthAdapter.ts` implements Auth.js's `Adapter` inte
 
 Session strategy is `"database"` (not JWT), so disabling a user or changing their password immediately invalidates every session for them (`deleteAllSessionsForUser` in `studioAuthRepository.ts`) rather than waiting for a signed token to expire.
 
+### Phase 5C update — Credentials sign-in does not use Auth.js's Credentials provider
+
+Auth.js's Credentials provider is not used for the Studio password sign-in path, because the pinned Auth.js version (`next-auth@5.0.0-beta.32`) does not support Credentials authentication together with a database session strategy — its Credentials sign-in handler always issues a JWT for the session cookie regardless of the configured strategy, so with `session.strategy: "database"` Auth.js refuses to start at all ("`UnsupportedStrategy: Signing in with credentials only supported if JWT strategy is enabled`"). This is a deliberate, long-standing Auth.js design decision (not a bug or something a version change would fix), confirmed by reading the installed `@auth/core` source directly.
+
+Music Madras therefore performs credential verification in its own application service (`modules/auth/credentialsSignIn.ts`) — the same `findStudioUserByEmail` + `verifyPassword` + `StudioUser` status checks the provider's `authorize()` used to run — creates the existing database-backed `StudioSession` row directly (via `studioAuthRepository.createStudioSession`, the same function the adapter's own `createSession` calls), and sets the session cookie itself using the exact name and attributes defined once in `modules/auth/sessionCookie.ts`. Auth.js's own database-session infrastructure continues to handle everything else unchanged: reading the session (`auth()`, the `session` callback in `authConfig.ts`), signing out (`signOut()` deletes whatever row the cookie points to, regardless of how it was created), and the optional Google OAuth path (which still goes through Auth.js's own adapter-backed sign-in flow normally). No schema change, no new session table, and no JWT was introduced.
+
 ## 2. RBAC
 
 Six roles, seven actions, one explicit lookup table — `modules/auth/policy.ts`:
