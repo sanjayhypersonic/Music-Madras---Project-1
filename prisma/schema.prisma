@@ -21,12 +21,15 @@
 //     silent architecture change; see docs/phase-1-foundation.md.
 //
 // Explicitly OUT of scope for this schema (later phases, per the ADR):
-//   - FieldOwnership / SyncConflict (ADR §16)
-//   - ObservabilityTransition / SyncPolicy (ADR §15)
-//   - SyncCheckpoint / SyncJobRun (ADR §12, §13)
-//   - Session / Account / Invitation / PasswordResetToken (ADR §7)
-// These are added alongside the code that actually uses them, in the
-// phases where the YouTube sync engine and authentication are built.
+//   - Session / Account / Invitation / PasswordResetToken (ADR §7) — added
+//     in Phase 4, once Studio authentication was built.
+//   - FieldOwnership / SyncConflict (ADR §16), ObservabilityTransition /
+//     SyncPolicy (ADR §15), SyncCheckpoint / SyncJobRun (ADR §12, §13) —
+//     added in Phase 6B as the persistence foundation the YouTube sync
+//     engine will need. The sync engine itself (the API adapter,
+//     reconciliation logic, deletion-evidence escalation, and Studio UI)
+//     remains out of scope — these tables exist so that work can be built
+//     without a further schema change, per ADR §12-16.
 
 generator client {
   provider = "prisma-client-js"
@@ -180,6 +183,13 @@ model StudioUser {
   editorialContentCreated   EditorialContent[]   @relation("EditorialContentCreatedBy")
   editorialContentUpdated   EditorialContent[]   @relation("EditorialContentUpdatedBy")
   auditLogEntries           AuditLogEntry[]      @relation("AuditLogActor")
+
+  // Phase 6B (ADR §16.3) — an editor changing a synced field's ownership,
+  // and an editor resolving a sync conflict, are both meaningful actorial
+  // events, following the same createdBy/updatedBy-style convention as
+  // every other entity above.
+  fieldOwnershipChanges FieldOwnership[] @relation("FieldOwnershipChangedBy")
+  syncConflictsResolved SyncConflict[]   @relation("SyncConflictResolvedBy")
 
   @@map("studio_users")
 }
@@ -1019,6 +1029,242 @@ model YouTubeAnalyticsObservation {
   @@index([youtubeVideoId, metric, periodStart])
   @@index([channelId, metric, periodStart])
   @@map("youtube_analytics_observations")
+}
+
+// ---------------------------------------------------------------------------
+// YouTube Sync Foundation (Phase 6B, ADR §12, §13, §15, §16) — the
+// persistence/domain foundation the approved YouTube synchronization
+// architecture depends on. No API adapter, reconciliation logic,
+// deletion-evidence escalation, scheduler, or Studio UI is implemented
+// here — these six tables exist so that work can be built without a
+// further schema change, per ADR §12-16.
+//
+// Generic across resource types (and, eventually, providers) via
+// SyncProvider/SyncResourceType — the same (resourceType, resourceId)
+// string-pair pattern already used above for EntitySource/EntityRights/
+// EntityEducationalContent, rather than a per-type foreign key, since one
+// FieldOwnership/ObservabilityTransition row can describe a Recording, a
+// YouTubeVideo, a YouTubePlaylist, or a YouTubePlaylistItem. No existing
+// YouTube table (YouTubeVideo/YouTubePlaylist/YouTubePlaylistItem),
+// MediaResource, Collection, Recording, or RecordingRevision is modified.
+// ---------------------------------------------------------------------------
+
+enum SyncProvider {
+  YOUTUBE
+}
+
+// RECORDING is included alongside the raw YouTube resource types because
+// ADR §16.1 explicitly extends field ownership to Recording.title/
+// description — the fields most likely to originate from an ingested
+// YouTubeVideo and then be edited editorially.
+enum SyncResourceType {
+  RECORDING
+  YOUTUBE_VIDEO
+  YOUTUBE_PLAYLIST
+  YOUTUBE_PLAYLIST_ITEM
+}
+
+// Three persisted states. ADR §16.2 also names a fourth state,
+// MUSIC_MADRAS_EDITORIAL, for fields with no YouTube-sourced counterpart
+// at all (e.g. a future analysisMarkdown) — but the ADR itself says "no
+// FieldOwnership row is even needed for such fields," so it was never a
+// value this enum has to store: a field either never enters this table at
+// all, or is one of the three states below.
+enum FieldOwnershipState {
+  YOUTUBE_CONTROLLED
+  MUSIC_MADRAS_CONTROLLED
+  SHARED_REQUIRES_REVIEW
+}
+
+enum SyncConflictStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+enum SyncConflictResolution {
+  KEPT_MUSIC_MADRAS
+  ACCEPTED_YOUTUBE
+  MANUAL_MERGE
+}
+
+// ADR §13.2: a run only counts as deletion/unavailability evidence when
+// FULL — a PARTIAL (or FAILED, tracked on SyncJobRun.status instead) run
+// contributes no such evidence either way.
+enum SyncCompleteness {
+  FULL
+  PARTIAL
+}
+
+enum SyncJobStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+// One row per (provider, resourceType, resourceId, fieldName) — ADR
+// §16.1's single generic ownership mechanism, not a titleSource/
+// descriptionSource column pair duplicated per entity.
+model FieldOwnership {
+  id                 String              @id @default(uuid())
+  provider           SyncProvider
+  resourceType       SyncResourceType
+  resourceId         String
+  fieldName          String
+  ownership          FieldOwnershipState @default(YOUTUBE_CONTROLLED)
+  lastExternalValue  String?             @db.Text
+  lastEditorialValue String?             @db.Text
+  lastSyncedAt       DateTime?
+  // Distinct from `updatedAt`, which Prisma bumps on every write to this
+  // row (including a routine `lastExternalValue`/`lastSyncedAt` sync
+  // touch) — this column answers "when did the ownership *state itself*
+  // last change" specifically, alongside who/what changed it below.
+  ownershipChangedAt DateTime            @default(now())
+  changedById        String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  changedBy StudioUser? @relation("FieldOwnershipChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@unique([provider, resourceType, resourceId, fieldName])
+  @@index([resourceType, resourceId])
+  @@map("field_ownerships")
+}
+
+// ADR §16.3's conflict record. previousMusicMadrasValue/newProviderValue
+// capture exactly what conflicted, so the Music Madras value is preserved
+// and visible, never silently overwritten (a later phase's Studio review
+// screen is what an editor resolves this from — not built here).
+model SyncConflict {
+  id                       String                  @id @default(uuid())
+  provider                 SyncProvider
+  resourceType             SyncResourceType
+  resourceId               String
+  fieldName                String
+  ownershipAtDetection     FieldOwnershipState
+  previousMusicMadrasValue String?                 @db.Text
+  newProviderValue         String?                 @db.Text
+  status                   SyncConflictStatus      @default(OPEN)
+  resolution               SyncConflictResolution?
+  reason                   String?
+  detectedAt               DateTime                @default(now())
+  resolvedAt               DateTime?
+  resolvedById             String?
+  syncJobRunId             String?
+
+  resolvedBy StudioUser? @relation("SyncConflictResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  syncJobRun SyncJobRun? @relation(fields: [syncJobRunId], references: [id], onDelete: SetNull)
+
+  @@index([resourceType, resourceId])
+  @@index([status])
+  @@map("sync_conflicts")
+}
+
+// ADR §15's evidence record behind an availability state transition.
+// Reuses the existing ObservabilityState enum unchanged — it already
+// covers every state §15 specifies; nothing about it needed to change.
+model ObservabilityTransition {
+  id                    String             @id @default(uuid())
+  provider              SyncProvider
+  resourceType          SyncResourceType
+  resourceId            String
+  musicMadrasEntityType String?
+  musicMadrasEntityId   String?
+  fromState             ObservabilityState
+  toState               ObservabilityState
+  reason                String
+  requiredPasses        Int?
+  syncJobRunId          String?
+  syncCheckpointId      String?
+  detectedAt            DateTime           @default(now())
+
+  syncJobRun     SyncJobRun?     @relation(fields: [syncJobRunId], references: [id], onDelete: SetNull)
+  syncCheckpoint SyncCheckpoint? @relation(fields: [syncCheckpointId], references: [id], onDelete: SetNull)
+
+  @@index([resourceType, resourceId])
+  @@index([toState])
+  @@map("observability_transitions")
+}
+
+// ADR §15's deletionEvidenceRequiredPasses, held as configuration rather
+// than a literal constant in application code — one typed row per
+// (provider, resourceType), not a generic key/value settings table, since
+// this is the one setting this phase actually needs.
+model SyncPolicy {
+  id                             String           @id @default(uuid())
+  provider                       SyncProvider
+  resourceType                   SyncResourceType
+  deletionEvidenceRequiredPasses Int              @default(3)
+  isActive                       Boolean          @default(true)
+  createdAt                      DateTime         @default(now())
+  updatedAt                      DateTime         @updatedAt
+
+  @@unique([provider, resourceType])
+  @@map("sync_policies")
+}
+
+// ADR §13.2. One row per (provider, resourceType, scopeKey) — scopeKey is
+// the generic analogue of the ADR's "(resourceType, parentId)" (e.g. a
+// specific playlist's id when paging its items, or a fixed sentinel like
+// "channel-uploads" when paging the channel's uploads playlist).
+// providerCursor is a small, genuinely provider-specific escape hatch for
+// paging details that don't fit the normalized columns above — never
+// catalogue data, only resumption bookkeeping.
+model SyncCheckpoint {
+  id                   String            @id @default(uuid())
+  provider             SyncProvider
+  resourceType         SyncResourceType
+  scopeKey             String
+  pageToken            String?
+  lastProcessedId      String?
+  etag                 String?
+  lastFullCompletionAt DateTime?
+  completeness         SyncCompleteness?
+  providerCursor       Json?
+  syncJobRunId         String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  syncJobRun               SyncJobRun?               @relation(fields: [syncJobRunId], references: [id], onDelete: SetNull)
+  observabilityTransitions ObservabilityTransition[]
+
+  @@unique([provider, resourceType, scopeKey])
+  @@map("sync_checkpoints")
+}
+
+// ADR §12-13's SyncJobRun — one row per actual synchronization attempt,
+// scheduled or manual alike (both will call the same job function in a
+// later phase, so both write this same row shape). recordsFlagged
+// mirrors ADR §13.4's own wording ("counts of created/updated/flagged/
+// failed resources per type") — one collective counter for anything
+// landing on PRIVATE/UNLISTED/UNAVAILABLE/DELETED, since the per-resource
+// detail already lives in ObservabilityTransition; this column is a
+// dashboard summary number, not a second source of truth for it.
+model SyncJobRun {
+  id                String            @id @default(uuid())
+  provider          SyncProvider
+  jobType           String
+  status            SyncJobStatus     @default(RUNNING)
+  completeness      SyncCompleteness?
+  startedAt         DateTime          @default(now())
+  completedAt       DateTime?
+  recordsDiscovered Int               @default(0)
+  recordsCreated    Int               @default(0)
+  recordsUpdated    Int               @default(0)
+  recordsUnchanged  Int               @default(0)
+  recordsFlagged    Int               @default(0)
+  recordsFailed     Int               @default(0)
+  conflictsDetected Int               @default(0)
+  errorDetails      String?           @db.Text
+
+  checkpoints              SyncCheckpoint[]
+  observabilityTransitions ObservabilityTransition[]
+  syncConflicts            SyncConflict[]
+
+  @@index([provider, status])
+  @@index([startedAt])
+  @@map("sync_job_runs")
 }
 
 // ---------------------------------------------------------------------------
