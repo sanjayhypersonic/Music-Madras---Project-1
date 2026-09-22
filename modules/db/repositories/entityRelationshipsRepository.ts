@@ -4,7 +4,21 @@ import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageReposit
 import { findPublicCollectionsByIds } from "./collectionRepository";
 import { listMusicalWorksByComposer } from "./musicalWorkRepository";
 import { assembleEntityPageData } from "../../mmke/entityPage/assembleEntityPageData";
-import type { Collection, MusicalWork, Performance, Programme, Recording, RecordingRevision, Venue } from "@prisma/client";
+import type {
+  Artist,
+  Choir,
+  Collection,
+  Conductor,
+  MusicalWork,
+  Performance,
+  PerformanceChoir,
+  PerformanceConductor,
+  PerformancePerformer,
+  Programme,
+  Recording,
+  RecordingRevision,
+  Venue,
+} from "@prisma/client";
 import type { PublicVideoPageResult } from "./youtubeVideoPageRepository";
 import type { EntityPageData } from "../../mmke/entityPage/entityPageContract";
 
@@ -42,6 +56,9 @@ export interface RecordingWithPublishedRevision extends Recording {
 export interface PerformanceWithVenueAndProgramme extends Performance {
   venue: Venue;
   programme: Programme;
+  performers: (PerformancePerformer & { artist: Artist })[];
+  choirs: (PerformanceChoir & { choir: Choir })[];
+  conductors: (PerformanceConductor & { conductor: Conductor })[];
 }
 
 export interface RelatedContent {
@@ -92,7 +109,13 @@ export async function resolveRelatedContent(input: RelatedContentInput): Promise
     allPerformanceIds.length > 0
       ? await prisma.performance.findMany({
           where: { id: { in: allPerformanceIds }, archivedAt: null },
-          include: { venue: true, programme: true },
+          include: {
+            venue: true,
+            programme: true,
+            performers: { include: { artist: true } },
+            choirs: { include: { choir: true } },
+            conductors: { include: { conductor: true } },
+          },
           orderBy: { createdAt: "desc" },
         })
       : [];
@@ -220,6 +243,7 @@ export async function getComposerEntityPageData(slug: string): Promise<EntityPag
     slug: composer.slug,
     name: composer.name,
     description: composer.biography,
+    lifespan: { bornDate: composer.bornDate, diedDate: composer.diedDate, era: composer.era },
     works: content.works,
     programmes: content.programmes,
     performances: content.performances,
@@ -244,6 +268,7 @@ export async function getVenueEntityPageData(slug: string): Promise<EntityPageDa
     // never repurposing an unrelated column (e.g. acousticProfile) to
     // fake one.
     description: null,
+    lifespan: null,
     works: null,
     programmes: content.programmes,
     performances: content.performances,

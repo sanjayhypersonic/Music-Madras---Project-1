@@ -62,6 +62,7 @@ async function createTestVideo(overrides: { privacyStatus?: string; observabilit
     data: {
       youtubeVideoId: uniqueSlug("video"),
       title: "Test Choir Live", // deliberately matches the "Test Choir" fixture's name (see the title-matching test)
+      thumbnailUrl: "https://i.ytimg.com/vi/test/hqdefault.jpg",
       channelId: `${TEST_TAG}-test-channel`,
       privacyStatus: overrides.privacyStatus ?? "public",
       observabilityState: overrides.observabilityState ?? "OBSERVED",
@@ -79,7 +80,14 @@ async function createTestVideo(overrides: { privacyStatus?: string; observabilit
 async function createFullChainFixture() {
   const user = await createTestUser();
 
-  const composer = await createComposer({ slug: uniqueSlug("composer"), name: "Test Composer", actorId: user.id });
+  const composer = await createComposer({
+    slug: uniqueSlug("composer"),
+    name: "Test Composer",
+    bornDate: "1685",
+    diedDate: "1750",
+    biography: "A test composer's short biography.",
+    actorId: user.id,
+  });
   const work = await createMusicalWork({ slug: uniqueSlug("work"), title: "Test Work", composerId: composer.id, actorId: user.id });
   const programme = await createProgramme({ slug: uniqueSlug("programme"), title: "Test Programme", actorId: user.id });
   await addProgrammeItem({ programmeId: programme.id, musicalWorkId: work.id, actorId: user.id });
@@ -209,13 +217,26 @@ describe("entityRelationshipsRepository against a real database", () => {
       const composerPage = await getComposerEntityPageData(fixture.composer.slug);
       expect(composerPage).not.toBeNull();
       expect(composerPage!.entityType).toBe("composer");
+      expect(composerPage!.lifespan).toEqual({ bornDate: "1685", diedDate: "1750", era: null });
+      expect(composerPage!.description).toBe("A test composer's short biography.");
       expect(composerPage!.relatedWorks).toEqual([{ id: fixture.work.id, slug: fixture.work.slug, title: fixture.work.title }]);
       expect(composerPage!.relatedVideos.map((v) => v.slug)).toContain(fixture.videoPage.slug);
+      const composerVideo = composerPage!.relatedVideos.find((v) => v.slug === fixture!.videoPage.slug);
+      expect(composerVideo?.thumbnailUrl).toBe("https://i.ytimg.com/vi/test/hqdefault.jpg");
       expect(composerPage!.relatedCollections.map((c) => c.id)).toContain(fixture.collection.id);
+      expect(composerPage!.relatedParticipants.choirs).toContain(fixture.choir.name);
+      expect(composerPage!.relatedParticipants.conductors).toContain(fixture.conductor.name);
+      expect(composerPage!.relatedParticipants.artists).toContain(fixture.artist.name);
+      expect(composerPage!.relatedParticipants.venues).toContain(fixture.venue.name);
+      const composerPerformance = composerPage!.relatedPerformances.find((p) => p.id === fixture!.performance.id);
+      expect(composerPerformance?.choirs).toContain(fixture.choir.name);
+      expect(composerPerformance?.conductors).toContain(fixture.conductor.name);
+      expect(composerPerformance?.artists).toContain(fixture.artist.name);
 
       const venuePage = await getVenueEntityPageData(fixture.venue.slug);
       expect(venuePage).not.toBeNull();
       expect(venuePage!.entityType).toBe("venue");
+      expect(venuePage!.lifespan).toBeNull();
       expect(venuePage!.relatedWorks).toBeNull(); // Venue has no work-level relationship
       expect(venuePage!.relatedVideos.map((v) => v.slug)).toContain(fixture.videoPage.slug);
     });
@@ -407,6 +428,13 @@ describe("entityRelationshipsRepository against a real database", () => {
       } finally {
         await cleanup();
       }
+    });
+  });
+
+  describe("6G-4B: getComposerEntityPageData for a slug with no matching row", () => {
+    it("returns null rather than throwing, so /composers/[slug] can render a real 404", async () => {
+      const result = await getComposerEntityPageData(`phase6g4b-nonexistent-${randomUUID()}`);
+      expect(result).toBeNull();
     });
   });
 });

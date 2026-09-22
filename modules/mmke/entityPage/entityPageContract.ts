@@ -27,6 +27,10 @@ export interface EntityPageRelatedPerformance {
   id: string;
   performanceDate: Date | null;
   venueName: string | null;
+  /** Participant names only (brief §5E) — not links, since no public route exists yet for any of these entity types. */
+  artists: string[];
+  choirs: string[];
+  conductors: string[];
 }
 
 export interface EntityPageRelatedRecording {
@@ -39,12 +43,37 @@ export interface EntityPageRelatedRecording {
 export interface EntityPageRelatedVideo {
   slug: string;
   title: string | null;
+  thumbnailUrl: string | null;
 }
 
 export interface EntityPageRelatedCollection {
   id: string;
   slug: string;
   title: string;
+}
+
+/**
+ * Composer-only identity fields (brief §5B — "lifespan/dates if actual
+ * data exists"). Null for every other entity type today; kept as its own
+ * optional block rather than three loose top-level fields so the contract
+ * stays obviously entity-specific-safe.
+ */
+export interface EntityPageLifespan {
+  bornDate: string | null;
+  diedDate: string | null;
+  era: string | null;
+}
+
+/**
+ * Related people/places (brief §5I), deduped by name across every
+ * relatedPerformance — plain names, not links, since none of these
+ * entity types have a public route yet.
+ */
+export interface EntityPageRelatedParticipants {
+  artists: string[];
+  choirs: string[];
+  conductors: string[];
+  venues: string[];
 }
 
 /**
@@ -60,12 +89,15 @@ export interface EntityPageData {
   name: string;
   /** Archive information — biography/description, where the source model has one. */
   description: string | null;
+  /** Composer-only today (brief §5B); null for every other entity type. */
+  lifespan: EntityPageLifespan | null;
 
   // Archive relationships.
   relatedWorks: EntityPageRelatedWork[] | null;
   relatedProgrammes: EntityPageRelatedProgramme[];
   relatedPerformances: EntityPageRelatedPerformance[];
   relatedRecordings: EntityPageRelatedRecording[];
+  relatedParticipants: EntityPageRelatedParticipants;
 
   // MusicMadras media — publicly discoverable only (never raw sync data).
   relatedVideos: EntityPageRelatedVideo[];

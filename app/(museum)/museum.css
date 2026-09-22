@@ -471,6 +471,103 @@
   color: var(--mm-text-muted);
 }
 
+/* ---------------------------------------------------------------------
+   Entity pages (Phase 6G-4B) — reusable across every future /[type]/
+   [slug] page, not hardcoded to Composer specifically.
+--------------------------------------------------------------------- */
+
+.museum-breadcrumbs {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 0;
+}
+
+.museum-breadcrumbs ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0;
+  margin: 0;
+  font-family: var(--mm-font-sans);
+  font-size: 0.8rem;
+}
+
+.museum-breadcrumbs li {
+  color: var(--mm-text-muted);
+}
+
+.museum-breadcrumbs li:not(:last-child)::after {
+  content: "/";
+  margin: 0 0.5rem;
+  color: var(--mm-border);
+}
+
+.museum-breadcrumbs a {
+  color: var(--mm-text-muted);
+}
+
+.museum-breadcrumbs a:hover {
+  color: var(--mm-accent-tertiary);
+}
+
+.museum-breadcrumbs [aria-current="page"] {
+  color: var(--mm-text);
+  font-weight: 600;
+}
+
+.museum-entity-header {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 3rem;
+}
+
+.museum-root .museum-entity-header__subtitle {
+  color: var(--mm-text-muted);
+  font-size: 1.05rem;
+  margin: 0 0 1.25rem;
+}
+
+.museum-entity-header__description {
+  max-width: 42rem;
+}
+
+.museum-related-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.museum-related-list li {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--mm-border);
+  font-family: var(--mm-font-serif);
+}
+
+.museum-related-list li:first-child {
+  border-top: 1px solid var(--mm-border);
+}
+
+.museum-root .museum-performance-participants {
+  font-family: var(--mm-font-sans);
+  color: var(--mm-text-muted);
+  font-size: 0.9rem;
+}
+
+.museum-group-heading {
+  max-width: 72rem;
+  margin: 3rem auto 0;
+  padding: 0 1.5rem;
+  font-family: var(--mm-font-sans);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.museum-root .museum-group-heading {
+  color: var(--mm-accent-tertiary);
+}
+
 @media (max-width: 40rem) {
   .museum-container {
     padding: 1.25rem 1rem 3rem;
@@ -486,5 +583,12 @@
 
   .museum-nav {
     display: none;
+  }
+
+  .museum-breadcrumbs,
+  .museum-entity-header,
+  .museum-group-heading {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 }
