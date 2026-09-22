@@ -1,5 +1,5 @@
-# app/(museum) — later-phase scope
+# app/(museum) — the public Museum route group
 
-Reserved for the public Museum route group (ADR §3, §9): `page.tsx` (home), `composers/[slug]`, `works/[slug]`, `artists/[slug]`, `programmes/[slug]`, `performances/[slug]`, `recordings/[slug]`, `venues/[slug]`, `collections/[slug]`, `learning/[slug]`, `articles/[slug]`, plus `sitemap.xml`/`robots.txt` route handlers.
+The public Museum route group (ADR §3, §9). Implemented so far: `page.tsx` (the real homepage, Phase 6G-3), `videos/[slug]` (Phase 6G-2A/6G-2B).
 
-Deliberately empty in Phase 1 — the root `app/page.tsx` is a temporary Phase 1 foundation placeholder, not the real homepage, so it is not placed inside this route group yet (that would mean building the Museum homepage, which the Phase 1 guardrails explicitly exclude).
+Still reserved for later phases: `composers/[slug]`, `works/[slug]`, `artists/[slug]`, `programmes/[slug]`, `performances/[slug]`, `recordings/[slug]`, `venues/[slug]`, `collections/[slug]`, `learning/[slug]`, `articles/[slug]`, plus `sitemap.xml`/`robots.txt` route handlers. The Phase 1 foundation placeholder that used to live at the root `app/page.tsx` has been removed now that this route group owns `/`.

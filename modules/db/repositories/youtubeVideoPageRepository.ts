@@ -100,6 +100,33 @@ export async function findPublishedBySlug(slug: string): Promise<PublicVideoPage
   return { page, youtubeVideo: page.youtubeVideo };
 }
 
+/**
+ * The list-shaped sibling of findPublishedBySlug (Phase 6G-3, homepage
+ * discovery surface). Same re-evaluated three-axis eligibility check —
+ * never trusts page.status alone — so a page that has drifted to
+ * unlisted/private/unavailable since publish is silently excluded here
+ * too, without anyone needing to remember to unpublish it. Ordered by
+ * most-recently-updated so a newly published or newly approved page
+ * surfaces without depending on a separate "featured" concept.
+ */
+export async function listPublishedVideoPages(limit: number): Promise<PublicVideoPageResult[]> {
+  const pages = await prisma.youTubeVideoPage.findMany({
+    where: { status: "PUBLISHED", archivedAt: null },
+    include: { youtubeVideo: true },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return pages
+    .filter((page) =>
+      isYouTubeVideoPagePublic({
+        page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
+        youtubeVideo: { privacyStatus: page.youtubeVideo.privacyStatus, observabilityState: page.youtubeVideo.observabilityState },
+      })
+    )
+    .slice(0, limit)
+    .map((page) => ({ page, youtubeVideo: page.youtubeVideo }));
+}
+
 export interface UpdateVideoPageEditorialFieldsInput {
   // Deliberately no `slug`, `youtubeVideoId`, or `status` field here —
   // this function must never be able to change identity or publication

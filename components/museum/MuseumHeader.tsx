@@ -1,17 +1,27 @@
 import Image from "next/image";
+import Link from "next/link";
 import { ThemeToggle } from "./ThemeToggle";
 
 // Phase 6G-2B — the Museum-wide header. The supplied official logo
 // artwork is used as-is (no recolouring/redesign/cropping); it already
 // carries the Music Madras wordmark, so no separate text label is added
-// alongside it. Not wrapped in a link to "/" yet — the real homepage
-// does not exist in this increment (explicitly out of scope), and
-// linking to the unrelated Phase 1 placeholder root would be misleading.
+// alongside it.
+//
+// Phase 6G-3 — now that app/(museum)/page.tsx is the real homepage, the
+// brand is wrapped in a link to "/". Nav links point at anchors on that
+// homepage (not separate routes) — those sections are real and always
+// present; there is no browsable index/entity route to link to yet.
+
+const NAV_LINKS = [
+  { href: "/#archive", label: "Archive" },
+  { href: "/#discover", label: "Discover" },
+  { href: "/#story", label: "About" },
+];
 
 export function MuseumHeader() {
   return (
     <header className="museum-header">
-      <div className="museum-header__brand">
+      <Link href="/" className="museum-header__brand" aria-label="Music Madras — home">
         <Image
           src="/music-madras-logo.webp"
           alt="Music Madras — Live Classical Concerts, Chennai"
@@ -20,7 +30,14 @@ export function MuseumHeader() {
           className="museum-header__logo"
           priority
         />
-      </div>
+      </Link>
+      <nav className="museum-nav" aria-label="Primary">
+        {NAV_LINKS.map((link) => (
+          <Link key={link.href} href={link.href}>
+            {link.label}
+          </Link>
+        ))}
+      </nav>
       <ThemeToggle />
     </header>
   );

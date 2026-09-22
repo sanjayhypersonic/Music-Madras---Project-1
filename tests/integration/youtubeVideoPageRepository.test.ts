@@ -9,6 +9,7 @@ import {
   findByYouTubeVideoId,
   findBySlug,
   findPublishedBySlug,
+  listPublishedVideoPages,
   listVideoPages,
   publishVideoPage,
   revokeUnlistedApproval,
@@ -370,5 +371,79 @@ describe("YouTubeVideoPage repository against a real database", () => {
 
     const all = await listVideoPages();
     expect(all.some((p) => p.id === created.id)).toBe(true);
+  });
+
+  // Phase 6G-3 (homepage discovery surface): listPublishedVideoPages is a
+  // global, unscoped query against the real table (like listVideoPages
+  // above), so — exactly like that test — these assert containment/
+  // exclusion by id rather than exact array shape, since other data may
+  // legitimately exist in the same database.
+
+  it("listPublishedVideoPages includes a genuinely public page", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Discoverable Video");
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+    await publishVideoPage(created.id, user.id);
+
+    const result = await listPublishedVideoPages(50);
+    expect(result.some((r) => r.page.id === created.id)).toBe(true);
+  });
+
+  it("listPublishedVideoPages excludes a DRAFT page", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Draft Video");
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+
+    const result = await listPublishedVideoPages(50);
+    expect(result.some((r) => r.page.id === created.id)).toBe(false);
+  });
+
+  it("listPublishedVideoPages excludes a published page whose video is private", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Private Video", { privacyStatus: "private" });
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+    await publishVideoPage(created.id, user.id);
+
+    const result = await listPublishedVideoPages(50);
+    expect(result.some((r) => r.page.id === created.id)).toBe(false);
+  });
+
+  it("listPublishedVideoPages excludes a published, unlisted page until it is explicitly approved", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Unlisted Video", { privacyStatus: "unlisted" });
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+    await publishVideoPage(created.id, user.id);
+
+    const beforeApproval = await listPublishedVideoPages(50);
+    expect(beforeApproval.some((r) => r.page.id === created.id)).toBe(false);
+
+    await approveUnlistedPublication(created.id, user.id);
+
+    const afterApproval = await listPublishedVideoPages(50);
+    expect(afterApproval.some((r) => r.page.id === created.id)).toBe(true);
+  });
+
+  it("listPublishedVideoPages excludes an archived page even if it was published", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Archived Video");
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+    await publishVideoPage(created.id, user.id);
+    await archiveVideoPage(created.id, user.id);
+
+    const result = await listPublishedVideoPages(50);
+    expect(result.some((r) => r.page.id === created.id)).toBe(false);
+  });
+
+  it("listPublishedVideoPages respects the requested limit", async () => {
+    const user = await createTestUser();
+    const video1 = await createTestVideo(TEST_VIDEO_ID_1, "Limit Video 1");
+    const video2 = await createTestVideo(TEST_VIDEO_ID_2, "Limit Video 2");
+    const page1 = await createDraftVideoPage({ youtubeVideoId: video1.id, actorId: user.id });
+    const page2 = await createDraftVideoPage({ youtubeVideoId: video2.id, actorId: user.id });
+    await publishVideoPage(page1.id, user.id);
+    await publishVideoPage(page2.id, user.id);
+
+    const result = await listPublishedVideoPages(1);
+    expect(result.length).toBeLessThanOrEqual(1);
   });
 });

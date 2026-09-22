@@ -170,6 +170,22 @@
   transform: translateY(-1px);
 }
 
+.museum-nav {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.museum-nav a {
+  font-family: var(--mm-font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--mm-text-muted);
+}
+
+.museum-nav a:hover {
+  color: var(--mm-accent-tertiary);
+}
+
 /* ---------------------------------------------------------------------
    Shared content primitives (reusable by any future Museum page —
    deliberately not scoped to any one entity type)
@@ -187,8 +203,15 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--mm-accent-tertiary);
   margin: 0 0 0.75rem;
+}
+
+/* Specificity note: a plain `.museum-eyebrow`/`.museum-prose`/etc rule
+   here loses its `color` to the higher-specificity `.museum-root p` rule
+   above (both target a <p>). `.museum-root .x` beats that unambiguously —
+   see the same fix applied to `.museum-button` further down. */
+.museum-root .museum-eyebrow {
+  color: var(--mm-accent-tertiary);
 }
 
 .museum-card {
@@ -228,8 +251,11 @@
   flex-wrap: wrap;
   gap: 0.4rem 1rem;
   font-size: 0.9rem;
-  color: var(--mm-text-muted);
   margin: 1rem 0;
+}
+
+.museum-root .museum-meta {
+  color: var(--mm-text-muted);
 }
 
 .museum-curator-note {
@@ -244,6 +270,9 @@
 
 .museum-prose {
   white-space: pre-wrap;
+}
+
+.museum-root .museum-prose {
   color: var(--mm-text-muted);
 }
 
@@ -254,14 +283,23 @@
   padding: 0.6rem 1.25rem;
   border-radius: 999px;
   background: var(--mm-gradient-accent);
-  color: var(--mm-accent-on);
   font-weight: 600;
   font-size: 0.95rem;
   border: none;
   transition: transform var(--mm-transition), box-shadow var(--mm-transition);
 }
 
-.museum-button:hover {
+/* Specificity note: plain `.museum-button { color: ... }` loses to the
+   higher-specificity `.museum-root a` rule above, which would leave a
+   linked button's text in the ordinary link colour instead of
+   --mm-accent-on. `.museum-root a.museum-button` beats that unambiguously. */
+.museum-root a.museum-button,
+.museum-button {
+  color: var(--mm-accent-on);
+}
+
+.museum-button:hover,
+.museum-root a.museum-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px var(--mm-shadow);
   color: var(--mm-accent-on);
@@ -275,8 +313,178 @@
   font-size: 0.85rem;
 }
 
+/* ---------------------------------------------------------------------
+   Homepage sections (Phase 6G-3) — deliberately reusable by any future
+   Museum landing/index-style page, not hardcoded to "/" specifically.
+--------------------------------------------------------------------- */
+
+.museum-hero {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 4.5rem 1.5rem 3.5rem;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--mm-accent-secondary) 16%, transparent), transparent 70%);
+}
+
+.museum-hero__logo {
+  display: block;
+  margin: 0 auto 1.75rem;
+  border-radius: 50%;
+}
+
+.museum-hero .museum-eyebrow {
+  display: block;
+}
+
+.museum-hero__lede {
+  max-width: 34rem;
+  margin: 0 auto 2rem;
+  font-size: 1.1rem;
+}
+
+.museum-root .museum-hero__lede {
+  color: var(--mm-text-muted);
+}
+
+.museum-section {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 3.5rem 1.5rem;
+  border-top: 1px solid var(--mm-border);
+}
+
+.museum-section__intro {
+  max-width: 42rem;
+  margin: 0 0 2.5rem;
+}
+
+.museum-root .museum-section__intro {
+  color: var(--mm-text-muted);
+}
+
+.museum-category-grid,
+.museum-recording-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+.museum-category-card {
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  border-radius: 0.85rem;
+  padding: 1.5rem;
+  transition: border-color var(--mm-transition), transform var(--mm-transition);
+}
+
+.museum-category-card:hover {
+  border-color: var(--mm-accent-tertiary);
+  transform: translateY(-2px);
+}
+
+.museum-category-card h3 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+}
+
+.museum-category-card p {
+  font-size: 0.92rem;
+  color: var(--mm-text-muted);
+  margin: 0;
+}
+
+.museum-category-card__status {
+  display: inline-block;
+  margin-top: 0.85rem;
+  font-family: var(--mm-font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--mm-accent-tertiary);
+}
+
+.museum-recording-card {
+  display: block;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  transition: border-color var(--mm-transition), transform var(--mm-transition);
+}
+
+.museum-root a.museum-recording-card,
+.museum-recording-card {
+  color: var(--mm-text);
+}
+
+.museum-recording-card:hover {
+  border-color: var(--mm-accent-tertiary);
+  transform: translateY(-2px);
+}
+
+.museum-media--thumbnail {
+  border-radius: 0;
+  background: var(--mm-surface-raised);
+}
+
+.museum-media__placeholder {
+  position: absolute;
+  inset: 0;
+  background: var(--mm-surface-raised);
+}
+
+.museum-recording-card__title {
+  display: block;
+  padding: 1rem 1.1rem 1.25rem;
+  font-family: var(--mm-font-serif);
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.museum-empty-state {
+  font-style: italic;
+  padding: 0.5rem 0 1rem;
+}
+
+.museum-root .museum-empty-state {
+  color: var(--mm-text-muted);
+}
+
+.museum-pathways {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0;
+  margin: 0 0 2rem;
+}
+
+.museum-pathways li {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--mm-border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--mm-text-muted);
+}
+
 @media (max-width: 40rem) {
   .museum-container {
     padding: 1.25rem 1rem 3rem;
+  }
+
+  .museum-hero {
+    padding: 3rem 1rem 2.5rem;
+  }
+
+  .museum-section {
+    padding: 2.5rem 1rem;
+  }
+
+  .museum-nav {
+    display: none;
   }
 }
