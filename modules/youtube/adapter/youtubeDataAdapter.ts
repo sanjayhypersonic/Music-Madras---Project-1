@@ -136,7 +136,7 @@ export class YouTubeDataApiAdapter implements YouTubeDataAdapter {
     for (const batch of batches) {
       if (batch.length === 0) continue;
       const result = await this.http.get<YouTubeVideosListResponse>("videos.list", "videos", {
-        part: "snippet,contentDetails,status",
+        part: "snippet,contentDetails,status,statistics",
         id: batch.join(","),
         maxResults: MAX_RESULTS_PER_PAGE,
       });
@@ -156,6 +156,10 @@ export class YouTubeDataApiAdapter implements YouTubeDataAdapter {
           channelTitle: item.snippet?.channelTitle ?? null,
           privacyStatus: item.status?.privacyStatus ?? null,
           uploadStatus: item.status?.uploadStatus ?? null,
+          embeddable: item.status?.embeddable ?? null,
+          viewCount: item.statistics?.viewCount ?? null,
+          likeCount: item.statistics?.likeCount ?? null,
+          commentCount: item.statistics?.commentCount ?? null,
           etag: item.etag ?? null,
         });
       }
@@ -236,6 +240,7 @@ interface YouTubeVideosListResponse {
       thumbnails?: unknown;
     };
     contentDetails?: { duration?: string };
-    status?: { privacyStatus?: string; uploadStatus?: string };
+    status?: { privacyStatus?: string; uploadStatus?: string; embeddable?: boolean };
+    statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
   }[];
 }

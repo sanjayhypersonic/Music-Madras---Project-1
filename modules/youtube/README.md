@@ -18,7 +18,7 @@ The `YouTubeVideo`, `YouTubePlaylist`, and `YouTubePlaylistItem` **tables** alre
 - `getChannel(channelId)` — `channels.list`, resolving the channel's uploads playlist ID (ADR §13.1, step 1).
 - `listPlaylists(channelId, pageToken?)` — `playlists.list`, one page at a time (ADR §13.1, step 3).
 - `listPlaylistItems(playlistId, pageToken?)` — `playlistItems.list`, one page at a time; works identically for the uploads playlist or any other playlist (ADR §13.1, steps 1 and 4).
-- `listVideos(videoIds)` — `videos.list`, internally batched into groups of 50 (YouTube's documented limit, matching ADR §13.1 step 2) — the caller passes any number of IDs.
+- `listVideos(videoIds)` — `videos.list`, internally batched into groups of 50 (YouTube's documented limit, matching ADR §13.1 step 2) — the caller passes any number of IDs. As of Phase 6E, also requests `part=statistics` and returns current `viewCount`/`likeCount`/`commentCount` (as the raw strings the API returns) and `status.embeddable` — needed for the Phase 6E archive inventory. These are current public video statistics from the Data API, not YouTube Analytics (watch time, traffic sources, etc.), which remains a separate, later concern (`docs/analytics-architecture.md` §5).
 
 **Pagination**: every list method returns `{ items, nextPageToken }` for a single page. The adapter never auto-fetches subsequent pages — that decision (how many pages to walk, when to stop) belongs to the future sync engine, not this layer. Pagination is not connected to `SyncCheckpoint` here, by design — the sync engine will read/write checkpoints itself, passing the resulting `pageToken` back into these same methods.
 

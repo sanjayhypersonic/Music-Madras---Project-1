@@ -154,7 +154,8 @@ describe("YouTubeDataApiAdapter", () => {
                 thumbnails: { default: { url: "https://example.com/thumb.jpg" } },
               },
               contentDetails: { duration: "PT4M13S" },
-              status: { privacyStatus: "public", uploadStatus: "processed" },
+              status: { privacyStatus: "public", uploadStatus: "processed", embeddable: true },
+              statistics: { viewCount: "1234", likeCount: "56", commentCount: "7" },
             },
           ],
         },
@@ -174,8 +175,25 @@ describe("YouTubeDataApiAdapter", () => {
       channelTitle: "Music Madras",
       privacyStatus: "public",
       uploadStatus: "processed",
+      embeddable: true,
+      viewCount: "1234",
+      likeCount: "56",
+      commentCount: "7",
       etag: '"e1"',
     });
+  });
+
+  it("listVideos defaults statistics/embeddable to null when the API omits them", async () => {
+    const { fetchImpl } = createFakeFetch([
+      { status: 200, body: { items: [{ id: "v2", snippet: {}, contentDetails: {}, status: {} }] } },
+    ]);
+    const adapter = buildAdapter(fetchImpl);
+
+    const [video] = await adapter.listVideos(["v2"]);
+    expect(video.embeddable).toBeNull();
+    expect(video.viewCount).toBeNull();
+    expect(video.likeCount).toBeNull();
+    expect(video.commentCount).toBeNull();
   });
 
   it("listVideos de-duplicates repeated IDs before batching", async () => {

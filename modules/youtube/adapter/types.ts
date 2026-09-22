@@ -48,6 +48,19 @@ export interface YouTubeVideoRecord {
   channelTitle: string | null;
   privacyStatus: string | null;
   uploadStatus: string | null;
+  /** `status.embeddable` — whether YouTube allows this video to be embedded elsewhere. */
+  embeddable: boolean | null;
+  // Phase 6E: current public video statistics (`part=statistics`), added
+  // because the archive-inventory phase needs them. Kept as the raw
+  // strings the API returns (YouTube's statistics values are strings, not
+  // numbers, in the wire format) — parsing to a number is a mapping
+  // decision for whoever consumes this DTO. These are NOT YouTube
+  // Analytics (watch time, traffic sources, etc.) — that is a distinct,
+  // separately-authorized API and a later phase (see
+  // docs/analytics-architecture.md §5).
+  viewCount: string | null;
+  likeCount: string | null;
+  commentCount: string | null;
   etag: string | null;
 }
 
