@@ -46,6 +46,31 @@ describe("Phase 6B YouTube sync foundation", () => {
   afterEach(async () => {
     // Cleanup order respects FK constraints: leaf rows before the
     // StudioUser and SyncJobRun/SyncCheckpoint rows they reference.
+    //
+    // Also removes this suite's own AuditLogEntry rows (Phase 6F database
+    // hygiene) — setFieldOwnership/resolveSyncConflict/upsertSyncPolicy/
+    // recordObservabilityTransition all audit-log by design (ADR §16.3:
+    // "resolutions are never silent"; ADR §20), which is exactly correct
+    // production behavior to exercise here. But AuditLogEntry has no FK/
+    // cascade on entityId (deliberately — see
+    // modules/audit/writeAuditLog.ts), so without this cleanup those rows
+    // outlive the SyncPolicy/resource rows they reference and accumulate
+    // as orphaned dev-database noise every time this suite runs. SyncPolicy
+    // ids are captured before that table's own row is deleted below, so
+    // the matching audit entries can still be found by entityId.
+    const testPolicies = await prisma.syncPolicy.findMany({
+      where: { resourceType: "YOUTUBE_VIDEO", provider: "YOUTUBE" },
+      select: { id: true },
+    });
+    await prisma.auditLogEntry.deleteMany({
+      where: {
+        OR: [
+          { entityType: "YOUTUBE_VIDEO", entityId: TEST_RESOURCE_ID },
+          { entityType: "SyncPolicy", entityId: { in: testPolicies.map((p) => p.id) } },
+        ],
+      },
+    });
+
     await prisma.observabilityTransition.deleteMany({ where: { resourceId: TEST_RESOURCE_ID } });
     await prisma.syncConflict.deleteMany({ where: { resourceId: TEST_RESOURCE_ID } });
     await prisma.fieldOwnership.deleteMany({ where: { resourceId: TEST_RESOURCE_ID } });

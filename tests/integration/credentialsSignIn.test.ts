@@ -62,8 +62,18 @@ async function verifyCredentials(email: string, password: string) {
 describe("Phase 5C credentials + database session flow", () => {
   afterEach(async () => {
     // Cleanup order respects FK constraints: sessions before the user.
+    // Also removes this test's own AuditLogEntry rows (Phase 6F database
+    // hygiene) — test H calls updateStudioUserPassword, which audit-logs
+    // by design (ADR §20: password changes are a real, meaningful event
+    // in production). That's correct behavior to exercise, but without
+    // this cleanup the row outlives the test user it references (audit
+    // rows have no FK/cascade on entityId, by design — see
+    // modules/audit/writeAuditLog.ts) and accumulates in the dev database
+    // every time this suite runs. Scoped only to this exact test user's
+    // id, so it can never touch a real StudioUser's audit history.
     const user = await prisma.studioUser.findUnique({ where: { email: TEST_EMAIL } });
     if (user) {
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: "StudioUser", entityId: user.id } });
       await prisma.studioSession.deleteMany({ where: { studioUserId: user.id } });
       await prisma.studioUser.delete({ where: { id: user.id } });
     }
