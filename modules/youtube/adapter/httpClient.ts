@@ -92,6 +92,14 @@ export class YouTubeHttpClient {
     );
   }
 
+  /**
+   * Deliberately never adds the API key here (Phase 6D security
+   * hardening) — it travels only as the `x-goog-api-key` request header,
+   * set in performRequest, so it can never end up in a URL that gets
+   * logged, cached by an intermediary, or captured in server access
+   * logs. Google's APIs document this header as an equivalent,
+   * server-side-only alternative to the `key` query parameter.
+   */
   private buildUrl(path: string, query: Record<string, string | number | undefined>): string {
     const url = new URL(`${this.baseUrl}/${path}`);
     for (const [key, value] of Object.entries(query)) {
@@ -99,7 +107,6 @@ export class YouTubeHttpClient {
         url.searchParams.set(key, String(value));
       }
     }
-    url.searchParams.set("key", this.apiKey);
     return url.toString();
   }
 
@@ -111,11 +118,16 @@ export class YouTubeHttpClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
+    const headers: Record<string, string> = { "x-goog-api-key": this.apiKey };
+    if (ifNoneMatch) {
+      headers["If-None-Match"] = ifNoneMatch;
+    }
+
     let response: Response;
     try {
       response = await this.fetchImpl(url, {
         method: "GET",
-        headers: ifNoneMatch ? { "If-None-Match": ifNoneMatch } : undefined,
+        headers,
         signal: controller.signal,
       });
     } catch (error) {

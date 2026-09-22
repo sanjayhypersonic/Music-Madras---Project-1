@@ -29,17 +29,66 @@ describe("YouTubeHttpClient", () => {
     }
   });
 
-  it("includes the API key as a query parameter, but never leaks it into the thrown error message", async () => {
-    const { fetchImpl, calls } = createFakeFetch([{ status: 403, body: { error: { message: "Forbidden", errors: [{ reason: "forbidden" }] } } }]);
-    const client = buildClient(fetchImpl);
+  // Phase 6D security hardening: the API key travels only via the
+  // `x-goog-api-key` request header, never a URL query parameter.
+  describe("API key handling (Phase 6D security patch)", () => {
+    it("1. sends the API key in the x-goog-api-key request header", async () => {
+      const { fetchImpl, calls } = createFakeFetch([{ status: 200, body: { items: [] } }]);
+      const client = buildClient(fetchImpl);
 
-    const error = await client.get("channels.list", "channels", { id: "UC123" }).catch((e) => e);
-    expect(error).toBeInstanceOf(YouTubeProviderError);
-    expect((error as YouTubeProviderError).message).not.toContain(API_KEY);
+      await client.get("channels.list", "channels", { id: "UC123" });
 
-    // The API key genuinely was sent as a query parameter (that's how the Data API expects it) —
-    // this test only asserts it never ends up somewhere it would leak, like a log or error message.
-    expect(calls[0].url).toContain(`key=${API_KEY}`);
+      const headers = calls[0].init?.headers as Record<string, string> | undefined;
+      expect(headers?.["x-goog-api-key"]).toBe(API_KEY);
+    });
+
+    it("2. never includes the API key anywhere in the request URL", async () => {
+      const { fetchImpl, calls } = createFakeFetch([{ status: 200, body: { items: [] } }]);
+      const client = buildClient(fetchImpl);
+
+      await client.get("channels.list", "channels", { id: "UC123" });
+
+      expect(calls[0].url).not.toContain(API_KEY);
+      expect(calls[0].url).not.toContain("key=");
+    });
+
+    it("3. never includes the API key in a thrown error's message, across every error kind", async () => {
+      const scenarios = [
+        { status: 400, body: { error: { message: "Bad request" } } },
+        { status: 401, body: { error: { message: "Invalid credentials" } } },
+        { status: 403, body: { error: { message: "Forbidden", errors: [{ reason: "forbidden" }] } } },
+        { status: 404, body: { error: { message: "Not found" } } },
+        { status: 429, body: { error: { message: "Too many requests" } } },
+      ];
+
+      for (const scenario of scenarios) {
+        const { fetchImpl } = createFakeFetch([scenario]);
+        const client = buildClient(fetchImpl);
+        const error = await client.get("channels.list", "channels", { id: "UC123" }).catch((e) => e);
+        expect(error).toBeInstanceOf(YouTubeProviderError);
+        expect((error as YouTubeProviderError).message).not.toContain(API_KEY);
+      }
+    });
+
+    it("4. never passes the API key to onApiCall, the adapter's only built-in 'observability' hook", async () => {
+      const { fetchImpl } = createFakeFetch([{ status: 200, body: { items: [] } }]);
+      const observed: unknown[] = [];
+      const client = new YouTubeHttpClient({
+        apiKey: API_KEY,
+        fetchImpl,
+        sleep: instantSleep,
+        onApiCall: (info) => observed.push(info),
+      });
+
+      await client.get("channels.list", "channels", { id: "UC123" });
+
+      expect(JSON.stringify(observed)).not.toContain(API_KEY);
+    });
+
+    // 5. Retry/error behavior is unchanged by this patch — verified by every
+    // other test in this file continuing to pass unmodified below (status
+    // classification, retry-on-TRANSIENT, no-retry-on-permanent, timeout,
+    // 304 handling, onApiCall invocation count).
   });
 
   it("classifies 429 as QUOTA_EXCEEDED and does not retry it", async () => {

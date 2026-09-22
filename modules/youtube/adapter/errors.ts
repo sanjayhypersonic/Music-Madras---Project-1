@@ -4,10 +4,13 @@
 // distinguishing *why* a call to YouTube failed, for the caller (and,
 // later, the sync engine) to react to appropriately.
 //
-// Security: messages built by this module use `redactUrl` (below) so a
-// request URL containing `key=<api key>` never appears in a thrown
-// error's message — see modules/youtube/adapter/httpClient.ts, the only
-// place a URL is ever constructed.
+// Security: the API key travels only as the `x-goog-api-key` request
+// header (Phase 6D hardening — see httpClient.ts), never as a URL query
+// parameter, so it cannot appear in a request URL at all. `redactUrl`
+// (below) is kept as a defense-in-depth safeguard on any URL this module
+// puts into a thrown error's message regardless — it strips a `key`
+// parameter if one is ever present, rather than assuming it never will
+// be.
 
 export type YouTubeProviderErrorKind =
   | "CONFIGURATION" // e.g. no API key provided
@@ -38,9 +41,12 @@ export function isRetryableYouTubeError(error: unknown): boolean {
 }
 
 /**
- * Strips the `key` query parameter from a URL before it can ever reach a
- * log line or an error message — the one function every code path that
- * builds a user-facing/loggable string from a request URL must go
+ * Strips a `key` query parameter from a URL, if one is present, before it
+ * can ever reach a log line or an error message. As of Phase 6D the
+ * adapter no longer sends the API key as a query parameter at all (see
+ * httpClient.ts), so this is a defensive backstop rather than the
+ * primary protection — the one function any code path that builds a
+ * user-facing/loggable string from a request URL should still go
  * through.
  */
 export function redactUrl(url: string): string {
