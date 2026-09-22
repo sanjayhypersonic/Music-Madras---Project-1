@@ -89,7 +89,7 @@ export async function findPublishedBySlug(slug: string): Promise<PublicVideoPage
   if (!page) return null;
 
   const eligible = isYouTubeVideoPagePublic({
-    page: { status: page.status, archivedAt: page.archivedAt },
+    page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
     youtubeVideo: {
       privacyStatus: page.youtubeVideo.privacyStatus,
       observabilityState: page.youtubeVideo.observabilityState,
@@ -140,7 +140,7 @@ export async function updateEditorialFields(id: string, input: UpdateVideoPageEd
 
 export async function publishVideoPage(id: string, actorId: string): Promise<YouTubeVideoPage> {
   return prisma.$transaction(async (tx) => {
-    const page = await tx.youTubeVideoPage.findUnique({ where: { id }, include: { youtubeVideo: true } });
+    const page = await tx.youTubeVideoPage.findUnique({ where: { id } });
     if (!page) {
       throw new Error(`YouTubeVideoPage ${id} does not exist.`);
     }
@@ -148,16 +148,13 @@ export async function publishVideoPage(id: string, actorId: string): Promise<You
       throw new Error(`YouTubeVideoPage ${id} cannot be published from its current state (${page.status}${page.archivedAt ? ", archived" : ""}).`);
     }
 
-    // Validate public eligibility before allowing the transition (brief §7)
-    // — evaluated as if already PUBLISHED, since that is the state being
-    // requested; the archivedAt/status checks above already ruled out DRAFT-only paths.
-    const eligible = isYouTubeVideoPagePublic({
-      page: { status: "PUBLISHED", archivedAt: page.archivedAt },
-      youtubeVideo: { privacyStatus: page.youtubeVideo.privacyStatus, observabilityState: page.youtubeVideo.observabilityState },
-    });
-    if (!eligible) {
-      throw new Error(`YouTubeVideoPage ${id} cannot be published: the linked YouTube video is not currently public and available.`);
-    }
+    // Phase 6G-2A (locked product decision): publishing is Music Madras's
+    // own editorial decision and is independent of YouTube's current
+    // visibility — it no longer requires isYouTubeVideoPagePublic
+    // eligibility. A page CAN become PUBLISHED while its video is
+    // unlisted or even private; whether that page is actually exposed
+    // publicly is entirely findPublishedBySlug/isYouTubeVideoPagePublic's
+    // decision at read time, never this function's.
 
     const updated = await tx.youTubeVideoPage.update({
       where: { id },
@@ -209,6 +206,74 @@ export async function unpublishVideoPage(id: string, actorId: string): Promise<Y
 
     return updated;
   });
+}
+
+/**
+ * Explicit Music Madras editorial approval to expose an UNLISTED video's
+ * page publicly (Phase 6G-2A, locked product decision). Deliberately
+ * independent of publish/unpublish: approving does not publish, and
+ * publishing does not approve. Only ever legal while the linked
+ * YouTubeVideo is currently "unlisted" — there is no approval path for
+ * "private" or any other privacy status, matching
+ * isYouTubeVideoPagePublic's own refusal to even consult this field for
+ * those cases.
+ */
+export async function approveUnlistedPublication(id: string, actorId: string): Promise<YouTubeVideoPage> {
+  return prisma.$transaction(async (tx) => {
+    const page = await tx.youTubeVideoPage.findUnique({ where: { id }, include: { youtubeVideo: true } });
+    if (!page) {
+      throw new Error(`YouTubeVideoPage ${id} does not exist.`);
+    }
+    if (page.youtubeVideo.privacyStatus !== "unlisted") {
+      throw new Error(
+        `YouTubeVideoPage ${id} cannot be approved for unlisted publication: the linked YouTube video's privacy status is "${page.youtubeVideo.privacyStatus}", not "unlisted".`
+      );
+    }
+
+    const approvedAt = new Date();
+    const updated = await tx.youTubeVideoPage.update({
+      where: { id },
+      data: { unlistedPublicationApprovedAt: approvedAt, updatedById: actorId },
+    });
+
+    await writeAuditLog(
+      {
+        actorId,
+        action: "VIDEO_PAGE_UNLISTED_PUBLICATION_APPROVED",
+        entityType: "YouTubeVideoPage",
+        entityId: id,
+        beforeSnapshot: { unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
+        afterSnapshot: { unlistedPublicationApprovedAt: approvedAt },
+      },
+      tx
+    );
+
+    return updated;
+  });
+}
+
+/** Revoking never touches status/archivedAt — only the approval timestamp. */
+export async function revokeUnlistedApproval(id: string, actorId: string): Promise<YouTubeVideoPage> {
+  const before = await prisma.youTubeVideoPage.findUnique({ where: { id } });
+  if (!before) {
+    throw new Error(`YouTubeVideoPage ${id} does not exist.`);
+  }
+
+  const updated = await prisma.youTubeVideoPage.update({
+    where: { id },
+    data: { unlistedPublicationApprovedAt: null, updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "VIDEO_PAGE_UNLISTED_PUBLICATION_REVOKED",
+    entityType: "YouTubeVideoPage",
+    entityId: id,
+    beforeSnapshot: { unlistedPublicationApprovedAt: before.unlistedPublicationApprovedAt },
+    afterSnapshot: { unlistedPublicationApprovedAt: null },
+  });
+
+  return updated;
 }
 
 export async function archiveVideoPage(id: string, actorId: string): Promise<YouTubeVideoPage> {

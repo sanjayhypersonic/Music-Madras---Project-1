@@ -8,20 +8,23 @@ import { canPublishVideoPage, canUnpublishVideoPage } from "../../../../../../..
 import { isYouTubeVideoPagePublic } from "../../../../../../../modules/mmke/catalogue/isYouTubeVideoPagePublic";
 import { deriveCataloguePageState } from "../../../../../../../modules/mmke/catalogue/deriveCataloguePageState";
 import {
+  approveUnlistedPublicationAction,
   archiveVideoPageAction,
   createCataloguePageAction,
   publishVideoPageAction,
+  revokeUnlistedApprovalAction,
   unarchiveVideoPageAction,
   unpublishVideoPageAction,
   updateEditorialFieldsAction,
 } from "./actions";
 
 // Phase 6G-1C — the per-video Studio manage page (brief "STUDIO ROUTE 2").
+// Extended Phase 6G-2A with the explicit Unlisted-approval control.
 // Deliberately shows YouTube's own state and Music Madras's editorial
 // state as two separate sections, never implying that a PUBLISHED
-// catalogue page means the video is publicly visible — that depends on
-// isYouTubeVideoPagePublic, evaluated only by the (not-yet-built) public
-// route, never duplicated here. This page never writes to YouTubeVideo.
+// catalogue page means the video is publicly visible — that always comes
+// from isYouTubeVideoPagePublic, never duplicated here. This page never
+// writes to YouTubeVideo.
 
 export default async function YouTubeVideoManagePage({
   params,
@@ -43,6 +46,14 @@ export default async function YouTubeVideoManagePage({
 
   const page = await findByYouTubeVideoId(videoId);
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
+  const isPublic = page
+    ? isYouTubeVideoPagePublic({
+        page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
+        youtubeVideo: { privacyStatus: video.privacyStatus, observabilityState: video.observabilityState },
+      })
+    : false;
+  const isUnlisted = video.privacyStatus === "unlisted";
+  const isApprovedUnlisted = Boolean(page?.unlistedPublicationApprovedAt);
 
   return (
     <div>
@@ -72,18 +83,9 @@ export default async function YouTubeVideoManagePage({
             <p>
               Catalogue Page: <strong>{deriveCataloguePageState(page)}</strong>
               <br />
-              Public:{" "}
-              <strong>
-                {isYouTubeVideoPagePublic({
-                  page: { status: page.status, archivedAt: page.archivedAt },
-                  youtubeVideo: { privacyStatus: video.privacyStatus, observabilityState: video.observabilityState },
-                })
-                  ? "YES"
-                  : "NO"}
-              </strong>{" "}
-              (the public Museum route does not exist yet, so this is never actually reachable)
+              Public: <strong>{isPublic ? "YES" : "NO"}</strong>
               <br />
-              URL (once the public route exists): <code>/videos/{page.slug}</code>
+              URL: <code>/videos/{page.slug}</code>
             </p>
           ) : (
             <p>
@@ -107,6 +109,26 @@ export default async function YouTubeVideoManagePage({
 
       {page && (
         <>
+          {isUnlisted && (
+            <section style={{ margin: "1rem 0", padding: "1rem", border: "1px dashed #b8860b", background: "#fffaf0" }}>
+              <h3>Unlisted — {isApprovedUnlisted ? "approved for public Museum exposure" : "not approved for public Museum exposure"}</h3>
+              <p>
+                This video is unlisted on YouTube — requires approval for public Museum exposure. Publishing this catalogue
+                page alone will never make it public; an editor must separately approve it below.
+              </p>
+              {canWrite &&
+                (isApprovedUnlisted ? (
+                  <form action={revokeUnlistedApprovalAction.bind(null, videoId, page.id)}>
+                    <button type="submit">Revoke Public Museum Approval</button>
+                  </form>
+                ) : (
+                  <form action={approveUnlistedPublicationAction.bind(null, videoId, page.id)}>
+                    <button type="submit">Approve for Public Museum</button>
+                  </form>
+                ))}
+            </section>
+          )}
+
           <h2>Editorial fields</h2>
           {canWrite ? (
             <form
@@ -149,7 +171,7 @@ export default async function YouTubeVideoManagePage({
             {page.curatorNote && <p>{page.curatorNote}</p>}
             <p style={{ whiteSpace: "pre-wrap" }}>{video.description}</p>
             <p>
-              <small>Eventual public URL: /videos/{page.slug}</small>
+              <small>Public URL: /videos/{page.slug}</small>
             </p>
           </div>
 

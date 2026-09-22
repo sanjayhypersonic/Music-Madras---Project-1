@@ -995,20 +995,30 @@ model YouTubePlaylistItem {
 // Deliberately no duplicated title/description/thumbnail/statistics copy —
 // those are always read live from the linked YouTubeVideo relation.
 model YouTubeVideoPage {
-  id                 String          @id @default(uuid())
-  slug               String          @unique
-  youtubeVideoId     String          @unique
-  status             VideoPageStatus @default(DRAFT)
+  id                            String          @id @default(uuid())
+  slug                          String          @unique
+  youtubeVideoId                String          @unique
+  status                        VideoPageStatus @default(DRAFT)
   // Music Madras editorial content, distinct from YouTube's own
   // title/description (which stay on YouTubeVideo, YouTube-controlled).
-  curatorNote        String?         @db.Text
-  seoMetaTitle       String?
-  seoMetaDescription String?         @db.Text
-  archivedAt         DateTime?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  createdById        String
-  updatedById        String
+  curatorNote                   String?         @db.Text
+  seoMetaTitle                  String?
+  seoMetaDescription            String?         @db.Text
+  // Phase 6G-2A — explicit Music Madras editorial approval for exposing an
+  // UNLISTED YouTube video's page publicly. The timestamp itself IS the
+  // approval record (non-null = approved, null = not approved) — no
+  // separate boolean, no separate approval table. Only ever meaningful
+  // when the linked YouTubeVideo.privacyStatus is "unlisted"; a "private"
+  // video has no approval path at all (modules/mmke/catalogue/
+  // isYouTubeVideoPagePublic.ts never even reads this field for that
+  // case). Approving does not publish, and publishing does not approve —
+  // these are two independent editor decisions.
+  unlistedPublicationApprovedAt DateTime?
+  archivedAt                    DateTime?
+  createdAt                     DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
+  createdById                   String
+  updatedById                   String
 
   youtubeVideo YouTubeVideo @relation(fields: [youtubeVideoId], references: [id], onDelete: Cascade)
   createdBy    StudioUser   @relation("YouTubeVideoPageCreatedBy", fields: [createdById], references: [id])

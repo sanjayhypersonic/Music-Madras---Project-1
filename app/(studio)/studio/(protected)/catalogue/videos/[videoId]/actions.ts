@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import {
+  approveUnlistedPublication,
   archiveVideoPage,
   createDraftVideoPage,
   publishVideoPage,
+  revokeUnlistedApproval,
   unarchiveVideoPage,
   unpublishVideoPage,
   updateEditorialFields,
@@ -101,5 +103,30 @@ export async function unarchiveVideoPageAction(videoId: string, pageId: string) 
   }
 
   await unarchiveVideoPage(pageId, session!.user.id);
+  redirect(`/studio/catalogue/videos/${videoId}`);
+}
+
+export async function approveUnlistedPublicationAction(videoId: string, pageId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(videoId, "You do not have permission to approve this catalogue page for public Museum exposure.");
+  }
+
+  try {
+    await approveUnlistedPublication(pageId, session!.user.id);
+  } catch (err) {
+    errorRedirect(videoId, err instanceof Error ? err.message : "Could not approve this catalogue page for public Museum exposure.");
+  }
+
+  redirect(`/studio/catalogue/videos/${videoId}`);
+}
+
+export async function revokeUnlistedApprovalAction(videoId: string, pageId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(videoId, "You do not have permission to revoke this catalogue page's public Museum approval.");
+  }
+
+  await revokeUnlistedApproval(pageId, session!.user.id);
   redirect(`/studio/catalogue/videos/${videoId}`);
 }

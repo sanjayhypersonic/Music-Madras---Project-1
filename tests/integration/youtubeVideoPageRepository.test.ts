@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
 import {
+  approveUnlistedPublication,
   archiveVideoPage,
   createDraftVideoPage,
   findById,
@@ -10,6 +11,7 @@ import {
   findPublishedBySlug,
   listVideoPages,
   publishVideoPage,
+  revokeUnlistedApproval,
   unarchiveVideoPage,
   unpublishVideoPage,
   updateEditorialFields,
@@ -174,15 +176,29 @@ describe("YouTubeVideoPage repository against a real database", () => {
     expect(auditRows).toHaveLength(1);
   });
 
-  it("refuses to publish a page whose linked video is currently unlisted", async () => {
+  it("Phase 6G-2A: publishing an unlisted video's page is allowed (I) — status becomes PUBLISHED but it remains non-public until approved", async () => {
     const user = await createTestUser();
     const video = await createTestVideo(TEST_VIDEO_ID_1, "Unlisted Video", { privacyStatus: "unlisted" });
     const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
 
-    await expect(publishVideoPage(created.id, user.id)).rejects.toThrow();
+    const published = await publishVideoPage(created.id, user.id);
+    expect(published.status).toBe("PUBLISHED");
 
-    const stillDraft = await findById(created.id);
-    expect(stillDraft?.status).toBe("DRAFT");
+    const stillNotPublic = await findPublishedBySlug(created.slug);
+    expect(stillNotPublic).toBeNull();
+  });
+
+  it("Phase 6G-2A: publishing a private video's page is allowed editorially but it can never become public", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Private Video", { privacyStatus: "private" });
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+
+    const published = await publishVideoPage(created.id, user.id);
+    expect(published.status).toBe("PUBLISHED");
+    expect(await findPublishedBySlug(created.slug)).toBeNull();
+
+    // No approval path exists for private videos at all.
+    await expect(approveUnlistedPublication(created.id, user.id)).rejects.toThrow();
   });
 
   it("unpublishes a published page and audit-logs it", async () => {
@@ -215,6 +231,63 @@ describe("YouTubeVideoPage repository against a real database", () => {
 
     const stillPublishedInStudio = await findById(created.id);
     expect(stillPublishedInStudio?.status).toBe("PUBLISHED"); // Studio's own record of the decision is untouched
+  });
+
+  it("Phase 6G-2A (D): approving an unlisted, published page makes it public", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Unlisted Approvable Video", { privacyStatus: "unlisted" });
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+    await publishVideoPage(created.id, user.id);
+    expect(await findPublishedBySlug(created.slug)).toBeNull();
+
+    const approved = await approveUnlistedPublication(created.id, user.id);
+    expect(approved.unlistedPublicationApprovedAt).not.toBeNull();
+
+    const result = await findPublishedBySlug(created.slug);
+    expect(result?.page.id).toBe(created.id);
+
+    const auditRows = await prisma.auditLogEntry.findMany({
+      where: { entityType: "YouTubeVideoPage", entityId: created.id, action: "VIDEO_PAGE_UNLISTED_PUBLICATION_APPROVED" },
+    });
+    expect(auditRows).toHaveLength(1);
+  });
+
+  it("Phase 6G-2A (J): approving a still-DRAFT unlisted page does not publish it", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Unlisted Draft Approved Video", { privacyStatus: "unlisted" });
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+
+    const approved = await approveUnlistedPublication(created.id, user.id);
+    expect(approved.status).toBe("DRAFT"); // approval never touches status
+    expect(await findPublishedBySlug(created.slug)).toBeNull(); // still not public — status gates first
+  });
+
+  it("Phase 6G-2A (H): revoking approval immediately makes a previously-public unlisted page non-public again, without touching status", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Revocable Video", { privacyStatus: "unlisted" });
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+    await publishVideoPage(created.id, user.id);
+    await approveUnlistedPublication(created.id, user.id);
+    expect(await findPublishedBySlug(created.slug)).not.toBeNull();
+
+    const revoked = await revokeUnlistedApproval(created.id, user.id);
+    expect(revoked.unlistedPublicationApprovedAt).toBeNull();
+    expect(revoked.status).toBe("PUBLISHED"); // revocation never unpublishes
+
+    expect(await findPublishedBySlug(created.slug)).toBeNull();
+
+    const auditRows = await prisma.auditLogEntry.findMany({
+      where: { entityType: "YouTubeVideoPage", entityId: created.id, action: "VIDEO_PAGE_UNLISTED_PUBLICATION_REVOKED" },
+    });
+    expect(auditRows).toHaveLength(1);
+  });
+
+  it("rejects approving a page whose video is not currently unlisted", async () => {
+    const user = await createTestUser();
+    const video = await createTestVideo(TEST_VIDEO_ID_1, "Public Video, Not Approvable");
+    const created = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
+
+    await expect(approveUnlistedPublication(created.id, user.id)).rejects.toThrow();
   });
 
   it("findPublishedBySlug returns null for a DRAFT page even if the video is fully public", async () => {
