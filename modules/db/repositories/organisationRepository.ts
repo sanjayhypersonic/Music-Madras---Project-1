@@ -1,5 +1,6 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
+import { DuplicateEntityError, findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
 import type { Organisation } from "@prisma/client";
 
 export interface CreateOrganisationInput {
@@ -8,7 +9,25 @@ export interface CreateOrganisationInput {
   actorId: string;
 }
 
+/**
+ * Phase 6G-4E (brief §11): adds the same exact-normalized-name duplicate
+ * guard Composer/Artist/Choir/Conductor/Venue already have — the 6G-4D
+ * preflight found Organisation was the other simple entity missing it.
+ */
 export async function createOrganisation(input: CreateOrganisationInput): Promise<Organisation> {
+  const existing = await prisma.organisation.findMany({
+    where: { archivedAt: null },
+    select: { name: true },
+  });
+
+  const duplicate = findExactNormalizedDuplicate(
+    input.name,
+    existing.map((o) => o.name)
+  );
+  if (duplicate) {
+    throw new DuplicateEntityError("Organisation", duplicate);
+  }
+
   const organisation = await prisma.organisation.create({
     data: {
       name: input.name,
@@ -38,4 +57,96 @@ export function listActiveOrganisations(): Promise<Organisation[]> {
     where: { archivedAt: null },
     orderBy: { name: "asc" },
   });
+}
+
+export interface OrganisationForStudio extends Organisation {
+  _count: { venues: number };
+}
+
+/**
+ * Studio-facing list (Phase 6G-4E, mirrors listComposersForStudio):
+ * every Organisation regardless of archived state, with a cheap
+ * direct-relation Venue count (brief §8: "show associated Venue count
+ * where cheaply available" — a single aggregated query, not one per
+ * row), and an optional case-insensitive name search.
+ */
+export function listOrganisationsForStudio(searchQuery?: string): Promise<OrganisationForStudio[]> {
+  return prisma.organisation.findMany({
+    where: searchQuery ? { name: { contains: searchQuery, mode: "insensitive" } } : undefined,
+    include: { _count: { select: { venues: true } } },
+    orderBy: { name: "asc" },
+  });
+}
+
+export interface UpdateOrganisationInput {
+  name?: string;
+  description?: string | null;
+  actorId: string;
+}
+
+export async function updateOrganisation(id: string, input: UpdateOrganisationInput): Promise<Organisation> {
+  const before = await prisma.organisation.findUnique({ where: { id } });
+  if (!before) {
+    throw new Error(`Organisation ${id} does not exist.`);
+  }
+
+  const updated = await prisma.organisation.update({
+    where: { id },
+    data: {
+      name: input.name,
+      description: input.description,
+      updatedById: input.actorId,
+    },
+  });
+
+  await writeAuditLog({
+    actorId: input.actorId,
+    action: "ORGANISATION_UPDATED",
+    entityType: "Organisation",
+    entityId: id,
+    beforeSnapshot: before,
+    afterSnapshot: updated,
+  });
+
+  return updated;
+}
+
+/**
+ * Archiving/restoring (brief §12) reuses the existing archivedAt
+ * convention — never deletes the row, never cascades to its Venues.
+ * Venue.organisationId is a plain nullable FK (onDelete: SetNull only
+ * applies if the Organisation row itself were deleted, which this never
+ * does), so every linked Venue keeps pointing at this Organisation
+ * whether it is active or archived.
+ */
+export async function archiveOrganisation(id: string, actorId: string): Promise<Organisation> {
+  const organisation = await prisma.organisation.update({
+    where: { id },
+    data: { archivedAt: new Date(), updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "ORGANISATION_ARCHIVED",
+    entityType: "Organisation",
+    entityId: id,
+  });
+
+  return organisation;
+}
+
+export async function restoreOrganisation(id: string, actorId: string): Promise<Organisation> {
+  const organisation = await prisma.organisation.update({
+    where: { id },
+    data: { archivedAt: null, updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "ORGANISATION_RESTORED",
+    entityType: "Organisation",
+    entityId: id,
+  });
+
+  return organisation;
 }
