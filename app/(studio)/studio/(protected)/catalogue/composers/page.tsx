@@ -1,99 +1,77 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
-import {
-  createComposer,
-  listActiveComposers,
-} from "../../../../../../modules/db/repositories/composerRepository";
-import { DuplicateEntityError } from "../../../../../../modules/mmke/duplicate-detection/detectDuplicateName";
-import { slugify } from "../../../../../../modules/mmke/slug/slugify";
+import { listComposersForStudio } from "../../../../../../modules/db/repositories/composerRepository";
 
-export default async function ComposersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
+// Phase 6G-4C — the Composer catalogue list. Shows every Composer
+// regardless of archived state (clearly labelled), with a cheap
+// direct-relation work count and a case-insensitive name search. Create
+// now lives at its own /new route; this page is purely the searchable
+// list + entry point, per the brief's conceptual three-route shape.
+
+export default async function ComposersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const session = await getCurrentStudioSession();
   if (!session) redirect("/studio/signin");
-  const { error } = await searchParams;
+  const { q } = await searchParams;
 
-  const composers = await listActiveComposers();
+  const composers = await listComposersForStudio(q);
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
-
-  async function createComposerAction(formData: FormData) {
-    "use server";
-    const session = await getCurrentStudioSession();
-    if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-      redirect("/studio/catalogue/composers?error=You+do+not+have+permission+to+add+composers.");
-    }
-
-    const name = String(formData.get("name") ?? "").trim();
-    if (!name) {
-      redirect("/studio/catalogue/composers?error=Name+is+required.");
-    }
-
-    try {
-      await createComposer({
-        slug: slugify(name),
-        name,
-        bornDate: String(formData.get("bornDate") ?? "") || undefined,
-        diedDate: String(formData.get("diedDate") ?? "") || undefined,
-        era: String(formData.get("era") ?? "") || undefined,
-        biography: String(formData.get("biography") ?? "") || undefined,
-        actorId: session.user.id,
-      });
-    } catch (err) {
-      if (err instanceof DuplicateEntityError) {
-        redirect(`/studio/catalogue/composers?error=${encodeURIComponent(err.message)}`);
-      }
-      throw err;
-    }
-
-    redirect("/studio/catalogue/composers");
-  }
 
   return (
     <div>
       <h1>Composers</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
 
-      <ul>
-        {composers.map((composer) => (
-          <li key={composer.id}>
-            {composer.name}
-            {composer.era ? ` — ${composer.era}` : ""}
-          </li>
-        ))}
-      </ul>
-      {composers.length === 0 && <p>No composers yet.</p>}
+      <form method="get" style={{ margin: "1rem 0" }}>
+        <label>
+          Search by name
+          <input type="search" name="q" defaultValue={q ?? ""} style={{ display: "block", width: "100%", maxWidth: "24rem" }} />
+        </label>
+        <button type="submit" style={{ marginTop: "0.5rem" }}>
+          Search
+        </button>
+        {q && (
+          <Link href="/studio/catalogue/composers" style={{ marginLeft: "1rem" }}>
+            Clear
+          </Link>
+        )}
+      </form>
 
       {canWrite && (
-        <>
-          <h2>Add a composer</h2>
-          <form action={createComposerAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
-            <label>
-              Name
-              <input name="name" required style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Born (free text, e.g. &quot;1685&quot;)
-              <input name="bornDate" style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Died (free text)
-              <input name="diedDate" style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Era
-              <input name="era" style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Biography
-              <textarea name="biography" style={{ display: "block", width: "100%" }} />
-            </label>
-            <button type="submit">Add composer</button>
-          </form>
-        </>
+        <p>
+          <Link href="/studio/catalogue/composers/new">+ New Composer</Link>
+        </p>
+      )}
+
+      {composers.length === 0 ? (
+        <p>
+          {q
+            ? `No composers match "${q}".`
+            : "No composers have been added to the MusicMadras archive yet."}
+        </p>
+      ) : (
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Works</th>
+              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {composers.map((composer) => (
+              <tr key={composer.id}>
+                <td style={{ padding: "0.4rem 0" }}>{composer.name}</td>
+                <td>{composer.archivedAt ? "Archived" : "Active"}</td>
+                <td>{composer._count.works}</td>
+                <td>
+                  <Link href={`/studio/catalogue/composers/${composer.id}`}>Open</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );
