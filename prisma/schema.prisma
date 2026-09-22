@@ -126,6 +126,16 @@ enum CollectionStatus {
   PUBLISHED
 }
 
+// Phase 6G-1 (brief §1): same two-state shape as CollectionStatus, for the
+// same reason — a YouTubeVideoPage is a thin catalogue/publication wrapper
+// around synced facts, not richly-authored content, so it doesn't need
+// Recording's full revision history. Archival is the existing archivedAt
+// convention, not a third enum state.
+enum VideoPageStatus {
+  DRAFT
+  PUBLISHED
+}
+
 // ---------------------------------------------------------------------------
 // Studio identity (minimal — see file header note)
 // ---------------------------------------------------------------------------
@@ -182,6 +192,8 @@ model StudioUser {
   educationalContentUpdated EducationalContent[] @relation("EducationalContentUpdatedBy")
   editorialContentCreated   EditorialContent[]   @relation("EditorialContentCreatedBy")
   editorialContentUpdated   EditorialContent[]   @relation("EditorialContentUpdatedBy")
+  videoPagesCreated         YouTubeVideoPage[]   @relation("YouTubeVideoPageCreatedBy")
+  videoPagesUpdated         YouTubeVideoPage[]   @relation("YouTubeVideoPageUpdatedBy")
   auditLogEntries           AuditLogEntry[]      @relation("AuditLogActor")
 
   // Phase 6B (ADR §16.3) — an editor changing a synced field's ownership,
@@ -926,6 +938,7 @@ model YouTubeVideo {
   playlistItems         YouTubePlaylistItem[]
   mediaResources        MediaResource[]
   analyticsObservations YouTubeAnalyticsObservation[]
+  videoPage             YouTubeVideoPage?
 
   @@map("youtube_videos")
 }
@@ -971,6 +984,38 @@ model YouTubePlaylistItem {
   @@unique([playlistId, youtubeVideoId])
   @@index([playlistId, position])
   @@map("youtube_playlist_items")
+}
+
+// Phase 6G-1 — the Music Madras-owned catalogue/publication wrapper for a
+// single synchronized YouTubeVideo (pre-flight §4). YouTubeVideo above
+// remains a pure synchronization mirror: nothing on it is editorial, and
+// this model never writes to it. A row here represents an explicit editor
+// decision to give one specific video a canonical Music Madras page — the
+// 226 synced videos do NOT each get one automatically (brief "IMPORTANT").
+// Deliberately no duplicated title/description/thumbnail/statistics copy —
+// those are always read live from the linked YouTubeVideo relation.
+model YouTubeVideoPage {
+  id                 String          @id @default(uuid())
+  slug               String          @unique
+  youtubeVideoId     String          @unique
+  status             VideoPageStatus @default(DRAFT)
+  // Music Madras editorial content, distinct from YouTube's own
+  // title/description (which stay on YouTubeVideo, YouTube-controlled).
+  curatorNote        String?         @db.Text
+  seoMetaTitle       String?
+  seoMetaDescription String?         @db.Text
+  archivedAt         DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  createdById        String
+  updatedById        String
+
+  youtubeVideo YouTubeVideo @relation(fields: [youtubeVideoId], references: [id], onDelete: Cascade)
+  createdBy    StudioUser   @relation("YouTubeVideoPageCreatedBy", fields: [createdById], references: [id])
+  updatedBy    StudioUser   @relation("YouTubeVideoPageUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([archivedAt])
+  @@map("youtube_video_pages")
 }
 
 // ---------------------------------------------------------------------------
