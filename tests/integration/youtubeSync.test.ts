@@ -83,24 +83,25 @@ async function cleanup() {
   });
   const videoIds = videos.map((v) => v.id);
   const playlistIds = playlists.map((p) => p.id);
+  const items = await prisma.youTubePlaylistItem.findMany({
+    where: { playlistId: { in: playlistIds } },
+    select: { id: true },
+  });
+  const itemIds = items.map((i) => i.id);
+  const allResourceIds = [...videoIds, ...playlistIds, ...itemIds];
 
   await prisma.auditLogEntry.deleteMany({
     where: {
       OR: [
         { entityType: "YOUTUBE_VIDEO", entityId: { in: videoIds } },
         { entityType: "YOUTUBE_PLAYLIST", entityId: { in: playlistIds } },
+        { entityType: "YOUTUBE_PLAYLIST_ITEM", entityId: { in: itemIds } },
       ],
     },
   });
-  await prisma.observabilityTransition.deleteMany({
-    where: { OR: [{ resourceId: { in: videoIds } }, { resourceId: { in: playlistIds } }] },
-  });
-  await prisma.syncConflict.deleteMany({
-    where: { OR: [{ resourceId: { in: videoIds } }, { resourceId: { in: playlistIds } }] },
-  });
-  await prisma.fieldOwnership.deleteMany({
-    where: { OR: [{ resourceId: { in: videoIds } }, { resourceId: { in: playlistIds } }] },
-  });
+  await prisma.observabilityTransition.deleteMany({ where: { resourceId: { in: allResourceIds } } });
+  await prisma.syncConflict.deleteMany({ where: { resourceId: { in: allResourceIds } } });
+  await prisma.fieldOwnership.deleteMany({ where: { resourceId: { in: allResourceIds } } });
   await prisma.syncCheckpoint.deleteMany({
     where: { scopeKey: { in: ["channel-uploads", "channel-playlists", TEST_PLAYLIST_ID] } },
   });
