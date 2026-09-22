@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { findPublishedBySlug } from "../../../../modules/db/repositories/youtubeVideoPageRepository";
 
-// Phase 6G-2A — the first real public Museum route. Uses ONLY
-// findPublishedBySlug (the sanctioned public-safe repository lookup,
-// which itself defers entirely to isYouTubeVideoPagePublic) — no
-// visibility logic is duplicated here, and YouTubeVideo is never read
-// directly. Plain dynamic SSR: no generateStaticParams, no revalidate,
-// no ISR — that rendering-strategy work is explicitly a later increment.
+// Phase 6G-2A (route) / Phase 6G-2B (visual design) — the first real
+// public Museum route. Uses ONLY findPublishedBySlug (the sanctioned
+// public-safe repository lookup, which itself defers entirely to
+// isYouTubeVideoPagePublic) — no visibility logic is duplicated here,
+// and YouTubeVideo is never read directly. Plain dynamic SSR: no
+// generateStaticParams, no revalidate, no ISR — that rendering-strategy
+// work is explicitly a later increment. Styling uses only the shared,
+// reusable classes from app/(museum)/museum.css — nothing here is
+// hardcoded specifically around this one page.
 
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -52,41 +55,38 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
   const { page, youtubeVideo } = result;
 
   return (
-    <article style={{ maxWidth: "48rem", margin: "0 auto", padding: "1.5rem" }}>
+    <article className="museum-container">
+      <p className="museum-eyebrow">Recording</p>
       <h1>{youtubeVideo.title ?? "Untitled"}</h1>
 
-      <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+      <div className="museum-media">
         <iframe
           src={`https://www.youtube.com/embed/${youtubeVideo.youtubeVideoId}`}
           title={youtubeVideo.title ?? "Music Madras video"}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
-          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: 0 }}
         />
       </div>
 
-      {page.curatorNote && (
-        <p>
-          <em>{page.curatorNote}</em>
-        </p>
-      )}
-
-      <p>
-        {youtubeVideo.durationSeconds !== null && <>Duration: {formatDuration(youtubeVideo.durationSeconds)} </>}
-        {youtubeVideo.publishedAt && <>· Published on YouTube: {new Date(youtubeVideo.publishedAt).toLocaleDateString()}</>}
+      <p className="museum-meta">
+        {youtubeVideo.durationSeconds !== null && <span>Duration: {formatDuration(youtubeVideo.durationSeconds)}</span>}
+        {youtubeVideo.publishedAt && <span>Published on YouTube: {new Date(youtubeVideo.publishedAt).toLocaleDateString()}</span>}
       </p>
 
-      <p style={{ whiteSpace: "pre-wrap" }}>{youtubeVideo.description}</p>
+      {page.curatorNote && <p className="museum-curator-note">{page.curatorNote}</p>}
+
+      <p className="museum-prose">{youtubeVideo.description}</p>
 
       <p>
-        <a href={`https://www.youtube.com/watch?v=${youtubeVideo.youtubeVideoId}`} target="_blank" rel="noopener noreferrer">
+        <a
+          className="museum-button"
+          href={`https://www.youtube.com/watch?v=${youtubeVideo.youtubeVideoId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           Watch on YouTube
         </a>
       </p>
-
-      <footer style={{ marginTop: "2rem", borderTop: "1px solid #ccc", paddingTop: "1rem" }}>
-        <small>Music Madras — Music. People. Heritage. Chennai.</small>
-      </footer>
     </article>
   );
 }

@@ -1,0 +1,282 @@
+/*
+ * Phase 6G-2B — Museum-wide design tokens and base editorial styling.
+ * Scoped entirely to app/(museum)/** (imported only by its layout, so
+ * Next's per-route CSS splitting means Studio never loads this file at
+ * all). Dark is the default (no [data-theme] attribute needed); light
+ * mode is a full, deliberate override set on :root[data-theme="light"],
+ * never a dimmed/inverted version of the same values — matching the
+ * brief's "preserve the same visual identity and hierarchy rather than
+ * becoming a completely different design."
+ *
+ * Brand palette (authoritative, supplied directly — NOT GAIS's own
+ * amber/teal/red, which was inspiration for layout/typography only):
+ *   Deep Magenta   #95135A
+ *   Bright Magenta #C2185B
+ *   Purple         #6A3BA8
+ *   Lavender       #C9B8E8
+ *   Near-black     #1A1A2E
+ */
+
+:root {
+  /* Surfaces — layered, not one flat black (brief: "refined near-black
+     foundation... layers of near-black background, slightly lighter dark
+     surfaces, subtle borders/dividers, restrained shadows"). */
+  --mm-bg: #1a1a2e;
+  --mm-surface: #211f36;
+  --mm-surface-raised: #292640;
+  --mm-border: rgba(201, 184, 232, 0.14);
+  --mm-shadow: rgba(0, 0, 0, 0.45);
+
+  /* Text */
+  --mm-text: #f1eef8;
+  --mm-text-muted: #a9a3c2;
+
+  /* Brand accents */
+  --mm-accent: #c2185b; /* Bright Magenta — primary interactive accent */
+  --mm-accent-deep: #95135a; /* Deep Magenta — hover/pressed */
+  --mm-accent-secondary: #6a3ba8; /* Purple — secondary accent, gradients */
+  --mm-accent-tertiary: #c9b8e8; /* Lavender — soft highlights, focus rings */
+  --mm-accent-on: #ffffff; /* text placed on top of a solid accent fill */
+  --mm-gradient-accent: linear-gradient(135deg, var(--mm-accent-deep), var(--mm-accent-secondary));
+
+  /* Typography */
+  --mm-font-serif: var(--mm-font-serif), "Georgia", serif;
+  --mm-font-sans: var(--mm-font-sans), -apple-system, "Segoe UI", sans-serif;
+
+  /* Motion — restrained, per the quality bar (no excessive animation). */
+  --mm-transition: 180ms ease;
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --mm-bg: #faf8fb;
+  --mm-surface: #ffffff;
+  --mm-surface-raised: #f3eef9;
+  --mm-border: rgba(106, 59, 168, 0.16);
+  --mm-shadow: rgba(26, 26, 46, 0.12);
+
+  --mm-text: #1a1a2e;
+  --mm-text-muted: #5b5770;
+
+  --mm-accent: #c2185b;
+  --mm-accent-deep: #95135a;
+  --mm-accent-secondary: #6a3ba8;
+  --mm-accent-tertiary: #8f7ac4; /* deepened from the pale brand lavender for legible contrast on a light surface */
+  --mm-accent-on: #ffffff;
+
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------- */
+
+.museum-root {
+  background: var(--mm-bg);
+  color: var(--mm-text);
+  font-family: var(--mm-font-sans);
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background-color var(--mm-transition), color var(--mm-transition);
+}
+
+.museum-root h1,
+.museum-root h2,
+.museum-root h3,
+.museum-root h4 {
+  font-family: var(--mm-font-serif);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.6em;
+}
+
+.museum-root h1 {
+  font-size: clamp(2rem, 1.6rem + 1.6vw, 3rem);
+  font-weight: 700;
+}
+
+.museum-root h2 {
+  font-size: clamp(1.5rem, 1.3rem + 0.8vw, 2rem);
+}
+
+.museum-root p {
+  margin: 0 0 1.1em;
+  color: var(--mm-text);
+}
+
+.museum-root a {
+  color: var(--mm-accent-tertiary);
+  text-decoration: none;
+  transition: color var(--mm-transition);
+}
+
+.museum-root a:hover {
+  color: var(--mm-accent);
+}
+
+.museum-root :focus-visible {
+  outline: 2px solid var(--mm-accent-tertiary);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------------
+   Header
+--------------------------------------------------------------------- */
+
+.museum-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: color-mix(in srgb, var(--mm-bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--mm-border);
+}
+
+.museum-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.museum-header__logo {
+  border-radius: 50%;
+  display: block;
+}
+
+.museum-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  border: 1px solid var(--mm-border);
+  background: var(--mm-surface);
+  color: var(--mm-text);
+  cursor: pointer;
+  transition: background-color var(--mm-transition), border-color var(--mm-transition), transform var(--mm-transition);
+}
+
+.museum-theme-toggle:hover {
+  border-color: var(--mm-accent-tertiary);
+  transform: translateY(-1px);
+}
+
+/* ---------------------------------------------------------------------
+   Shared content primitives (reusable by any future Museum page —
+   deliberately not scoped to any one entity type)
+--------------------------------------------------------------------- */
+
+.museum-container {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.museum-eyebrow {
+  font-family: var(--mm-font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mm-accent-tertiary);
+  margin: 0 0 0.75rem;
+}
+
+.museum-card {
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px var(--mm-shadow);
+  overflow: hidden;
+}
+
+.museum-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--mm-surface-raised);
+}
+
+.museum-media img,
+.museum-media iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+  transition: transform 320ms ease;
+}
+
+.museum-media:hover img {
+  transform: scale(1.03);
+}
+
+.museum-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  font-size: 0.9rem;
+  color: var(--mm-text-muted);
+  margin: 1rem 0;
+}
+
+.museum-curator-note {
+  font-family: var(--mm-font-serif);
+  font-style: italic;
+  font-size: 1.1rem;
+  color: var(--mm-text);
+  border-left: 3px solid var(--mm-accent);
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+}
+
+.museum-prose {
+  white-space: pre-wrap;
+  color: var(--mm-text-muted);
+}
+
+.museum-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 999px;
+  background: var(--mm-gradient-accent);
+  color: var(--mm-accent-on);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: none;
+  transition: transform var(--mm-transition), box-shadow var(--mm-transition);
+}
+
+.museum-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px var(--mm-shadow);
+  color: var(--mm-accent-on);
+}
+
+.museum-footer {
+  border-top: 1px solid var(--mm-border);
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--mm-text-muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 40rem) {
+  .museum-container {
+    padding: 1.25rem 1rem 3rem;
+  }
+}
