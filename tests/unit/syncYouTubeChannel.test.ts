@@ -583,4 +583,112 @@ describe("runYouTubeSync", () => {
     const methods = Object.keys(new FakeYouTubeSyncRepository());
     expect(methods.some((m) => /mediaResource|recording|collection/i.test(m))).toBe(false);
   });
+
+  // Phase 6F-CORRECTION: a Music Madras playlist can legitimately reference
+  // a video from another YouTube channel entirely (the reverse never
+  // actually occurred in the live data — every synced video turned out to
+  // be Music Madras's own, including 57 unlisted ones the anonymous
+  // uploads-playlist listing excludes — but the engine must still handle
+  // this correctly if it ever does happen). Ownership is the video's own
+  // `channelId`, taken verbatim from YouTube, never inferred from which
+  // playlist referenced it and never coerced to the channel being synced.
+
+  it("stores a playlist-referenced video's own true channel ID, even when it differs from the channel being synced", async () => {
+    const videosById = new Map<string, YouTubeVideoRecord>([
+      ["v1", makeVideo({ videoId: "v1", title: "Music Madras Original", channelId: CHANNEL_ID, channelTitle: "Music Madras" })],
+      ["v2", makeVideo({ videoId: "v2", title: "Guest Performance", channelId: "UCexternalChannel", channelTitle: "Some Other Channel" })],
+    ]);
+    const adapter = new FakeAdapter(
+      UPLOADS_PLAYLIST_ID,
+      CHANNEL_ID,
+      [{ items: [makePlaylistItem(UPLOADS_PLAYLIST_ID, "v1", 0)], nextPageToken: null }], // only v1 is an actual upload
+      [{ items: [{ playlistId: "PL1", title: "A Curated Playlist", description: null, publishedAt: null, privacyStatus: "public", channelId: CHANNEL_ID, thumbnails: {}, etag: '"pl1"' }], nextPageToken: null }],
+      new Map([["PL1", [{ items: [makePlaylistItem("PL1", "v1", 0), makePlaylistItem("PL1", "v2", 1)], nextPageToken: null }]]]),
+      videosById
+    );
+    const repo = new FakeYouTubeSyncRepository();
+
+    await runYouTubeSync(adapter, repo, { channelId: CHANNEL_ID, now: NOW });
+
+    const ownedId = repo.videosByYoutubeId.get("v1")!;
+    const externalId = repo.videosByYoutubeId.get("v2")!;
+    expect(repo.videos.get(ownedId)!.channelId).toBe(CHANNEL_ID);
+    expect(repo.videos.get(externalId)!.channelId).toBe("UCexternalChannel");
+    // Ownership is a plain data comparison against the configured channel, not a separate flag or table.
+    expect(repo.videos.get(ownedId)!.channelId === CHANNEL_ID).toBe(true);
+    expect(repo.videos.get(externalId)!.channelId === CHANNEL_ID).toBe(false);
+  });
+
+  it("a playlist containing both a channel-owned video and an externally-owned video keeps both, distinctly, with no cross-contamination", async () => {
+    const videosById = new Map<string, YouTubeVideoRecord>([
+      ["v1", makeVideo({ videoId: "v1", channelId: CHANNEL_ID })],
+      ["v2", makeVideo({ videoId: "v2", channelId: "UCexternalChannel" })],
+    ]);
+    const adapter = new FakeAdapter(
+      UPLOADS_PLAYLIST_ID,
+      CHANNEL_ID,
+      [{ items: [makePlaylistItem(UPLOADS_PLAYLIST_ID, "v1", 0)], nextPageToken: null }],
+      [{ items: [{ playlistId: "PL1", title: "Mixed Playlist", description: null, publishedAt: null, privacyStatus: "public", channelId: CHANNEL_ID, thumbnails: {}, etag: '"pl1"' }], nextPageToken: null }],
+      new Map([["PL1", [{ items: [makePlaylistItem("PL1", "v1", 0), makePlaylistItem("PL1", "v2", 1)], nextPageToken: null }]]]),
+      videosById
+    );
+    const repo = new FakeYouTubeSyncRepository();
+
+    const result = await runYouTubeSync(adapter, repo, { channelId: CHANNEL_ID, now: NOW });
+
+    expect(result.playlistItems.created).toBe(2);
+    const playlistInternalId = repo.playlistsByYoutubeId.get("PL1")!;
+    const items = await repo.listPlaylistItemIdentities(playlistInternalId);
+    expect(items).toHaveLength(2);
+    const channelIds = items.map((i) => repo.videos.get(i.youtubeVideoId)!.channelId).sort();
+    expect(channelIds).toEqual(["UCexternalChannel", CHANNEL_ID].sort());
+  });
+
+  it("duplicate titles across two different channels are still stored as distinct rows, keyed by video ID with each one's own true channel ID", async () => {
+    const videosById = new Map<string, YouTubeVideoRecord>([
+      ["v1", makeVideo({ videoId: "v1", title: "Ave Maria", channelId: CHANNEL_ID })],
+      ["v2", makeVideo({ videoId: "v2", title: "Ave Maria", channelId: "UCexternalChannel" })],
+    ]);
+    const adapter = new FakeAdapter(
+      UPLOADS_PLAYLIST_ID,
+      CHANNEL_ID,
+      [{ items: [makePlaylistItem(UPLOADS_PLAYLIST_ID, "v1", 0)], nextPageToken: null }],
+      [{ items: [{ playlistId: "PL1", title: "A", description: null, publishedAt: null, privacyStatus: "public", channelId: CHANNEL_ID, thumbnails: {}, etag: '"pl1"' }], nextPageToken: null }],
+      new Map([["PL1", [{ items: [makePlaylistItem("PL1", "v1", 0), makePlaylistItem("PL1", "v2", 1)], nextPageToken: null }]]]),
+      videosById
+    );
+    const repo = new FakeYouTubeSyncRepository();
+
+    await runYouTubeSync(adapter, repo, { channelId: CHANNEL_ID, now: NOW });
+
+    expect(repo.videos.size).toBe(2);
+    const ownedId = repo.videosByYoutubeId.get("v1")!;
+    const externalId = repo.videosByYoutubeId.get("v2")!;
+    expect(repo.videos.get(ownedId)!.title).toBe("Ave Maria");
+    expect(repo.videos.get(externalId)!.title).toBe("Ave Maria");
+    expect(repo.videos.get(ownedId)!.channelId).not.toBe(repo.videos.get(externalId)!.channelId);
+  });
+
+  it("never creates a Recording, MediaResource, or Collection for an externally-owned video merely because a Music Madras playlist references it", async () => {
+    const videosById = new Map<string, YouTubeVideoRecord>([
+      ["v1", makeVideo({ videoId: "v1", channelId: "UCexternalChannel" })],
+    ]);
+    const adapter = new FakeAdapter(
+      UPLOADS_PLAYLIST_ID,
+      CHANNEL_ID,
+      [{ items: [], nextPageToken: null }], // not a Music Madras upload at all
+      [{ items: [{ playlistId: "PL1", title: "A", description: null, publishedAt: null, privacyStatus: "public", channelId: CHANNEL_ID, thumbnails: {}, etag: '"pl1"' }], nextPageToken: null }],
+      new Map([["PL1", [{ items: [makePlaylistItem("PL1", "v1", 0)], nextPageToken: null }]]]),
+      videosById
+    );
+    const repo = new FakeYouTubeSyncRepository();
+
+    await runYouTubeSync(adapter, repo, { channelId: CHANNEL_ID, now: NOW });
+
+    // The port itself has no method for MediaResource/Recording/Collection
+    // (see the structural test above) — this confirms the video is still
+    // synced as a bare YouTubeVideo/YouTubePlaylistItem, nothing more.
+    expect(repo.videos.size).toBe(1);
+    expect(repo.videos.get(repo.videosByYoutubeId.get("v1")!)!.channelId).toBe("UCexternalChannel");
+  });
 });
