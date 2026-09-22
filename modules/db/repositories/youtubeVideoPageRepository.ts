@@ -127,6 +127,33 @@ export async function listPublishedVideoPages(limit: number): Promise<PublicVide
     .map((page) => ({ page, youtubeVideo: page.youtubeVideo }));
 }
 
+/**
+ * The scoped-by-id sibling of listPublishedVideoPages (Phase 6G-4A, entity
+ * relationship/media-aggregation layer). Given a specific set of
+ * YouTubeVideo ids reached through a canonical MMKE relationship (e.g.
+ * Recording -> MediaResource), returns only the ones that are genuinely
+ * public right now — same isYouTubeVideoPagePublic gate, never a second
+ * competing predicate. An empty input returns an empty result without
+ * querying, so callers never need to special-case "no candidates."
+ */
+export async function findPublicVideoPagesByYouTubeVideoIds(youtubeVideoIds: string[]): Promise<PublicVideoPageResult[]> {
+  if (youtubeVideoIds.length === 0) return [];
+
+  const pages = await prisma.youTubeVideoPage.findMany({
+    where: { youtubeVideoId: { in: youtubeVideoIds }, status: "PUBLISHED", archivedAt: null },
+    include: { youtubeVideo: true },
+  });
+
+  return pages
+    .filter((page) =>
+      isYouTubeVideoPagePublic({
+        page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
+        youtubeVideo: { privacyStatus: page.youtubeVideo.privacyStatus, observabilityState: page.youtubeVideo.observabilityState },
+      })
+    )
+    .map((page) => ({ page, youtubeVideo: page.youtubeVideo }));
+}
+
 export interface UpdateVideoPageEditorialFieldsInput {
   // Deliberately no `slug`, `youtubeVideoId`, or `status` field here —
   // this function must never be able to change identity or publication

@@ -133,6 +133,25 @@ export function listPublishedCollections(): Promise<Collection[]> {
   });
 }
 
+/**
+ * The scoped-by-id sibling of listPublishedCollections (Phase 6G-4A,
+ * entity relationship/media-aggregation layer). Given a specific set of
+ * Collection ids reached through a canonical MMKE relationship (e.g.
+ * Recording -> CollectionRecording), returns only the ones that are
+ * genuinely public right now. Distinct from — never derived from — the
+ * raw YouTube playlists a Collection may optionally back onto (brief §9):
+ * a playlist containing the underlying video does not make a Collection
+ * exist or make it public.
+ */
+export function findPublicCollectionsByIds(ids: string[]): Promise<Collection[]> {
+  if (ids.length === 0) return Promise.resolve([]);
+
+  return prisma.collection.findMany({
+    where: { id: { in: ids }, status: "PUBLISHED", archivedAt: null },
+    orderBy: { title: "asc" },
+  });
+}
+
 /** Studio-facing list (Phase 4): drafts too, not just what the Museum shows. */
 export function listCollections(): Promise<Collection[]> {
   return prisma.collection.findMany({
