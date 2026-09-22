@@ -891,18 +891,37 @@ model MediaResource {
 // ---------------------------------------------------------------------------
 
 model YouTubeVideo {
-  id                 String             @id @default(uuid())
-  youtubeVideoId     String             @unique
-  title              String?
-  description        String?            @db.Text
-  thumbnailUrl       String?
-  publishedAt        DateTime?
-  durationSeconds    Int?
-  etag               String?
-  contentHash        String?
-  observabilityState ObservabilityState @default(OBSERVED)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  id                  String             @id @default(uuid())
+  youtubeVideoId      String             @unique
+  title               String?
+  description         String?            @db.Text
+  thumbnailUrl        String?
+  publishedAt         DateTime?
+  durationSeconds     Int?
+  etag                String?
+  contentHash         String?
+  observabilityState  ObservabilityState @default(OBSERVED)
+  // Phase 6F additions — the Phase 1 schema predated the Data API adapter
+  // (Phase 6C) and its statistics/status fields (Phase 6E), so it never
+  // had columns for them. All four are purely additive, nullable, and
+  // named to match the adapter's own YouTubeVideoRecord DTO exactly.
+  // channelId/embeddable/privacyStatus are technical facts the sync
+  // engine always overwrites (never FieldOwnership-tracked, ADR §16.1
+  // only names title/description/thumbnailUrl/visibilityStatus for this
+  // table). The three current* counters plus statisticsUpdatedAt are
+  // YouTube's own mutable, frequently-refreshed signals (brief §9) — a
+  // plain "value as of the last sync" column, not a time-series; deeper
+  // historical/analytical trends remain YouTubeAnalyticsObservation's job
+  // above, a distinct and already-existing table.
+  channelId           String?
+  privacyStatus       String?
+  embeddable          Boolean?
+  currentViewCount    Int?
+  currentLikeCount    Int?
+  currentCommentCount Int?
+  statisticsUpdatedAt DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   playlistItems         YouTubePlaylistItem[]
   mediaResources        MediaResource[]
@@ -919,6 +938,14 @@ model YouTubePlaylist {
   etag               String?
   contentHash        String?
   observabilityState ObservabilityState @default(OBSERVED)
+  // Phase 6F additions — same rationale as YouTubeVideo above: this table
+  // never had columns for the playlist's own channel, thumbnail,
+  // publish date, or privacy status, all of which the Phase 6F initial
+  // synchronization brief requires be preserved and kept refreshable.
+  channelId          String?
+  thumbnailUrl       String?
+  privacyStatus      String?
+  publishedAt        DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 

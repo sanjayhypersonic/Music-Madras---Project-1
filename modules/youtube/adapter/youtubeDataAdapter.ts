@@ -89,6 +89,7 @@ export class YouTubeDataApiAdapter implements YouTubeDataAdapter {
         publishedAt: item.snippet?.publishedAt ?? null,
         privacyStatus: item.status?.privacyStatus ?? null,
         channelId: item.snippet?.channelId ?? null,
+        thumbnails: (item.snippet?.thumbnails ?? {}) as YouTubeThumbnailSet,
         etag: item.etag ?? null,
       })
     );
@@ -208,7 +209,7 @@ interface YouTubePlaylistsListResponse {
   items?: {
     id: string;
     etag?: string;
-    snippet?: { title?: string; description?: string; publishedAt?: string; channelId?: string };
+    snippet?: { title?: string; description?: string; publishedAt?: string; channelId?: string; thumbnails?: unknown };
     status?: { privacyStatus?: string };
   }[];
 }

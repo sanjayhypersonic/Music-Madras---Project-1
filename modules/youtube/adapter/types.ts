@@ -71,6 +71,10 @@ export interface YouTubePlaylistRecord {
   publishedAt: string | null;
   privacyStatus: string | null;
   channelId: string | null;
+  // Phase 6F: added alongside the equivalent field on YouTubeVideoRecord —
+  // needed once the sync engine started persisting a playlist's own
+  // thumbnail, which the Phase 6C DTO never carried.
+  thumbnails: YouTubeThumbnailSet;
   etag: string | null;
 }
 

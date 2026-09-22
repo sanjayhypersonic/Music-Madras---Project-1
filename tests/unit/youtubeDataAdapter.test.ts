@@ -59,7 +59,13 @@ describe("YouTubeDataApiAdapter", () => {
             {
               id: "PL1",
               etag: '"e1"',
-              snippet: { title: "Concerts 2025", description: "d", publishedAt: "2025-01-01T00:00:00Z", channelId: "UCabc" },
+              snippet: {
+                title: "Concerts 2025",
+                description: "d",
+                publishedAt: "2025-01-01T00:00:00Z",
+                channelId: "UCabc",
+                thumbnails: { default: { url: "https://example.com/pl-thumb.jpg" } },
+              },
               status: { privacyStatus: "public" },
             },
           ],
@@ -78,6 +84,7 @@ describe("YouTubeDataApiAdapter", () => {
         publishedAt: "2025-01-01T00:00:00Z",
         privacyStatus: "public",
         channelId: "UCabc",
+        thumbnails: { default: { url: "https://example.com/pl-thumb.jpg" } },
         etag: '"e1"',
       },
     ]);
