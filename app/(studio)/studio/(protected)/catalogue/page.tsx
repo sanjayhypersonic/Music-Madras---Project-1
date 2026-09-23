@@ -9,6 +9,7 @@ const ENTITY_LINKS = [
   { href: "/studio/catalogue/programmes", label: "Programmes" },
   { href: "/studio/catalogue/venues", label: "Venues / Churches" },
   { href: "/studio/catalogue/organisations", label: "Organisations" },
+  { href: "/studio/catalogue/performances", label: "Performances" },
   { href: "/studio/catalogue/collections", label: "Collections" },
 ];
 
