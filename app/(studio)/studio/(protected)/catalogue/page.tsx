@@ -6,6 +6,7 @@ const ENTITY_LINKS = [
   { href: "/studio/catalogue/artists", label: "Artists" },
   { href: "/studio/catalogue/choirs", label: "Choirs" },
   { href: "/studio/catalogue/conductors", label: "Conductors" },
+  { href: "/studio/catalogue/programmes", label: "Programmes" },
   { href: "/studio/catalogue/venues", label: "Venues / Churches" },
   { href: "/studio/catalogue/organisations", label: "Organisations" },
   { href: "/studio/catalogue/collections", label: "Collections" },

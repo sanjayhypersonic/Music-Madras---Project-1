@@ -1,6 +1,8 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { computeNextOrder, reorderProgrammeItems } from "../../mmke/programme/reorderProgrammeItems";
+import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
+import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
 import type { Programme, ProgrammeItem } from "@prisma/client";
 
 // Programme as a first-class entity (brief §4): a real Programme with real,
@@ -14,16 +16,34 @@ export interface CreateProgrammeInput {
   actorId: string;
 }
 
+/**
+ * Phase 6G-4G: catches the slug @unique collision the same way
+ * createComposer/createVenue/createMusicalWork already do — this was
+ * previously unguarded (a raw P2002 would have reached the caller as an
+ * unhandled 500). No duplicate-*title* check is added here, deliberately
+ * — unlike a Composer/Choir/Venue name, a Programme title legitimately
+ * repeats (e.g. an annual "Christmas Concert" run across many years), so
+ * the exact-normalized-name guard the other simple entities use would be
+ * a false-positive machine here, not a safety net.
+ */
 export async function createProgramme(input: CreateProgrammeInput): Promise<Programme> {
-  const programme = await prisma.programme.create({
-    data: {
-      slug: input.slug,
-      title: input.title,
-      notes: input.notes,
-      createdById: input.actorId,
-      updatedById: input.actorId,
-    },
-  });
+  let programme: Programme;
+  try {
+    programme = await prisma.programme.create({
+      data: {
+        slug: input.slug,
+        title: input.title,
+        notes: input.notes,
+        createdById: input.actorId,
+        updatedById: input.actorId,
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err, "slug")) {
+      throw new SlugConflictError(input.slug);
+    }
+    throw err;
+  }
 
   await writeAuditLog({
     actorId: input.actorId,
@@ -152,4 +172,95 @@ export function listProgrammes(): Promise<Programme[]> {
     where: { archivedAt: null },
     orderBy: { title: "asc" },
   });
+}
+
+export interface ProgrammeForStudio extends Programme {
+  _count: { items: number };
+}
+
+/**
+ * Studio-facing list (Phase 6G-4G, mirrors listComposersForStudio): every
+ * Programme regardless of archived state, with a cheap direct-relation
+ * item count, and an optional case-insensitive title search.
+ */
+export function listProgrammesForStudio(searchQuery?: string): Promise<ProgrammeForStudio[]> {
+  return prisma.programme.findMany({
+    where: searchQuery ? { title: { contains: searchQuery, mode: "insensitive" } } : undefined,
+    include: { _count: { select: { items: true } } },
+    orderBy: { title: "asc" },
+  });
+}
+
+export interface UpdateProgrammeInput {
+  title?: string;
+  notes?: string | null;
+  actorId: string;
+}
+
+/**
+ * Edits the Programme's own fields (title/notes) — mirrors updateComposer/
+ * updateVenue exactly: slug stays immutable, no duplicate-title re-check
+ * on edit (same reasoning as createProgramme above).
+ */
+export async function updateProgramme(id: string, input: UpdateProgrammeInput): Promise<Programme> {
+  const before = await prisma.programme.findUnique({ where: { id } });
+  if (!before) {
+    throw new Error(`Programme ${id} does not exist.`);
+  }
+
+  const updated = await prisma.programme.update({
+    where: { id },
+    data: {
+      title: input.title,
+      notes: input.notes,
+      updatedById: input.actorId,
+    },
+  });
+
+  await writeAuditLog({
+    actorId: input.actorId,
+    action: "PROGRAMME_UPDATED",
+    entityType: "Programme",
+    entityId: id,
+    beforeSnapshot: before,
+    afterSnapshot: updated,
+  });
+
+  return updated;
+}
+
+/**
+ * Archiving/restoring reuses the existing archivedAt convention — never
+ * deletes the row, never cascades to ProgrammeItems or Performances.
+ */
+export async function archiveProgramme(id: string, actorId: string): Promise<Programme> {
+  const programme = await prisma.programme.update({
+    where: { id },
+    data: { archivedAt: new Date(), updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "PROGRAMME_ARCHIVED",
+    entityType: "Programme",
+    entityId: id,
+  });
+
+  return programme;
+}
+
+export async function restoreProgramme(id: string, actorId: string): Promise<Programme> {
+  const programme = await prisma.programme.update({
+    where: { id },
+    data: { archivedAt: null, updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "PROGRAMME_RESTORED",
+    entityType: "Programme",
+    entityId: id,
+  });
+
+  return programme;
 }
