@@ -1,77 +1,69 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
-import { createChoir, listActiveChoirs } from "../../../../../../modules/db/repositories/choirRepository";
-import { DuplicateEntityError } from "../../../../../../modules/mmke/duplicate-detection/detectDuplicateName";
+import { listChoirsForStudio } from "../../../../../../modules/db/repositories/choirRepository";
 
-export default async function ChoirsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+// Phase 6G-4F — the Choir catalogue list, mirroring the Artist list's shape exactly.
+
+export default async function ChoirsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const session = await getCurrentStudioSession();
   if (!session) redirect("/studio/signin");
-  const { error } = await searchParams;
+  const { q } = await searchParams;
 
-  const choirs = await listActiveChoirs();
+  const choirs = await listChoirsForStudio(q);
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
-
-  async function createChoirAction(formData: FormData) {
-    "use server";
-    const session = await getCurrentStudioSession();
-    if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-      redirect("/studio/catalogue/choirs?error=You+do+not+have+permission+to+add+choirs.");
-    }
-
-    const name = String(formData.get("name") ?? "").trim();
-    if (!name) redirect("/studio/catalogue/choirs?error=Name+is+required.");
-
-    try {
-      await createChoir({
-        name,
-        directorName: String(formData.get("directorName") ?? "") || undefined,
-        description: String(formData.get("description") ?? "") || undefined,
-        actorId: session.user.id,
-      });
-    } catch (err) {
-      if (err instanceof DuplicateEntityError) {
-        redirect(`/studio/catalogue/choirs?error=${encodeURIComponent(err.message)}`);
-      }
-      throw err;
-    }
-
-    redirect("/studio/catalogue/choirs");
-  }
 
   return (
     <div>
       <h1>Choirs</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
-      <ul>
-        {choirs.map((choir) => (
-          <li key={choir.id}>
-            {choir.name}
-            {choir.directorName ? ` — director: ${choir.directorName}` : ""}
-          </li>
-        ))}
-      </ul>
-      {choirs.length === 0 && <p>No choirs yet.</p>}
+
+      <form method="get" style={{ margin: "1rem 0" }}>
+        <label>
+          Search by name
+          <input type="search" name="q" defaultValue={q ?? ""} style={{ display: "block", width: "100%", maxWidth: "24rem" }} />
+        </label>
+        <button type="submit" style={{ marginTop: "0.5rem" }}>
+          Search
+        </button>
+        {q && (
+          <Link href="/studio/catalogue/choirs" style={{ marginLeft: "1rem" }}>
+            Clear
+          </Link>
+        )}
+      </form>
 
       {canWrite && (
-        <>
-          <h2>Add a choir</h2>
-          <form action={createChoirAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
-            <label>
-              Name
-              <input name="name" required style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Director
-              <input name="directorName" style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Description
-              <textarea name="description" style={{ display: "block", width: "100%" }} />
-            </label>
-            <button type="submit">Add choir</button>
-          </form>
-        </>
+        <p>
+          <Link href="/studio/catalogue/choirs/new">+ New Choir</Link>
+        </p>
+      )}
+
+      {choirs.length === 0 ? (
+        <p>{q ? `No choirs match "${q}".` : "No choirs have been added to the MusicMadras archive yet."}</p>
+      ) : (
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Director</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
+              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {choirs.map((choir) => (
+              <tr key={choir.id}>
+                <td style={{ padding: "0.4rem 0" }}>{choir.name}</td>
+                <td>{choir.directorName ?? "—"}</td>
+                <td>{choir.archivedAt ? "Archived" : "Active"}</td>
+                <td>
+                  <Link href={`/studio/catalogue/choirs/${choir.id}`}>Open</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

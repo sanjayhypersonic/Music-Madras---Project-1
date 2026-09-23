@@ -1,72 +1,67 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
-import {
-  createConductor,
-  listActiveConductors,
-} from "../../../../../../modules/db/repositories/conductorRepository";
-import { DuplicateEntityError } from "../../../../../../modules/mmke/duplicate-detection/detectDuplicateName";
+import { listConductorsForStudio } from "../../../../../../modules/db/repositories/conductorRepository";
 
-export default async function ConductorsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+// Phase 6G-4F — the Conductor catalogue list, mirroring the Artist list's shape exactly.
+
+export default async function ConductorsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const session = await getCurrentStudioSession();
   if (!session) redirect("/studio/signin");
-  const { error } = await searchParams;
+  const { q } = await searchParams;
 
-  const conductors = await listActiveConductors();
+  const conductors = await listConductorsForStudio(q);
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
-
-  async function createConductorAction(formData: FormData) {
-    "use server";
-    const session = await getCurrentStudioSession();
-    if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-      redirect("/studio/catalogue/conductors?error=You+do+not+have+permission+to+add+conductors.");
-    }
-
-    const name = String(formData.get("name") ?? "").trim();
-    if (!name) redirect("/studio/catalogue/conductors?error=Name+is+required.");
-
-    try {
-      await createConductor({
-        name,
-        biography: String(formData.get("biography") ?? "") || undefined,
-        actorId: session.user.id,
-      });
-    } catch (err) {
-      if (err instanceof DuplicateEntityError) {
-        redirect(`/studio/catalogue/conductors?error=${encodeURIComponent(err.message)}`);
-      }
-      throw err;
-    }
-
-    redirect("/studio/catalogue/conductors");
-  }
 
   return (
     <div>
       <h1>Conductors</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
-      <ul>
-        {conductors.map((conductor) => (
-          <li key={conductor.id}>{conductor.name}</li>
-        ))}
-      </ul>
-      {conductors.length === 0 && <p>No conductors yet.</p>}
+
+      <form method="get" style={{ margin: "1rem 0" }}>
+        <label>
+          Search by name
+          <input type="search" name="q" defaultValue={q ?? ""} style={{ display: "block", width: "100%", maxWidth: "24rem" }} />
+        </label>
+        <button type="submit" style={{ marginTop: "0.5rem" }}>
+          Search
+        </button>
+        {q && (
+          <Link href="/studio/catalogue/conductors" style={{ marginLeft: "1rem" }}>
+            Clear
+          </Link>
+        )}
+      </form>
 
       {canWrite && (
-        <>
-          <h2>Add a conductor</h2>
-          <form action={createConductorAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
-            <label>
-              Name
-              <input name="name" required style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Biography
-              <textarea name="biography" style={{ display: "block", width: "100%" }} />
-            </label>
-            <button type="submit">Add conductor</button>
-          </form>
-        </>
+        <p>
+          <Link href="/studio/catalogue/conductors/new">+ New Conductor</Link>
+        </p>
+      )}
+
+      {conductors.length === 0 ? (
+        <p>{q ? `No conductors match "${q}".` : "No conductors have been added to the MusicMadras archive yet."}</p>
+      ) : (
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
+              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {conductors.map((conductor) => (
+              <tr key={conductor.id}>
+                <td style={{ padding: "0.4rem 0" }}>{conductor.name}</td>
+                <td>{conductor.archivedAt ? "Archived" : "Active"}</td>
+                <td>
+                  <Link href={`/studio/catalogue/conductors/${conductor.id}`}>Open</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

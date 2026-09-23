@@ -1,77 +1,71 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
-import { createArtist, listActiveArtists } from "../../../../../../modules/db/repositories/artistRepository";
-import { DuplicateEntityError } from "../../../../../../modules/mmke/duplicate-detection/detectDuplicateName";
+import { listArtistsForStudio } from "../../../../../../modules/db/repositories/artistRepository";
 
-export default async function ArtistsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+// Phase 6G-4F — the Artist catalogue list, mirroring the Organisation
+// list's shape exactly (search, active/archived, a separate /new route
+// for creation).
+
+export default async function ArtistsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const session = await getCurrentStudioSession();
   if (!session) redirect("/studio/signin");
-  const { error } = await searchParams;
+  const { q } = await searchParams;
 
-  const artists = await listActiveArtists();
+  const artists = await listArtistsForStudio(q);
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
-
-  async function createArtistAction(formData: FormData) {
-    "use server";
-    const session = await getCurrentStudioSession();
-    if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-      redirect("/studio/catalogue/artists?error=You+do+not+have+permission+to+add+artists.");
-    }
-
-    const name = String(formData.get("name") ?? "").trim();
-    if (!name) redirect("/studio/catalogue/artists?error=Name+is+required.");
-
-    try {
-      await createArtist({
-        name,
-        instrument: String(formData.get("instrument") ?? "") || undefined,
-        biography: String(formData.get("biography") ?? "") || undefined,
-        actorId: session.user.id,
-      });
-    } catch (err) {
-      if (err instanceof DuplicateEntityError) {
-        redirect(`/studio/catalogue/artists?error=${encodeURIComponent(err.message)}`);
-      }
-      throw err;
-    }
-
-    redirect("/studio/catalogue/artists");
-  }
 
   return (
     <div>
       <h1>Artists</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
-      <ul>
-        {artists.map((artist) => (
-          <li key={artist.id}>
-            {artist.name}
-            {artist.instrument ? ` — ${artist.instrument}` : ""}
-          </li>
-        ))}
-      </ul>
-      {artists.length === 0 && <p>No artists yet.</p>}
+
+      <form method="get" style={{ margin: "1rem 0" }}>
+        <label>
+          Search by name
+          <input type="search" name="q" defaultValue={q ?? ""} style={{ display: "block", width: "100%", maxWidth: "24rem" }} />
+        </label>
+        <button type="submit" style={{ marginTop: "0.5rem" }}>
+          Search
+        </button>
+        {q && (
+          <Link href="/studio/catalogue/artists" style={{ marginLeft: "1rem" }}>
+            Clear
+          </Link>
+        )}
+      </form>
 
       {canWrite && (
-        <>
-          <h2>Add an artist</h2>
-          <form action={createArtistAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
-            <label>
-              Name
-              <input name="name" required style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Instrument / voice
-              <input name="instrument" style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Biography
-              <textarea name="biography" style={{ display: "block", width: "100%" }} />
-            </label>
-            <button type="submit">Add artist</button>
-          </form>
-        </>
+        <p>
+          <Link href="/studio/catalogue/artists/new">+ New Artist</Link>
+        </p>
+      )}
+
+      {artists.length === 0 ? (
+        <p>{q ? `No artists match "${q}".` : "No artists have been added to the MusicMadras archive yet."}</p>
+      ) : (
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Instrument</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
+              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {artists.map((artist) => (
+              <tr key={artist.id}>
+                <td style={{ padding: "0.4rem 0" }}>{artist.name}</td>
+                <td>{artist.instrument ?? "—"}</td>
+                <td>{artist.archivedAt ? "Archived" : "Active"}</td>
+                <td>
+                  <Link href={`/studio/catalogue/artists/${artist.id}`}>Open</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

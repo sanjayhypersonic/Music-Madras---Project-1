@@ -43,3 +43,77 @@ export function findConductorById(id: string): Promise<Conductor | null> {
 export function listActiveConductors(): Promise<Conductor[]> {
   return prisma.conductor.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" } });
 }
+
+/** Studio-facing list (Phase 6G-4F, mirrors listArtistsForStudio). */
+export function listConductorsForStudio(searchQuery?: string): Promise<Conductor[]> {
+  return prisma.conductor.findMany({
+    where: searchQuery ? { name: { contains: searchQuery, mode: "insensitive" } } : undefined,
+    orderBy: { name: "asc" },
+  });
+}
+
+export interface UpdateConductorInput {
+  name?: string;
+  biography?: string | null;
+  actorId: string;
+}
+
+/** Edits the canonical Conductor record in place — mirrors updateArtist exactly. */
+export async function updateConductor(id: string, input: UpdateConductorInput): Promise<Conductor> {
+  const before = await prisma.conductor.findUnique({ where: { id } });
+  if (!before) {
+    throw new Error(`Conductor ${id} does not exist.`);
+  }
+
+  const updated = await prisma.conductor.update({
+    where: { id },
+    data: {
+      name: input.name,
+      biography: input.biography,
+      updatedById: input.actorId,
+    },
+  });
+
+  await writeAuditLog({
+    actorId: input.actorId,
+    action: "CONDUCTOR_UPDATED",
+    entityType: "Conductor",
+    entityId: id,
+    beforeSnapshot: before,
+    afterSnapshot: updated,
+  });
+
+  return updated;
+}
+
+export async function archiveConductor(id: string, actorId: string): Promise<Conductor> {
+  const conductor = await prisma.conductor.update({
+    where: { id },
+    data: { archivedAt: new Date(), updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "CONDUCTOR_ARCHIVED",
+    entityType: "Conductor",
+    entityId: id,
+  });
+
+  return conductor;
+}
+
+export async function restoreConductor(id: string, actorId: string): Promise<Conductor> {
+  const conductor = await prisma.conductor.update({
+    where: { id },
+    data: { archivedAt: null, updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "CONDUCTOR_RESTORED",
+    entityType: "Conductor",
+    entityId: id,
+  });
+
+  return conductor;
+}

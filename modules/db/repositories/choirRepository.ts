@@ -45,3 +45,79 @@ export function findChoirById(id: string): Promise<Choir | null> {
 export function listActiveChoirs(): Promise<Choir[]> {
   return prisma.choir.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" } });
 }
+
+/** Studio-facing list (Phase 6G-4F, mirrors listArtistsForStudio). */
+export function listChoirsForStudio(searchQuery?: string): Promise<Choir[]> {
+  return prisma.choir.findMany({
+    where: searchQuery ? { name: { contains: searchQuery, mode: "insensitive" } } : undefined,
+    orderBy: { name: "asc" },
+  });
+}
+
+export interface UpdateChoirInput {
+  name?: string;
+  directorName?: string | null;
+  description?: string | null;
+  actorId: string;
+}
+
+/** Edits the canonical Choir record in place — mirrors updateArtist exactly. */
+export async function updateChoir(id: string, input: UpdateChoirInput): Promise<Choir> {
+  const before = await prisma.choir.findUnique({ where: { id } });
+  if (!before) {
+    throw new Error(`Choir ${id} does not exist.`);
+  }
+
+  const updated = await prisma.choir.update({
+    where: { id },
+    data: {
+      name: input.name,
+      directorName: input.directorName,
+      description: input.description,
+      updatedById: input.actorId,
+    },
+  });
+
+  await writeAuditLog({
+    actorId: input.actorId,
+    action: "CHOIR_UPDATED",
+    entityType: "Choir",
+    entityId: id,
+    beforeSnapshot: before,
+    afterSnapshot: updated,
+  });
+
+  return updated;
+}
+
+export async function archiveChoir(id: string, actorId: string): Promise<Choir> {
+  const choir = await prisma.choir.update({
+    where: { id },
+    data: { archivedAt: new Date(), updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "CHOIR_ARCHIVED",
+    entityType: "Choir",
+    entityId: id,
+  });
+
+  return choir;
+}
+
+export async function restoreChoir(id: string, actorId: string): Promise<Choir> {
+  const choir = await prisma.choir.update({
+    where: { id },
+    data: { archivedAt: null, updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "CHOIR_RESTORED",
+    entityType: "Choir",
+    entityId: id,
+  });
+
+  return choir;
+}
