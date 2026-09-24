@@ -5,6 +5,9 @@ import { findPublicCollectionsByIds } from "./collectionRepository";
 import { listMusicalWorksByComposer } from "./musicalWorkRepository";
 import { assembleEntityPageData } from "../../mmke/entityPage/assembleEntityPageData";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { getPublishedRecordingContextBySlug } from "./recordingRepository";
+import { assembleRecordingPageData } from "../../mmke/recordingPage/assembleRecordingPageData";
+import type { RecordingPageData } from "../../mmke/recordingPage/recordingPageContract";
 import type {
   Artist,
   Choir,
@@ -284,5 +287,90 @@ export async function getVenueEntityPageData(slug: string): Promise<EntityPageDa
     recordings: content.recordings,
     videos: content.videos,
     collections: content.collections,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6G-5B — the first non-"related content" public entity page: a
+// Recording page is built around ONE published revision's own canonical
+// content, not a list of related items, so it gets its own dedicated
+// assembly (RecordingPageData, assembleRecordingPageData) rather than a
+// third instance of the EntityPageData contract above. Public-visibility
+// filtering for media and collections reuses the exact same sanctioned
+// gates every other public page already uses — never a new predicate.
+// ---------------------------------------------------------------------------
+
+/**
+ * The public /recordings/[slug] page's sole data source. Returns null for
+ * a nonexistent, unpublished, or archived Recording (never distinguishes
+ * "doesn't exist" from "isn't public" — same as getComposerEntityPageData/
+ * getVenueEntityPageData above, so the route can render a real 404
+ * either way).
+ */
+export async function getPublicRecordingPageData(slug: string): Promise<RecordingPageData | null> {
+  const context = await getPublishedRecordingContextBySlug(slug);
+  if (!context) return null;
+
+  const { recording, revision } = context;
+
+  const candidateYouTubeVideoIds = Array.from(
+    new Set(
+      revision.mediaResources
+        .filter((media) => media.provider === "YOUTUBE" && media.youtubeVideoId !== null)
+        .map((media) => media.youtubeVideoId as string)
+    )
+  );
+  const publicVideoPages = await findPublicVideoPagesByYouTubeVideoIds(candidateYouTubeVideoIds);
+  const videos = dedupeById(publicVideoPages.map((result) => ({ id: result.youtubeVideo.id, ...result })));
+
+  const collectionLinks = await prisma.collectionRecording.findMany({
+    where: { recordingId: recording.id },
+    select: { collectionId: true },
+  });
+  const collections = await findPublicCollectionsByIds(collectionLinks.map((link) => link.collectionId));
+
+  return assembleRecordingPageData({
+    id: recording.id,
+    slug: recording.slug,
+    title: revision.title,
+    description: revision.description,
+    seoMetaTitle: revision.seoMetaTitle,
+    seoMetaDescription: revision.seoMetaDescription,
+    seoCanonicalPath: revision.seoCanonicalPath,
+    educationalDifficultyLevel: revision.educationalDifficultyLevel,
+    educationalListeningGuide: revision.educationalListeningGuide,
+    educationalAnalysis: revision.educationalAnalysis,
+    works: revision.works.map((link) => ({
+      id: link.musicalWork.id,
+      slug: link.musicalWork.slug,
+      title: link.musicalWork.title,
+      composer: { id: link.musicalWork.composer.id, slug: link.musicalWork.composer.slug, name: link.musicalWork.composer.name },
+    })),
+    programme: revision.performance?.programme
+      ? {
+          id: revision.performance.programme.id,
+          slug: revision.performance.programme.slug,
+          title: revision.performance.programme.title,
+          items: revision.performance.programme.items,
+        }
+      : null,
+    performance: revision.performance
+      ? {
+          id: revision.performance.id,
+          performanceDate: revision.performance.performanceDate,
+          venue: revision.performance.venue
+            ? {
+                id: revision.performance.venue.id,
+                name: revision.performance.venue.name,
+                organisation: revision.performance.venue.organisation,
+              }
+            : null,
+          performers: revision.performance.performers,
+          choirs: revision.performance.choirs,
+          conductors: revision.performance.conductors,
+        }
+      : null,
+    videos,
+    collections,
   });
 }

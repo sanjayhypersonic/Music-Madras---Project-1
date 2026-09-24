@@ -556,6 +556,53 @@ export async function findPublishedRecordingBySlug(
   return { recording, publishedRevision: recording.currentPublishedRevision };
 }
 
+/**
+ * Phase 6G-5B: the dedicated public-page data source for
+ * /recordings/[slug] — loads the published revision's full canonical
+ * context (works+composer, programme+items, performance+venue+
+ * organisation+participants, media resources) in one query, gated by the
+ * same isRecordingPublished predicate as findPublishedRecordingBySlug
+ * above. Deliberately a fresh query rather than widening
+ * getCanonicalContextForRevision (used by three existing Studio pages) —
+ * this needs Venue.organisation, which those callers never asked for, and
+ * this phase's boundary is explicitly "no Studio Recording redesign."
+ * Never queries by status directly (ADR §5.5) — always through the
+ * identity row's currentPublishedRevisionId pointer.
+ */
+export async function getPublishedRecordingContextBySlug(slug: string) {
+  const recording = await prisma.recording.findUnique({
+    where: { slug },
+    include: {
+      currentPublishedRevision: {
+        include: {
+          works: {
+            include: { musicalWork: { include: { composer: true } } },
+            orderBy: { order: "asc" },
+          },
+          mediaResources: { include: { youtubeVideo: true } },
+          performance: {
+            include: {
+              venue: { include: { organisation: true } },
+              programme: {
+                include: { items: { include: { musicalWork: true }, orderBy: { order: "asc" } } },
+              },
+              performers: { include: { artist: true } },
+              choirs: { include: { choir: true } },
+              conductors: { include: { conductor: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!recording?.currentPublishedRevision || !isRecordingPublished(recording)) {
+    return null;
+  }
+
+  return { recording, revision: recording.currentPublishedRevision };
+}
+
 // ---------------------------------------------------------------------------
 // Relationship traversal (Phase 2, brief §3) — the canonical chain
 // Recording -> [Works -> Composers] and Recording -> Performance ->
