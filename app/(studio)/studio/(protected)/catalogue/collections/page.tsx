@@ -1,69 +1,78 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
-import { createCollection, listCollections } from "../../../../../../modules/db/repositories/collectionRepository";
-import { slugify } from "../../../../../../modules/mmke/slug/slugify";
+import { listCollectionsForStudio } from "../../../../../../modules/db/repositories/collectionRepository";
 
-export default async function CollectionsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+// Phase 6G-4I — the Collection catalogue list, mirroring the Programme/
+// Performance list's shape exactly (search, active/archived, cheap
+// direct-relation counts, linked detail rows, a separate /new route for
+// creation). Replaces the Phase-4-era stub that only rendered plain,
+// unlinked "title — status" text with no way to reach a specific
+// Collection at all.
+
+export default async function CollectionsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const session = await getCurrentStudioSession();
   if (!session) redirect("/studio/signin");
-  const { error } = await searchParams;
+  const { q } = await searchParams;
 
-  const collections = await listCollections();
+  const collections = await listCollectionsForStudio(q);
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
-
-  async function createCollectionAction(formData: FormData) {
-    "use server";
-    const session = await getCurrentStudioSession();
-    if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-      redirect("/studio/catalogue/collections?error=You+do+not+have+permission+to+add+collections.");
-    }
-
-    const title = String(formData.get("title") ?? "").trim();
-    if (!title) redirect("/studio/catalogue/collections?error=Title+is+required.");
-
-    await createCollection({
-      slug: slugify(title),
-      title,
-      description: String(formData.get("description") ?? "") || undefined,
-      actorId: session.user.id,
-    });
-
-    redirect("/studio/catalogue/collections");
-  }
 
   return (
     <div>
       <h1>Collections</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
-      <ul>
-        {collections.map((collection) => (
-          <li key={collection.id}>
-            {collection.title} — {collection.status}
-          </li>
-        ))}
-      </ul>
-      {collections.length === 0 && <p>No collections yet.</p>}
+
+      <form method="get" style={{ margin: "1rem 0" }}>
+        <label>
+          Search by title
+          <input type="search" name="q" defaultValue={q ?? ""} style={{ display: "block", width: "100%", maxWidth: "24rem" }} />
+        </label>
+        <button type="submit" style={{ marginTop: "0.5rem" }}>
+          Search
+        </button>
+        {q && (
+          <Link href="/studio/catalogue/collections" style={{ marginLeft: "1rem" }}>
+            Clear
+          </Link>
+        )}
+      </form>
 
       {canWrite && (
-        <>
-          <h2>Add a collection</h2>
-          <form
-            action={createCollectionAction}
-            style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}
-          >
-            <label>
-              Title
-              <input name="title" required style={{ display: "block", width: "100%" }} />
-            </label>
-            <label>
-              Description
-              <textarea name="description" style={{ display: "block", width: "100%" }} />
-            </label>
-            <button type="submit">Add collection</button>
-          </form>
-          <p>New collections start as DRAFT — publish them from the collection once it has recordings.</p>
-        </>
+        <p>
+          <Link href="/studio/catalogue/collections/new">+ New Collection</Link>
+        </p>
+      )}
+
+      {collections.length === 0 ? (
+        <p>{q ? `No collections match "${q}".` : "No collections have been added to the MusicMadras archive yet."}</p>
+      ) : (
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Title</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Publication</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Recordings</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Works</th>
+              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {collections.map((collection) => (
+              <tr key={collection.id}>
+                <td style={{ padding: "0.4rem 0" }}>{collection.title}</td>
+                <td>{collection.status}</td>
+                <td>{collection.archivedAt ? "Archived" : "Active"}</td>
+                <td>{collection._count.recordingLinks}</td>
+                <td>{collection._count.workLinks}</td>
+                <td>
+                  <Link href={`/studio/catalogue/collections/${collection.id}`}>Open</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );
