@@ -50,6 +50,7 @@ describe("buildRecordingJsonLd", () => {
       baseData({
         performance: {
           id: "performance-1",
+          slug: "performance-1",
           performanceDate: null,
           venue: null,
           artists: [{ id: "artist-1", name: "Test Artist", role: "Soloist" }],

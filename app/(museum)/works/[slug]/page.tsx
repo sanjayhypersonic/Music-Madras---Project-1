@@ -87,6 +87,20 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         </ul>
       </EntitySection>
 
+      <EntitySection id="programmes" heading="Programmes">
+        {work.programmes.length > 0 ? (
+          <ul className="museum-related-list">
+            {work.programmes.map((programme) => (
+              <li key={programme.id}>
+                <Link href={`/programmes/${programme.slug}`}>{programme.title}</Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EntityEmptyState>No programmes featuring this work have been catalogued yet.</EntityEmptyState>
+        )}
+      </EntitySection>
+
       <EntitySection id="performances" heading="Performances">
         {work.performances.length > 0 ? (
           <ul className="museum-related-list">
@@ -94,7 +108,9 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
               const participants = [...performance.conductors, ...performance.choirs, ...performance.artists];
               return (
                 <li key={performance.id}>
-                  {formatPerformanceDate(performance.performanceDate) ?? "Date unknown"}
+                  <Link href={`/performances/${performance.slug}`}>
+                    {formatPerformanceDate(performance.performanceDate) ?? "Date unknown"}
+                  </Link>
                   {performance.venue && (
                     <>
                       {" — "}

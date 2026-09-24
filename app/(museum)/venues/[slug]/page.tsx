@@ -100,7 +100,9 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
               const participants = [...performance.conductors, ...performance.choirs, ...performance.artists];
               return (
                 <li key={performance.id}>
-                  {formatPerformanceDate(performance.performanceDate) ?? "Date unknown"}
+                  <Link href={`/performances/${performance.slug}`}>
+                    {formatPerformanceDate(performance.performanceDate) ?? "Date unknown"}
+                  </Link>
                   {participants.length > 0 && <span className="museum-performance-participants"> · {participants.join(", ")}</span>}
                 </li>
               );

@@ -25,6 +25,8 @@ export interface EntityPageRelatedProgramme {
 
 export interface EntityPageRelatedPerformance {
   id: string;
+  /** Phase 6G-8: now that /performances/[slug] exists, every relatedPerformance links there. */
+  slug: string;
   performanceDate: Date | null;
   venueName: string | null;
   /** Phase 6G-6: null only when there is no venue at all; non-null whenever venueName is, now that /venues/[slug] exists. */

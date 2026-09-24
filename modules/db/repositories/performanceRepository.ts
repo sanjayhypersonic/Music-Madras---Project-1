@@ -1,5 +1,9 @@
+import { randomUUID } from "crypto";
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
+import { generatePerformanceSlug } from "../../mmke/slug/generatePerformanceSlug";
+import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
+import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
 import type { Performance, Programme, Venue } from "@prisma/client";
 
 // Performance links a Programme to a Venue and its participants (brief §3,
@@ -12,16 +16,59 @@ export interface CreatePerformanceInput {
   actorId: string;
 }
 
+/**
+ * Phase 6G-8: Performance now has its own public /performances/[slug]
+ * route, so every new row needs a slug. Unlike Composer/MusicalWork/
+ * Venue/Programme (where the Studio action computes `slugify(name)` and
+ * passes it in, since the editor already typed that name), a Performance
+ * has no name field of its own — its slug is derived here, from its own
+ * Programme/Venue/date, via generatePerformanceSlug (see that module for
+ * why this is collision-safe by construction). The id is generated
+ * up front, before the insert, purely so the slug can include it as its
+ * uniqueness suffix. The try/catch below is defense-in-depth only (kept
+ * for consistency with every other slugged entity's create function) —
+ * an id-suffixed slug colliding with another row is not expected in
+ * practice.
+ */
 export async function createPerformance(input: CreatePerformanceInput): Promise<Performance> {
-  const performance = await prisma.performance.create({
-    data: {
-      programmeId: input.programmeId,
-      venueId: input.venueId,
-      performanceDate: input.performanceDate,
-      createdById: input.actorId,
-      updatedById: input.actorId,
-    },
+  const [programme, venue] = await Promise.all([
+    prisma.programme.findUnique({ where: { id: input.programmeId } }),
+    prisma.venue.findUnique({ where: { id: input.venueId } }),
+  ]);
+  if (!programme) {
+    throw new Error(`Programme ${input.programmeId} does not exist.`);
+  }
+  if (!venue) {
+    throw new Error(`Venue ${input.venueId} does not exist.`);
+  }
+
+  const id = randomUUID();
+  const slug = generatePerformanceSlug({
+    programmeTitle: programme.title,
+    venueName: venue.name,
+    performanceDate: input.performanceDate ?? null,
+    performanceId: id,
   });
+
+  let performance: Performance;
+  try {
+    performance = await prisma.performance.create({
+      data: {
+        id,
+        slug,
+        programmeId: input.programmeId,
+        venueId: input.venueId,
+        performanceDate: input.performanceDate,
+        createdById: input.actorId,
+        updatedById: input.actorId,
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err, "slug")) {
+      throw new SlugConflictError(slug);
+    }
+    throw err;
+  }
 
   await writeAuditLog({
     actorId: input.actorId,

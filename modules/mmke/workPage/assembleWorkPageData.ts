@@ -10,6 +10,7 @@ import type { WorkPageData, WorkPagePerformance, WorkPageVideo, WorkPageCollecti
 
 interface RawPerformance {
   id: string;
+  slug: string;
   performanceDate: Date | null;
   venue: { name: string; slug: string } | null;
   performers: { artist: { name: string } }[];
@@ -64,6 +65,7 @@ function toProgramme(programme: RawProgramme) {
 function toPerformance(performance: RawPerformance): WorkPagePerformance {
   return {
     id: performance.id,
+    slug: performance.slug,
     performanceDate: performance.performanceDate,
     venue: performance.venue,
     artists: performance.performers.map((link) => link.artist.name),

@@ -61,6 +61,7 @@ describe("buildRecordingMetadata", () => {
     const data = baseData({
       performance: {
         id: "performance-1",
+        slug: "performance-1",
         performanceDate: null,
         venue: { id: "venue-1", slug: "test-hall", name: "Test Hall", organisation: null },
         artists: [],

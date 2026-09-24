@@ -10,7 +10,7 @@
 // modules/db/repositories/archiveSearchRepository.ts, and one more branch
 // in the archive page's rendering — never a rewrite of the existing ones.
 
-export type ArchiveEntityType = "composer" | "work" | "recording" | "venue";
+export type ArchiveEntityType = "composer" | "work" | "recording" | "venue" | "programme" | "performance";
 
 export interface ArchiveSearchResultComposer {
   entityType: "composer";
@@ -53,11 +53,33 @@ export interface ArchiveSearchResultVenue {
   country: string | null;
 }
 
+/** A Programme's own canonical fields plus a small preview of its works (never a substitute for visiting the full page). */
+export interface ArchiveSearchResultProgramme {
+  entityType: "programme";
+  id: string;
+  slug: string;
+  title: string;
+  notes: string | null;
+  workTitles: string[];
+}
+
+/** A Performance's own canonical fields — no title/name of its own, so identity comes from its Programme + Venue + date. */
+export interface ArchiveSearchResultPerformance {
+  entityType: "performance";
+  id: string;
+  slug: string;
+  programmeTitle: string;
+  venueName: string;
+  performanceDate: Date | null;
+}
+
 export type ArchiveSearchResult =
   | ArchiveSearchResultComposer
   | ArchiveSearchResultWork
   | ArchiveSearchResultRecording
-  | ArchiveSearchResultVenue;
+  | ArchiveSearchResultVenue
+  | ArchiveSearchResultProgramme
+  | ArchiveSearchResultPerformance;
 
 /** One entity type's page of results, for the single-type paginated view. */
 export interface ArchiveSearchPage<T> {
@@ -73,4 +95,6 @@ export interface ArchiveSearchAllResult {
   works: ArchiveSearchPage<ArchiveSearchResultWork>;
   recordings: ArchiveSearchPage<ArchiveSearchResultRecording>;
   venues: ArchiveSearchPage<ArchiveSearchResultVenue>;
+  programmes: ArchiveSearchPage<ArchiveSearchResultProgramme>;
+  performances: ArchiveSearchPage<ArchiveSearchResultPerformance>;
 }

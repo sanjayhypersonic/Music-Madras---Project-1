@@ -10,6 +10,10 @@ import { assembleRecordingPageData } from "../../mmke/recordingPage/assembleReco
 import type { RecordingPageData } from "../../mmke/recordingPage/recordingPageContract";
 import { assembleWorkPageData } from "../../mmke/workPage/assembleWorkPageData";
 import type { WorkPageData } from "../../mmke/workPage/workPageContract";
+import { assembleProgrammePageData } from "../../mmke/programmePage/assembleProgrammePageData";
+import type { ProgrammePageData } from "../../mmke/programmePage/programmePageContract";
+import { assemblePerformancePageData } from "../../mmke/performancePage/assemblePerformancePageData";
+import type { PerformancePageData } from "../../mmke/performancePage/performancePageContract";
 import type {
   Artist,
   Choir,
@@ -358,6 +362,108 @@ export async function getPublicWorkPageData(slug: string): Promise<WorkPageData 
 }
 
 // ---------------------------------------------------------------------------
+// Phase 6G-8 — Programme gets its own bespoke assembly (ProgrammePageData),
+// for the same reason Work did in 6G-6: a Programme has its own strong
+// identity (an ordered list of works/movements/encores) that doesn't fit
+// EntityPageData's generic "related items" shape. The relationship graph
+// itself is still resolveRelatedContent, scoped to this one Programme's
+// own (non-archived) performances — never a second traversal
+// implementation.
+// ---------------------------------------------------------------------------
+
+/**
+ * The public /programmes/[slug] page's sole data source. Returns null for
+ * a nonexistent or archived Programme (never distinguishes the two, same
+ * convention as every other public entity-page function in this file).
+ */
+export async function getPublicProgrammePageData(slug: string): Promise<ProgrammePageData | null> {
+  const programme = await prisma.programme.findUnique({
+    where: { slug },
+    include: {
+      items: {
+        include: { musicalWork: { include: { composer: true } } },
+        orderBy: { order: "asc" },
+      },
+    },
+  });
+  if (!programme || programme.archivedAt !== null) return null;
+
+  const performanceRows = await prisma.performance.findMany({
+    where: { programmeId: programme.id, archivedAt: null },
+    select: { id: true },
+  });
+
+  const content = await resolveRelatedContent({ performanceIds: performanceRows.map((p) => p.id) });
+
+  return assembleProgrammePageData({
+    id: programme.id,
+    slug: programme.slug,
+    title: programme.title,
+    notes: programme.notes,
+    items: programme.items,
+    performances: content.performances,
+    recordings: content.recordings,
+    videos: content.videos,
+    collections: content.collections,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6G-8 — Performance gets its own bespoke assembly
+// (PerformancePageData), for the same reason Recording did in 6G-5B: a
+// Performance is built around ONE canonical Programme + Venue + its own
+// participants, not a list of "related" items. Recording/video/collection
+// resolution still defers to the shared resolveRelatedContent core,
+// scoped to this one Performance's own id — never a second traversal
+// implementation.
+// ---------------------------------------------------------------------------
+
+/**
+ * The public /performances/[slug] page's sole data source. Returns null
+ * for a nonexistent or archived Performance (never distinguishes the two,
+ * same convention as every other public entity-page function in this
+ * file).
+ */
+export async function getPublicPerformancePageData(slug: string): Promise<PerformancePageData | null> {
+  const performance = await prisma.performance.findUnique({
+    where: { slug },
+    include: {
+      programme: {
+        include: { items: { include: { musicalWork: { include: { composer: true } } }, orderBy: { order: "asc" } } },
+      },
+      venue: { include: { organisation: true } },
+      performers: { include: { artist: true } },
+      choirs: { include: { choir: true } },
+      conductors: { include: { conductor: true } },
+    },
+  });
+  if (!performance || performance.archivedAt !== null) return null;
+
+  const content = await resolveRelatedContent({ performanceIds: [performance.id] });
+
+  return assemblePerformancePageData({
+    id: performance.id,
+    slug: performance.slug,
+    performanceDate: performance.performanceDate,
+    programme: performance.programme,
+    venue: {
+      id: performance.venue.id,
+      slug: performance.venue.slug,
+      name: performance.venue.name,
+      organisation: performance.venue.organisation
+        ? { id: performance.venue.organisation.id, name: performance.venue.organisation.name }
+        : null,
+    },
+    performers: performance.performers,
+    choirs: performance.choirs,
+    conductors: performance.conductors,
+    recordings: content.recordings,
+    videos: content.videos,
+    collections: content.collections,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Phase 6G-5B — the first non-"related content" public entity page: a
 // Recording page is built around ONE published revision's own canonical
 // content, not a list of related items, so it gets its own dedicated
@@ -424,6 +530,7 @@ export async function getPublicRecordingPageData(slug: string): Promise<Recordin
     performance: revision.performance
       ? {
           id: revision.performance.id,
+          slug: revision.performance.slug,
           performanceDate: revision.performance.performanceDate,
           venue: revision.performance.venue
             ? {

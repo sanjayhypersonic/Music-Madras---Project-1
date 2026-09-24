@@ -39,6 +39,7 @@ interface RawProgramme {
 
 interface RawPerformance {
   id: string;
+  slug: string;
   performanceDate: Date | null;
   venue: { id: string; slug: string; name: string; organisation: { id: string; name: string } | null } | null;
   performers: { artist: { id: string; name: string }; role: string | null }[];
@@ -98,6 +99,7 @@ function toPerformance(performance: RawPerformance | null): RecordingPagePerform
   if (!performance) return null;
   return {
     id: performance.id,
+    slug: performance.slug,
     performanceDate: performance.performanceDate,
     venue: performance.venue,
     artists: performance.performers.map((link) => ({ id: link.artist.id, name: link.artist.name, role: link.role })),

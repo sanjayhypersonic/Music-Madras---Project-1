@@ -22,6 +22,8 @@ export interface WorkPageProgramme {
 
 export interface WorkPagePerformance {
   id: string;
+  /** Phase 6G-8: links to the existing /performances/[slug] route. */
+  slug: string;
   performanceDate: Date | null;
   venue: { name: string; slug: string } | null;
   artists: string[];

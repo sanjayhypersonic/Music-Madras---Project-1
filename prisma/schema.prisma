@@ -401,6 +401,14 @@ model ProgrammeItem {
 
 model Performance {
   id              String    @id @default(uuid())
+  // Phase 6G-8: added so Performance can have its own public
+  // /performances/[slug] route, mirroring Composer/MusicalWork/Venue/
+  // Programme/Recording. Derived once at creation from Programme title +
+  // Venue name + performance date, plus this row's own id as a stable
+  // uniqueness suffix (same shape as generateVideoSlug's title+immutable-id
+  // pattern) — never regenerated afterward, even if the Programme, Venue,
+  // date, or participants change later.
+  slug            String    @unique
   programmeId     String
   venueId         String
   performanceDate DateTime?

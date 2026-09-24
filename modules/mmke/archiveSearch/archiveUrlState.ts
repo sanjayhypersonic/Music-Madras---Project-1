@@ -11,6 +11,8 @@ export const ARCHIVE_TYPE_LABELS: Record<ArchiveEntityType, string> = {
   composer: "Composers",
   work: "Musical Works",
   recording: "Recordings",
+  programme: "Programmes",
+  performance: "Performances",
   venue: "Venues",
 };
 
@@ -21,6 +23,10 @@ const TYPE_ALIASES: Record<string, ArchiveEntityType> = {
   works: "work",
   recording: "recording",
   recordings: "recording",
+  programme: "programme",
+  programmes: "programme",
+  performance: "performance",
+  performances: "performance",
   venue: "venue",
   venues: "venue",
 };

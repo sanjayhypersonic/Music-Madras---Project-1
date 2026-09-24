@@ -36,6 +36,7 @@ interface RawProgramme {
 
 interface RawPerformance {
   id: string;
+  slug: string;
   performanceDate: Date | null;
   venue: { name: string; slug: string } | null;
   performers: { artist: { name: string } }[];
@@ -92,6 +93,7 @@ function toProgramme(programme: RawProgramme): EntityPageRelatedProgramme {
 function toPerformance(performance: RawPerformance): EntityPageRelatedPerformance {
   return {
     id: performance.id,
+    slug: performance.slug,
     performanceDate: performance.performanceDate,
     venueName: performance.venue?.name ?? null,
     venueSlug: performance.venue?.slug ?? null,

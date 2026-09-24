@@ -5,6 +5,8 @@ import type {
   ArchiveSearchAllResult,
   ArchiveSearchPage,
   ArchiveSearchResultComposer,
+  ArchiveSearchResultPerformance,
+  ArchiveSearchResultProgramme,
   ArchiveSearchResultRecording,
   ArchiveSearchResultVenue,
   ArchiveSearchResultWork,
@@ -237,19 +239,119 @@ export async function searchRecordings(
 }
 
 /**
- * The combined "all supported entity types" view — composes the four
- * single-type search functions above rather than a fifth query
+ * Programme search — Phase 6G-8, now that /programmes/[slug] exists.
+ * Follows the exact same where/Promise.all/map shape as searchWorks above:
+ * archivedAt-null visibility, DB-side ILIKE across Programme's own
+ * canonical fields (title, notes — never a keyword match against
+ * unrelated entities or YouTube data). The first few work titles are
+ * included as a factual preview only, capped and never a substitute for
+ * the full Programme page.
+ */
+export async function searchProgrammes(
+  query: string | undefined,
+  page = 1,
+  pageSize = ARCHIVE_PAGE_SIZE
+): Promise<ArchiveSearchPage<ArchiveSearchResultProgramme>> {
+  const currentPage = clampPage(page);
+  const where = {
+    archivedAt: null,
+    ...(query
+      ? {
+          OR: [
+            { title: { contains: query, mode: "insensitive" as const } },
+            { notes: { contains: query, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const [rows, total] = await Promise.all([
+    prisma.programme.findMany({
+      where,
+      include: { items: { include: { musicalWork: true }, orderBy: { order: "asc" }, take: 3 } },
+      orderBy: query ? { title: "asc" } : { createdAt: "desc" },
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.programme.count({ where }),
+  ]);
+
+  const items: ArchiveSearchResultProgramme[] = rows.map((programme) => ({
+    entityType: "programme",
+    id: programme.id,
+    slug: programme.slug,
+    title: programme.title,
+    notes: programme.notes,
+    workTitles: programme.items.map((item) => item.musicalWork.title),
+  }));
+
+  return { items, total, page: currentPage, pageSize };
+}
+
+/**
+ * Performance search — Phase 6G-8, now that /performances/[slug] exists.
+ * A Performance has no title/name field of its own (brief: "use actual
+ * canonical fields available"), so its only real searchable text is its
+ * required Programme's title and required Venue's name, via canonical
+ * relation filters — never a keyword match against an unrelated entity.
+ */
+export async function searchPerformances(
+  query: string | undefined,
+  page = 1,
+  pageSize = ARCHIVE_PAGE_SIZE
+): Promise<ArchiveSearchPage<ArchiveSearchResultPerformance>> {
+  const currentPage = clampPage(page);
+  const where = {
+    archivedAt: null,
+    ...(query
+      ? {
+          OR: [
+            { programme: { title: { contains: query, mode: "insensitive" as const } } },
+            { venue: { name: { contains: query, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [rows, total] = await Promise.all([
+    prisma.performance.findMany({
+      where,
+      include: { programme: true, venue: true },
+      orderBy: query ? { performanceDate: "desc" } : { createdAt: "desc" },
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.performance.count({ where }),
+  ]);
+
+  const items: ArchiveSearchResultPerformance[] = rows.map((performance) => ({
+    entityType: "performance",
+    id: performance.id,
+    slug: performance.slug,
+    programmeTitle: performance.programme.title,
+    venueName: performance.venue.name,
+    performanceDate: performance.performanceDate,
+  }));
+
+  return { items, total, page: currentPage, pageSize };
+}
+
+/**
+ * The combined "all supported entity types" view — composes the
+ * single-type search functions above rather than a separate query
  * implementation, so a future entity type is one new function away, not
  * a rewrite. Deliberately capped and never paginated (brief §6/§9): this
  * is the discovery/overview mode, not exhaustive search.
  */
 export async function searchArchiveAll(query: string | undefined, limitPerType = ARCHIVE_ALL_TYPES_LIMIT): Promise<ArchiveSearchAllResult> {
-  const [composers, works, recordings, venues] = await Promise.all([
+  const [composers, works, recordings, venues, programmes, performances] = await Promise.all([
     searchComposers(query, 1, limitPerType),
     searchWorks(query, 1, limitPerType),
     searchRecordings(query, 1, limitPerType),
     searchVenues(query, 1, limitPerType),
+    searchProgrammes(query, 1, limitPerType),
+    searchPerformances(query, 1, limitPerType),
   ]);
 
-  return { composers, works, recordings, venues };
+  return { composers, works, recordings, venues, programmes, performances };
 }

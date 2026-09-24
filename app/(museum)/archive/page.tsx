@@ -4,6 +4,8 @@ import {
   ARCHIVE_PAGE_SIZE,
   searchArchiveAll,
   searchComposers,
+  searchPerformances,
+  searchProgrammes,
   searchRecordings,
   searchVenues,
   searchWorks,
@@ -13,6 +15,8 @@ import type {
   ArchiveSearchPage,
   ArchiveSearchResult,
   ArchiveSearchResultComposer,
+  ArchiveSearchResultPerformance,
+  ArchiveSearchResultProgramme,
   ArchiveSearchResultRecording,
   ArchiveSearchResultVenue,
   ArchiveSearchResultWork,
@@ -66,7 +70,7 @@ export async function generateMetadata({
   const hasSearchState = Boolean(q?.trim()) || Boolean(type?.trim());
   const title = "Archive — Music Madras";
   const description =
-    "Explore the Music Madras archive of composers, musical works, recordings, and venues documenting Chennai's Western Classical Music heritage.";
+    "Explore the Music Madras archive of composers, musical works, programmes, performances, recordings, and venues documenting Chennai's Western Classical Music heritage.";
 
   return {
     metadataBase: new URL(SITE_ORIGIN),
@@ -129,6 +133,38 @@ function RecordingResult({ result }: { result: ArchiveSearchResultRecording }) {
   );
 }
 
+function ProgrammeResult({ result }: { result: ArchiveSearchResultProgramme }) {
+  const preview = result.workTitles.length > 0 ? result.workTitles.join(", ") : null;
+  return (
+    <li className="museum-category-card">
+      <ResultTypeBadge entityType="programme" />
+      <h3>
+        <Link href={`/programmes/${result.slug}`}>{result.title}</Link>
+      </h3>
+      {preview && <p className="museum-meta">{preview}</p>}
+    </li>
+  );
+}
+
+function formatPerformanceDate(date: Date | null): string | null {
+  return date ? date.toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" }) : null;
+}
+
+function PerformanceResult({ result }: { result: ArchiveSearchResultPerformance }) {
+  const dateLabel = formatPerformanceDate(result.performanceDate);
+  return (
+    <li className="museum-category-card">
+      <ResultTypeBadge entityType="performance" />
+      <h3>
+        <Link href={`/performances/${result.slug}`}>
+          {result.programmeTitle} at {result.venueName}
+        </Link>
+      </h3>
+      {dateLabel && <p className="museum-meta">{dateLabel}</p>}
+    </li>
+  );
+}
+
 function VenueResult({ result }: { result: ArchiveSearchResultVenue }) {
   const location = [result.city, result.country].filter(Boolean).join(", ");
   return (
@@ -153,6 +189,10 @@ function ResultCard({ result }: { result: ArchiveSearchResult }) {
       return <WorkResult result={result} />;
     case "recording":
       return <RecordingResult result={result} />;
+    case "programme":
+      return <ProgrammeResult result={result} />;
+    case "performance":
+      return <PerformanceResult result={result} />;
     case "venue":
       return <VenueResult result={result} />;
   }
@@ -191,6 +231,8 @@ function FilterPills({ query, activeType }: { query?: string; activeType: Archiv
     { type: "composer", label: "Composers" },
     { type: "work", label: "Works" },
     { type: "recording", label: "Recordings" },
+    { type: "programme", label: "Programmes" },
+    { type: "performance", label: "Performances" },
     { type: "venue", label: "Venues" },
   ];
 
@@ -263,8 +305,9 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
         <p className="museum-eyebrow">Archive</p>
         <h1>{heading}</h1>
         <p className="museum-entity-header__description">
-          Search the MusicMadras collection of composers, musical works, recordings, and the venues that hosted
-          them — every result is drawn directly from the canonical archive, never from raw synchronization data.
+          Search the MusicMadras collection of composers, musical works, programmes, performances, recordings,
+          and the venues that hosted them — every result is drawn directly from the canonical archive, never
+          from raw synchronization data.
         </p>
       </header>
 
@@ -293,7 +336,7 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
             "@type": "CollectionPage",
             name: "Music Madras Archive",
             description:
-              "Explore the Music Madras archive of composers, musical works, recordings, and venues documenting Chennai's Western Classical Music heritage.",
+              "Explore the Music Madras archive of composers, musical works, programmes, performances, recordings, and venues documenting Chennai's Western Classical Music heritage.",
             url: `${SITE_ORIGIN}/archive`,
           }),
         }}
@@ -337,6 +380,8 @@ async function AllTypesResults({ query }: { query?: string }) {
     { type: "composer", page: all.composers },
     { type: "work", page: all.works },
     { type: "recording", page: all.recordings },
+    { type: "programme", page: all.programmes },
+    { type: "performance", page: all.performances },
     { type: "venue", page: all.venues },
   ];
 
@@ -390,6 +435,10 @@ async function fetchPageForType(
       return searchWorks(query, page, ARCHIVE_PAGE_SIZE);
     case "recording":
       return searchRecordings(query, page, ARCHIVE_PAGE_SIZE);
+    case "programme":
+      return searchProgrammes(query, page, ARCHIVE_PAGE_SIZE);
+    case "performance":
+      return searchPerformances(query, page, ARCHIVE_PAGE_SIZE);
     case "venue":
       return searchVenues(query, page, ARCHIVE_PAGE_SIZE);
   }

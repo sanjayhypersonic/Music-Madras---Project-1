@@ -73,6 +73,7 @@ describe("assembleRecordingPageData", () => {
     const input = baseInput();
     input.performance = {
       id: "performance-1",
+      slug: "performance-1",
       performanceDate: new Date("2020-01-01"),
       venue: { id: "venue-1", slug: "test-hall", name: "Test Hall", organisation: { id: "org-1", name: "Test Org" } },
       performers: [{ artist: { id: "artist-1", name: "Test Artist" }, role: "Soloist" }],
@@ -91,6 +92,7 @@ describe("assembleRecordingPageData", () => {
     const input = baseInput();
     input.performance = {
       id: "performance-1",
+      slug: "performance-1",
       performanceDate: null,
       venue: null,
       performers: [],

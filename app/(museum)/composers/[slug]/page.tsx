@@ -92,6 +92,20 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
         )}
       </EntitySection>
 
+      <EntitySection id="programmes" heading="Programmes">
+        {composer.relatedProgrammes.length > 0 ? (
+          <ul className="museum-related-list">
+            {composer.relatedProgrammes.map((programme) => (
+              <li key={programme.id}>
+                <Link href={`/programmes/${programme.slug}`}>{programme.title}</Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EntityEmptyState>No programmes featuring this composer&apos;s works have been catalogued yet.</EntityEmptyState>
+        )}
+      </EntitySection>
+
       <EntitySection id="performances" heading="Performances">
         {composer.relatedPerformances.length > 0 ? (
           <ul className="museum-related-list">
@@ -99,7 +113,9 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
               const participants = [...performance.conductors, ...performance.choirs, ...performance.artists];
               return (
                 <li key={performance.id}>
-                  {formatPerformanceDate(performance.performanceDate) ?? "Date unknown"}
+                  <Link href={`/performances/${performance.slug}`}>
+                    {formatPerformanceDate(performance.performanceDate) ?? "Date unknown"}
+                  </Link>
                   {performance.venueName && (
                     <>
                       {" — "}

@@ -18,6 +18,12 @@ describe("normalizeArchiveType", () => {
     expect(normalizeArchiveType("recordings")).toEqual({ type: "recording", invalid: false });
     expect(normalizeArchiveType("venue")).toEqual({ type: "venue", invalid: false });
     expect(normalizeArchiveType("venues")).toEqual({ type: "venue", invalid: false });
+    expect(normalizeArchiveType("programme")).toEqual({ type: "programme", invalid: false });
+    expect(normalizeArchiveType("programmes")).toEqual({ type: "programme", invalid: false });
+    expect(normalizeArchiveType("PROGRAMMES")).toEqual({ type: "programme", invalid: false });
+    expect(normalizeArchiveType("performance")).toEqual({ type: "performance", invalid: false });
+    expect(normalizeArchiveType("performances")).toEqual({ type: "performance", invalid: false });
+    expect(normalizeArchiveType("PERFORMANCES")).toEqual({ type: "performance", invalid: false });
   });
 
   it("flags an unrecognized type as invalid, never guessing a type", () => {

@@ -119,7 +119,11 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
         {recording.programme && (
           <>
             <p className="museum-section__intro">
-              Part of the programme <strong>{recording.programme.title}</strong>:
+              Part of the programme{" "}
+              <Link href={`/programmes/${recording.programme.slug}`}>
+                <strong>{recording.programme.title}</strong>
+              </Link>
+              :
             </p>
             <ol className="museum-related-list">
               {recording.programme.items.map((item) => (
@@ -138,9 +142,9 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
         {recording.performance ? (
           <>
             <p className="museum-meta">
-              {formatPerformanceDate(recording.performance.performanceDate) && (
-                <span>{formatPerformanceDate(recording.performance.performanceDate)}</span>
-              )}
+              <Link href={`/performances/${recording.performance.slug}`}>
+                {formatPerformanceDate(recording.performance.performanceDate) ?? "Performance details"}
+              </Link>
               {recording.performance.venue && (
                 <span>
                   <Link href={`/venues/${recording.performance.venue.slug}`}>{recording.performance.venue.name}</Link>
