@@ -62,7 +62,7 @@ describe("buildRecordingMetadata", () => {
       performance: {
         id: "performance-1",
         performanceDate: null,
-        venue: { id: "venue-1", name: "Test Hall", organisation: null },
+        venue: { id: "venue-1", slug: "test-hall", name: "Test Hall", organisation: null },
         artists: [],
         choirs: [],
         conductors: [],

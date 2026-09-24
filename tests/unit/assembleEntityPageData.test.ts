@@ -11,7 +11,9 @@ const BASE_INPUT = {
   name: "Test Composer",
   description: "A short biography.",
   lifespan: { bornDate: "1685", diedDate: "1750", era: "Baroque" },
+  venueDetails: null,
   works: [],
+  composers: null,
   programmes: [],
   performances: [],
   recordings: [],
@@ -48,14 +50,14 @@ describe("assembleEntityPageData", () => {
     expect(result.relatedWorks).toEqual([{ id: "w1", slug: "requiem", title: "Requiem" }]);
   });
 
-  it("maps performances, deriving venueName and participant names, and handling a null venue", () => {
+  it("maps performances, deriving venueName/venueSlug and participant names, and handling a null venue", () => {
     const result = assembleEntityPageData({
       ...BASE_INPUT,
       performances: [
         {
           id: "p1",
           performanceDate: new Date("2024-01-01"),
-          venue: { name: "St. Andrew's Church" },
+          venue: { name: "St. Andrew's Church", slug: "st-andrews-church" },
           performers: [{ artist: { name: "Jane Soloist" } }],
           choirs: [{ choir: { name: "St. Andrew's Choir" } }],
           conductors: [{ conductor: { name: "John Conductor" } }],
@@ -68,11 +70,12 @@ describe("assembleEntityPageData", () => {
         id: "p1",
         performanceDate: new Date("2024-01-01"),
         venueName: "St. Andrew's Church",
+        venueSlug: "st-andrews-church",
         artists: ["Jane Soloist"],
         choirs: ["St. Andrew's Choir"],
         conductors: ["John Conductor"],
       },
-      { id: "p2", performanceDate: null, venueName: null, artists: [], choirs: [], conductors: [] },
+      { id: "p2", performanceDate: null, venueName: null, venueSlug: null, artists: [], choirs: [], conductors: [] },
     ]);
   });
 
@@ -83,7 +86,7 @@ describe("assembleEntityPageData", () => {
         {
           id: "p1",
           performanceDate: null,
-          venue: { name: "St. Andrew's Church" },
+          venue: { name: "St. Andrew's Church", slug: "st-andrews-church" },
           performers: [{ artist: { name: "Jane Soloist" } }],
           choirs: [{ choir: { name: "St. Andrew's Choir" } }],
           conductors: [{ conductor: { name: "John Conductor" } }],
@@ -91,7 +94,7 @@ describe("assembleEntityPageData", () => {
         {
           id: "p2",
           performanceDate: null,
-          venue: { name: "St. Andrew's Church" }, // same venue again — must dedupe
+          venue: { name: "St. Andrew's Church", slug: "st-andrews-church" }, // same venue again — must dedupe
           performers: [{ artist: { name: "Jane Soloist" } }], // same artist again — must dedupe
           choirs: [],
           conductors: [{ conductor: { name: "Second Conductor" } }],
@@ -102,7 +105,7 @@ describe("assembleEntityPageData", () => {
       artists: ["Jane Soloist"],
       choirs: ["St. Andrew's Choir"],
       conductors: ["John Conductor", "Second Conductor"],
-      venues: ["St. Andrew's Church"],
+      venues: [{ name: "St. Andrew's Church", slug: "st-andrews-church" }],
     });
   });
 
@@ -141,6 +144,24 @@ describe("assembleEntityPageData", () => {
       collections: [{ id: "c1", slug: "christmas-concerts", title: "Christmas Concerts" }],
     });
     expect(result.relatedCollections).toEqual([{ id: "c1", slug: "christmas-concerts", title: "Christmas Concerts" }]);
+  });
+
+  it("maps venueDetails and relatedComposers straight through (Phase 6G-6, Venue-only fields)", () => {
+    const result = assembleEntityPageData({
+      ...BASE_INPUT,
+      entityType: "venue",
+      works: [{ id: "w1", slug: "requiem", title: "Requiem" }],
+      composers: [{ id: "c1", slug: "mozart", name: "W.A. Mozart" }],
+      venueDetails: { type: "CHURCH", address: "1 Church St", city: "Chennai", country: "India", organisation: { id: "org-1", name: "Test Trust" } },
+    });
+    expect(result.relatedComposers).toEqual([{ id: "c1", slug: "mozart", name: "W.A. Mozart" }]);
+    expect(result.venueDetails).toEqual({ type: "CHURCH", address: "1 Church St", city: "Chennai", country: "India", organisation: { id: "org-1", name: "Test Trust" } });
+  });
+
+  it("returns venueDetails and relatedComposers as null for entity types that don't populate them", () => {
+    const result = assembleEntityPageData(BASE_INPUT);
+    expect(result.venueDetails).toBeNull();
+    expect(result.relatedComposers).toBeNull();
   });
 
   it("handles every section being empty without error", () => {

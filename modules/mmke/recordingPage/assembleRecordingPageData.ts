@@ -40,7 +40,7 @@ interface RawProgramme {
 interface RawPerformance {
   id: string;
   performanceDate: Date | null;
-  venue: { id: string; name: string; organisation: { id: string; name: string } | null } | null;
+  venue: { id: string; slug: string; name: string; organisation: { id: string; name: string } | null } | null;
   performers: { artist: { id: string; name: string }; role: string | null }[];
   choirs: { choir: { id: string; name: string } }[];
   conductors: { conductor: { id: string; name: string } }[];

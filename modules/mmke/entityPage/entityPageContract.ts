@@ -27,6 +27,8 @@ export interface EntityPageRelatedPerformance {
   id: string;
   performanceDate: Date | null;
   venueName: string | null;
+  /** Phase 6G-6: null only when there is no venue at all; non-null whenever venueName is, now that /venues/[slug] exists. */
+  venueSlug: string | null;
   /** Participant names only (brief §5E) — not links, since no public route exists yet for any of these entity types. */
   artists: string[];
   choirs: string[];
@@ -52,6 +54,19 @@ export interface EntityPageRelatedCollection {
   title: string;
 }
 
+/** Phase 6G-6: a composer surfaced as related context (e.g. on a Venue page) — links to /composers/[slug], which already exists. */
+export interface EntityPageRelatedComposer {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+/** Phase 6G-6: a venue surfaced within relatedParticipants — links to /venues/[slug], which now exists. */
+export interface EntityPageRelatedVenueRef {
+  name: string;
+  slug: string;
+}
+
 /**
  * Composer-only identity fields (brief §5B — "lifespan/dates if actual
  * data exists"). Null for every other entity type today; kept as its own
@@ -73,7 +88,20 @@ export interface EntityPageRelatedParticipants {
   artists: string[];
   choirs: string[];
   conductors: string[];
-  venues: string[];
+  /** Phase 6G-6: upgraded from plain names to {name, slug} now that /venues/[slug] exists — these render as real links, unlike artists/choirs/conductors, which still have no public route. */
+  venues: EntityPageRelatedVenueRef[];
+}
+
+/**
+ * Phase 6G-6: Venue-specific identity fields, mirroring EntityPageLifespan's
+ * role for Composer — null for every entity type except Venue today.
+ */
+export interface EntityPageVenueDetails {
+  type: string;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  organisation: { id: string; name: string } | null;
 }
 
 /**
@@ -91,9 +119,13 @@ export interface EntityPageData {
   description: string | null;
   /** Composer-only today (brief §5B); null for every other entity type. */
   lifespan: EntityPageLifespan | null;
+  /** Venue-only (Phase 6G-6); null for every other entity type. */
+  venueDetails: EntityPageVenueDetails | null;
 
   // Archive relationships.
   relatedWorks: EntityPageRelatedWork[] | null;
+  /** Phase 6G-6: Venue-only today (works performed at this venue, derived from its performances' programmes); null elsewhere. */
+  relatedComposers: EntityPageRelatedComposer[] | null;
   relatedProgrammes: EntityPageRelatedProgramme[];
   relatedPerformances: EntityPageRelatedPerformance[];
   relatedRecordings: EntityPageRelatedRecording[];

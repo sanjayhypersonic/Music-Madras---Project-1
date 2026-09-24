@@ -107,7 +107,8 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
           <ul className="museum-related-list">
             {recording.works.map((work) => (
               <li key={work.id}>
-                {work.title} — <Link href={`/composers/${work.composer.slug}`}>{work.composer.name}</Link>
+                <Link href={`/works/${work.slug}`}>{work.title}</Link> —{" "}
+                <Link href={`/composers/${work.composer.slug}`}>{work.composer.name}</Link>
               </li>
             ))}
           </ul>
@@ -123,7 +124,7 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
             <ol className="museum-related-list">
               {recording.programme.items.map((item) => (
                 <li key={item.id}>
-                  {item.work.title}
+                  <Link href={`/works/${item.work.slug}`}>{item.work.title}</Link>
                   {item.movement ? ` — ${item.movement}` : ""}
                   {item.isEncore ? " (encore)" : ""}
                 </li>
@@ -142,7 +143,7 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
               )}
               {recording.performance.venue && (
                 <span>
-                  {recording.performance.venue.name}
+                  <Link href={`/venues/${recording.performance.venue.slug}`}>{recording.performance.venue.name}</Link>
                   {recording.performance.venue.organisation ? ` (${recording.performance.venue.organisation.name})` : ""}
                 </span>
               )}

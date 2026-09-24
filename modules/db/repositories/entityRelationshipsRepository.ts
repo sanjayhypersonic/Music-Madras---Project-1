@@ -8,10 +8,13 @@ import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished"
 import { getPublishedRecordingContextBySlug } from "./recordingRepository";
 import { assembleRecordingPageData } from "../../mmke/recordingPage/assembleRecordingPageData";
 import type { RecordingPageData } from "../../mmke/recordingPage/recordingPageContract";
+import { assembleWorkPageData } from "../../mmke/workPage/assembleWorkPageData";
+import type { WorkPageData } from "../../mmke/workPage/workPageContract";
 import type {
   Artist,
   Choir,
   Collection,
+  Composer,
   Conductor,
   MusicalWork,
   Performance,
@@ -19,6 +22,7 @@ import type {
   PerformanceConductor,
   PerformancePerformer,
   Programme,
+  ProgrammeItem,
   Recording,
   RecordingRevision,
   Venue,
@@ -59,7 +63,13 @@ export interface RecordingWithPublishedRevision extends Recording {
 
 export interface PerformanceWithVenueAndProgramme extends Performance {
   venue: Venue;
-  programme: Programme;
+  // Phase 6G-6: widened from a flat Programme to include its ordered items
+  // + each item's MusicalWork + Composer — the Venue page needs "works
+  // performed here" / "composers performed here," derived from these
+  // performances rather than a second query (brief: "do not reinvent the
+  // existing relationship resolver"). Composer/Choir/Conductor/Artist
+  // callers below simply don't read the extra nesting.
+  programme: Programme & { items: (ProgrammeItem & { musicalWork: MusicalWork & { composer: Composer } })[] };
   performers: (PerformancePerformer & { artist: Artist })[];
   choirs: (PerformanceChoir & { choir: Choir })[];
   conductors: (PerformanceConductor & { conductor: Conductor })[];
@@ -115,7 +125,7 @@ export async function resolveRelatedContent(input: RelatedContentInput): Promise
           where: { id: { in: allPerformanceIds }, archivedAt: null },
           include: {
             venue: true,
-            programme: true,
+            programme: { include: { items: { include: { musicalWork: { include: { composer: true } } }, orderBy: { order: "asc" } } } },
             performers: { include: { artist: true } },
             choirs: { include: { choir: true } },
             conductors: { include: { conductor: true } },
@@ -256,7 +266,9 @@ export async function getComposerEntityPageData(slug: string): Promise<EntityPag
     name: composer.name,
     description: composer.biography,
     lifespan: { bornDate: composer.bornDate, diedDate: composer.diedDate, era: composer.era },
+    venueDetails: null,
     works: content.works,
+    composers: null,
     programmes: content.programmes,
     performances: content.performances,
     recordings: content.recordings,
@@ -266,10 +278,18 @@ export async function getComposerEntityPageData(slug: string): Promise<EntityPag
 }
 
 export async function getVenueEntityPageData(slug: string): Promise<EntityPageData | null> {
-  const venue = await prisma.venue.findUnique({ where: { slug } });
+  const venue = await prisma.venue.findUnique({ where: { slug }, include: { organisation: true } });
   if (!venue || venue.archivedAt !== null) return null;
 
   const content = await getVenueRelatedContent(venue.id);
+
+  // Phase 6G-6: "works performed here" / "composers performed here" are
+  // derived from this venue's own performances' programme items — never a
+  // separate query, per PerformanceWithVenueAndProgramme's widened shape
+  // above. Deduped since the same work/composer can recur across many
+  // performances at the same venue.
+  const worksPerformedHere = dedupeById(content.performances.flatMap((p) => p.programme.items.map((item) => item.musicalWork)));
+  const composersPerformedHere = dedupeById(worksPerformedHere.map((work) => work.composer));
 
   return assembleEntityPageData({
     entityType: "venue",
@@ -281,7 +301,54 @@ export async function getVenueEntityPageData(slug: string): Promise<EntityPageDa
     // fake one.
     description: null,
     lifespan: null,
-    works: null,
+    venueDetails: {
+      type: venue.type,
+      address: venue.address,
+      city: venue.city,
+      country: venue.country,
+      organisation: venue.organisation ? { id: venue.organisation.id, name: venue.organisation.name } : null,
+    },
+    works: worksPerformedHere.map((work) => ({ id: work.id, slug: work.slug, title: work.title })),
+    composers: composersPerformedHere.map((composer) => ({ id: composer.id, slug: composer.slug, name: composer.name })),
+    programmes: content.programmes,
+    performances: content.performances,
+    recordings: content.recordings,
+    videos: content.videos,
+    collections: content.collections,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6G-6 — MusicalWork gets its own bespoke assembly (WorkPageData),
+// not a third EntityType, for the same reason Recording did in 6G-5B: a
+// Work has one canonical Composer plus its own scalar catalogue fields
+// (alternateTitles, catalogueNumber, keySignature, language, notes) that
+// don't fit EntityPageData's generic "related items" shape. The
+// relationship graph itself is still resolveRelatedContent, unchanged —
+// never a second traversal implementation.
+// ---------------------------------------------------------------------------
+
+/**
+ * The public /works/[slug] page's sole data source. Returns null for a
+ * nonexistent or archived Work (never distinguishes the two, same
+ * convention as every other public entity-page function above).
+ */
+export async function getPublicWorkPageData(slug: string): Promise<WorkPageData | null> {
+  const work = await prisma.musicalWork.findUnique({ where: { slug }, include: { composer: true } });
+  if (!work || work.archivedAt !== null) return null;
+
+  const content = await resolveRelatedContent({ workIds: [work.id] });
+
+  return assembleWorkPageData({
+    id: work.id,
+    slug: work.slug,
+    title: work.title,
+    alternateTitles: work.alternateTitles,
+    language: work.language,
+    notes: work.notes,
+    catalogueNumber: work.catalogueNumber,
+    keySignature: work.keySignature,
+    composer: { id: work.composer.id, slug: work.composer.slug, name: work.composer.name },
     programmes: content.programmes,
     performances: content.performances,
     recordings: content.recordings,
@@ -361,6 +428,7 @@ export async function getPublicRecordingPageData(slug: string): Promise<Recordin
           venue: revision.performance.venue
             ? {
                 id: revision.performance.venue.id,
+                slug: revision.performance.venue.slug,
                 name: revision.performance.venue.name,
                 organisation: revision.performance.venue.organisation,
               }

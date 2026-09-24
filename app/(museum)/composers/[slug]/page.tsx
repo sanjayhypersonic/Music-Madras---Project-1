@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getComposerEntityPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
 import type { EntityPageLifespan } from "../../../../modules/mmke/entityPage/entityPageContract";
 import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBreadcrumbs";
@@ -13,6 +14,11 @@ import { RecordingCard } from "../../../../components/museum/RecordingCard";
 // Phase 6G-4A relationship layer end to end: public route -> repository
 // -> EntityPageData contract -> Museum presentation. No Prisma import
 // here (brief §9) — getComposerEntityPageData is the only data access.
+//
+// Phase 6G-6: Works, Recordings and Venues now have their own public
+// routes, so this page links to them directly instead of using the
+// non-linked RelatedItemList placeholder — Artists/Choirs/Conductors
+// still have no public route, so they remain plain text.
 
 const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
 
@@ -57,7 +63,7 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
 
   const lifespanLabel = formatLifespan(composer.lifespan);
   const { artists, choirs, conductors, venues } = composer.relatedParticipants;
-  const relatedPeopleNames = [...conductors, ...choirs, ...artists, ...venues];
+  const relatedPeopleNames = [...conductors, ...choirs, ...artists];
 
   return (
     <article>
@@ -74,7 +80,13 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
 
       <EntitySection id="works" heading="Musical Works">
         {composer.relatedWorks && composer.relatedWorks.length > 0 ? (
-          <RelatedItemList items={composer.relatedWorks.map((w) => ({ id: w.id, title: w.title }))} />
+          <ul className="museum-related-list">
+            {composer.relatedWorks.map((work) => (
+              <li key={work.id}>
+                <Link href={`/works/${work.slug}`}>{work.title}</Link>
+              </li>
+            ))}
+          </ul>
         ) : (
           <EntityEmptyState>No musical works have been catalogued for this composer yet.</EntityEmptyState>
         )}
@@ -88,7 +100,12 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
               return (
                 <li key={performance.id}>
                   {formatPerformanceDate(performance.performanceDate) ?? "Date unknown"}
-                  {performance.venueName ? ` — ${performance.venueName}` : ""}
+                  {performance.venueName && (
+                    <>
+                      {" — "}
+                      {performance.venueSlug ? <Link href={`/venues/${performance.venueSlug}`}>{performance.venueName}</Link> : performance.venueName}
+                    </>
+                  )}
                   {participants.length > 0 && <span className="museum-performance-participants"> · {participants.join(", ")}</span>}
                 </li>
               );
@@ -101,15 +118,26 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
 
       <EntitySection id="recordings" heading="Recordings">
         {composer.relatedRecordings.length > 0 ? (
-          <RelatedItemList items={composer.relatedRecordings.map((r) => ({ id: r.id, title: r.title ?? "Untitled recording" }))} />
+          <ul className="museum-related-list">
+            {composer.relatedRecordings.map((recording) => (
+              <li key={recording.id}>
+                <Link href={`/recordings/${recording.slug}`}>{recording.title ?? "Untitled recording"}</Link>
+              </li>
+            ))}
+          </ul>
         ) : (
           <EntityEmptyState>No recordings have been published for this composer yet.</EntityEmptyState>
         )}
       </EntitySection>
 
-      {relatedPeopleNames.length > 0 && (
+      {(relatedPeopleNames.length > 0 || venues.length > 0) && (
         <EntitySection id="related" heading="Related People &amp; Places">
           <ul className="museum-pathways">
+            {venues.map((venue) => (
+              <li key={venue.slug}>
+                <Link href={`/venues/${venue.slug}`}>{venue.name}</Link>
+              </li>
+            ))}
             {relatedPeopleNames.map((name) => (
               <li key={name}>{name}</li>
             ))}

@@ -42,6 +42,7 @@ export interface RecordingPageOrganisation {
 
 export interface RecordingPageVenue {
   id: string;
+  slug: string;
   name: string;
   organisation: RecordingPageOrganisation | null;
 }

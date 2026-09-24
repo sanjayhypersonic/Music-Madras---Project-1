@@ -2,12 +2,15 @@ import type {
   EntityPageData,
   EntityPageLifespan,
   EntityPageRelatedCollection,
+  EntityPageRelatedComposer,
   EntityPageRelatedParticipants,
   EntityPageRelatedPerformance,
   EntityPageRelatedProgramme,
   EntityPageRelatedRecording,
+  EntityPageRelatedVenueRef,
   EntityPageRelatedVideo,
   EntityPageRelatedWork,
+  EntityPageVenueDetails,
   EntityType,
 } from "./entityPageContract";
 
@@ -34,7 +37,7 @@ interface RawProgramme {
 interface RawPerformance {
   id: string;
   performanceDate: Date | null;
-  venue: { name: string } | null;
+  venue: { name: string; slug: string } | null;
   performers: { artist: { name: string } }[];
   choirs: { choir: { name: string } }[];
   conductors: { conductor: { name: string } }[];
@@ -65,8 +68,12 @@ export interface AssembleEntityPageDataInput {
   description: string | null;
   /** Only Composer pages populate this today; every other entity type passes null. */
   lifespan: EntityPageLifespan | null;
-  /** Only Composer pages populate this today; every other entity type passes null. */
+  /** Phase 6G-6: only Venue pages populate this today; every other entity type passes null. */
+  venueDetails: EntityPageVenueDetails | null;
+  /** Composer's own works, or (Phase 6G-6) a Venue's works-performed-here, deduped by the caller; null where neither applies. */
   works: RawWork[] | null;
+  /** Phase 6G-6: only Venue pages populate this today (composers of works performed here); null elsewhere. */
+  composers: EntityPageRelatedComposer[] | null;
   programmes: RawProgramme[];
   performances: RawPerformance[];
   recordings: RawRecording[];
@@ -87,6 +94,7 @@ function toPerformance(performance: RawPerformance): EntityPageRelatedPerformanc
     id: performance.id,
     performanceDate: performance.performanceDate,
     venueName: performance.venue?.name ?? null,
+    venueSlug: performance.venue?.slug ?? null,
     artists: performance.performers.map((link) => link.artist.name),
     choirs: performance.choirs.map((link) => link.choir.name),
     conductors: performance.conductors.map((link) => link.conductor.name),
@@ -109,13 +117,26 @@ function dedupeStrings(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
-/** Derived, not separately queried (brief §5I) — deduped by name across every relatedPerformance. */
+function dedupeVenueRefs(venues: EntityPageRelatedVenueRef[]): EntityPageRelatedVenueRef[] {
+  const seen = new Map<string, EntityPageRelatedVenueRef>();
+  for (const venue of venues) {
+    seen.set(venue.slug, venue);
+  }
+  return Array.from(seen.values());
+}
+
+/** Derived, not separately queried (brief §5I) — deduped by name (or, for venues, by slug) across every relatedPerformance. */
 function deriveRelatedParticipants(performances: RawPerformance[]): EntityPageRelatedParticipants {
   return {
     artists: dedupeStrings(performances.flatMap((p) => p.performers.map((l) => l.artist.name))),
     choirs: dedupeStrings(performances.flatMap((p) => p.choirs.map((l) => l.choir.name))),
     conductors: dedupeStrings(performances.flatMap((p) => p.conductors.map((l) => l.conductor.name))),
-    venues: dedupeStrings(performances.map((p) => p.venue?.name).filter((name): name is string => Boolean(name))),
+    venues: dedupeVenueRefs(
+      performances
+        .map((p) => p.venue)
+        .filter((venue): venue is { name: string; slug: string } => venue !== null)
+        .map((venue) => ({ name: venue.name, slug: venue.slug }))
+    ),
   };
 }
 
@@ -127,7 +148,9 @@ export function assembleEntityPageData(input: AssembleEntityPageDataInput): Enti
     name: input.name,
     description: input.description,
     lifespan: input.lifespan,
+    venueDetails: input.venueDetails,
     relatedWorks: input.works ? input.works.map(toWork) : null,
+    relatedComposers: input.composers,
     relatedProgrammes: input.programmes.map(toProgramme),
     relatedPerformances: input.performances.map(toPerformance),
     relatedRecordings: input.recordings.map(toRecording),

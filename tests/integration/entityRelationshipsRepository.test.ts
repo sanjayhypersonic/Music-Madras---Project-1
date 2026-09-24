@@ -227,7 +227,8 @@ describe("entityRelationshipsRepository against a real database", () => {
       expect(composerPage!.relatedParticipants.choirs).toContain(fixture.choir.name);
       expect(composerPage!.relatedParticipants.conductors).toContain(fixture.conductor.name);
       expect(composerPage!.relatedParticipants.artists).toContain(fixture.artist.name);
-      expect(composerPage!.relatedParticipants.venues).toContain(fixture.venue.name);
+      // Phase 6G-6: venues upgraded from plain names to {name, slug} now that /venues/[slug] exists.
+      expect(composerPage!.relatedParticipants.venues).toContainEqual({ name: fixture.venue.name, slug: fixture.venue.slug });
       const composerPerformance = composerPage!.relatedPerformances.find((p) => p.id === fixture!.performance.id);
       expect(composerPerformance?.choirs).toContain(fixture.choir.name);
       expect(composerPerformance?.conductors).toContain(fixture.conductor.name);
@@ -237,7 +238,10 @@ describe("entityRelationshipsRepository against a real database", () => {
       expect(venuePage).not.toBeNull();
       expect(venuePage!.entityType).toBe("venue");
       expect(venuePage!.lifespan).toBeNull();
-      expect(venuePage!.relatedWorks).toBeNull(); // Venue has no work-level relationship
+      // Phase 6G-6: Venue now populates relatedWorks/relatedComposers, derived from its own performances' programme items.
+      expect(venuePage!.relatedWorks?.map((w) => w.id)).toContain(fixture.work.id);
+      expect(venuePage!.relatedComposers?.map((c) => c.id)).toContain(fixture.composer.id);
+      expect(venuePage!.venueDetails?.type).toBe("CHURCH");
       expect(venuePage!.relatedVideos.map((v) => v.slug)).toContain(fixture.videoPage.slug);
     });
 
