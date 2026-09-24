@@ -3,6 +3,9 @@ import { writeAuditLog } from "../../audit/writeAuditLog";
 import { canForkNewDraft, canPublishCurrentDraft } from "../../publishing/revisionTransitions";
 import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
 import { computeNextOrder } from "../../mmke/programme/reorderProgrammeItems";
+import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
+import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
 import {
   checkRecordingRevisionCompleteness,
   computeRecordingReadiness,
@@ -47,51 +50,63 @@ export interface RecordingWithRevisions extends Recording {
  * one transaction. This is the entry point for both manual creation and
  * (in a later phase) YouTube-ingestion-created drafts — ADR §5.3, first
  * bullet.
+ *
+ * Phase 6G-5A: catches the slug @unique collision the same way
+ * createComposer/createVenue/createProgramme/createCollection already do —
+ * this was previously unguarded (a raw P2002 would have reached the
+ * caller as an unhandled 500). Slug generation semantics are unchanged —
+ * the caller still supplies the slug, and it remains immutable once set,
+ * exactly as before.
  */
 export async function createDraftRecording(
   input: CreateDraftRecordingInput
 ): Promise<RecordingWithRevisions> {
-  const result = await prisma.$transaction(async (tx) => {
-    const recording = await tx.recording.create({
-      data: {
-        slug: input.slug,
-        createdById: input.actorId,
-        updatedById: input.actorId,
-      },
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const recording = await tx.recording.create({
+        data: {
+          slug: input.slug,
+          createdById: input.actorId,
+          updatedById: input.actorId,
+        },
+      });
+
+      const revision = await tx.recordingRevision.create({
+        data: {
+          recordingId: recording.id,
+          revisionNumber: 1,
+          revisionStatus: "DRAFT",
+          title: input.title,
+          description: input.description,
+          createdById: input.actorId,
+          updatedById: input.actorId,
+        },
+      });
+
+      const updated = await tx.recording.update({
+        where: { id: recording.id },
+        data: { currentDraftRevisionId: revision.id },
+      });
+
+      await writeAuditLog(
+        {
+          actorId: input.actorId,
+          action: "RECORDING_DRAFT_CREATED",
+          entityType: "Recording",
+          entityId: recording.id,
+          afterSnapshot: { recording: updated, revision },
+        },
+        tx
+      );
+
+      return { ...updated, currentDraftRevision: revision, currentPublishedRevision: null };
     });
-
-    const revision = await tx.recordingRevision.create({
-      data: {
-        recordingId: recording.id,
-        revisionNumber: 1,
-        revisionStatus: "DRAFT",
-        title: input.title,
-        description: input.description,
-        createdById: input.actorId,
-        updatedById: input.actorId,
-      },
-    });
-
-    const updated = await tx.recording.update({
-      where: { id: recording.id },
-      data: { currentDraftRevisionId: revision.id },
-    });
-
-    await writeAuditLog(
-      {
-        actorId: input.actorId,
-        action: "RECORDING_DRAFT_CREATED",
-        entityType: "Recording",
-        entityId: recording.id,
-        afterSnapshot: { recording: updated, revision },
-      },
-      tx
-    );
-
-    return { ...updated, currentDraftRevision: revision, currentPublishedRevision: null };
-  });
-
-  return result;
+  } catch (err) {
+    if (isUniqueConstraintViolation(err, "slug")) {
+      throw new SlugConflictError(input.slug);
+    }
+    throw err;
+  }
 }
 
 /**
@@ -345,6 +360,16 @@ export async function submitRecordingForReview(recordingId: string, actorId: str
   return updated;
 }
 
+/**
+ * Phase 6G-5A: deliberately does NOT clear currentPublishedRevisionId or
+ * currentDraftRevisionId — the previously-published revision remains
+ * intact as historical metadata, never deleted, never resurrected as a
+ * separate copy. Public safety comes entirely from the read side:
+ * isRecordingPublished requires `status === "PUBLISHED"`, so as soon as
+ * status flips to ARCHIVED here, findPublishedRecordingBySlug and
+ * resolveRelatedContent both stop returning this Recording, even though
+ * currentPublishedRevisionId still points at real revision history.
+ */
 export async function archiveRecording(recordingId: string, actorId: string): Promise<Recording> {
   const updated = await prisma.recording.update({
     where: { id: recordingId },
@@ -354,6 +379,84 @@ export async function archiveRecording(recordingId: string, actorId: string): Pr
   await writeAuditLog({
     actorId,
     action: "RECORDING_ARCHIVED",
+    entityType: "Recording",
+    entityId: recordingId,
+  });
+
+  return updated;
+}
+
+/**
+ * Phase 6G-5A: restores an ARCHIVED Recording to a safe, non-public
+ * editorial state — DRAFT, uniformly, regardless of what status it held
+ * before archiving. Deliberately does NOT restore whatever status
+ * preceded the archive (that would require either a schema field to
+ * remember it, or reading application state out of the audit log, both
+ * rejected as needlessly complex for what this needs to guarantee: a
+ * predictable, always-non-public landing state). Never touches
+ * currentPublishedRevisionId — if this Recording had a published
+ * revision before archiving, that revision row is untouched and
+ * canForkNewDraft (modules/publishing/revisionTransitions.ts) already
+ * allows forking a new draft from it regardless of Recording.status, so
+ * a future editor can still fork and republish without this function
+ * doing anything special to enable that. Restoring never republishes —
+ * publication remains a separate, intentional action via publishCurrentDraft.
+ */
+export async function restoreRecording(recordingId: string, actorId: string): Promise<Recording> {
+  const recording = await prisma.recording.findUnique({ where: { id: recordingId } });
+  if (!recording) {
+    throw new Error(`Recording ${recordingId} does not exist.`);
+  }
+  if (recording.status !== "ARCHIVED") {
+    throw new Error(`Recording ${recordingId} is not ARCHIVED (currently ${recording.status}).`);
+  }
+
+  const updated = await prisma.recording.update({
+    where: { id: recordingId },
+    data: { status: "DRAFT", updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "RECORDING_RESTORED",
+    entityType: "Recording",
+    entityId: recordingId,
+  });
+
+  return updated;
+}
+
+/**
+ * Phase 6G-5A: makes a PUBLISHED Recording non-public without touching
+ * revision history at all. The published RecordingRevision keeps
+ * `revisionStatus: "PUBLISHED"` forever — isValidRevisionTransition
+ * (modules/publishing/revisionTransitions.ts) explicitly forbids moving a
+ * PUBLISHED revision back to DRAFT, and this function does not attempt
+ * to; it only changes Recording.status, leaving currentPublishedRevisionId
+ * untouched so the historical revision remains reachable exactly as
+ * archiveRecording's history is. Lands on DRAFT, same landing state as
+ * restoreRecording, for the same reason: a predictable, always-non-public
+ * state a future editor can act on (fork a new draft, or edit directly if
+ * one is still open) without this operation silently deciding what
+ * happens next.
+ */
+export async function unpublishRecording(recordingId: string, actorId: string): Promise<Recording> {
+  const recording = await prisma.recording.findUnique({ where: { id: recordingId } });
+  if (!recording) {
+    throw new Error(`Recording ${recordingId} does not exist.`);
+  }
+  if (recording.status !== "PUBLISHED") {
+    throw new Error(`Recording ${recordingId} is not PUBLISHED (currently ${recording.status}).`);
+  }
+
+  const updated = await prisma.recording.update({
+    where: { id: recordingId },
+    data: { status: "DRAFT", updatedById: actorId },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "RECORDING_UNPUBLISHED",
     entityType: "Recording",
     entityId: recordingId,
   });
@@ -428,6 +531,15 @@ export async function detachWorkFromRevision(
  * Public-facing lookup (ADR §5.5 / §9): the Museum reads ONLY through
  * currentPublishedRevisionId, never by querying revisions directly by
  * status, so there is exactly one unambiguous definition of "what's live."
+ *
+ * Phase 6G-5A: now gated by isRecordingPublished (modules/mmke/catalogue),
+ * the same predicate entityRelationshipsRepository.ts's resolveRelatedContent
+ * uses. Before this phase, this function only checked
+ * `currentPublishedRevision` truthiness, which an ARCHIVED Recording still
+ * satisfies (archiveRecording never clears the pointer — see its own
+ * comment) — so an archived Recording would have been returned here as
+ * "published" while resolveRelatedContent correctly excluded it. Both now
+ * agree by construction.
  */
 export async function findPublishedRecordingBySlug(
   slug: string
@@ -437,7 +549,7 @@ export async function findPublishedRecordingBySlug(
     include: { currentPublishedRevision: true },
   });
 
-  if (!recording?.currentPublishedRevision) {
+  if (!recording?.currentPublishedRevision || !isRecordingPublished(recording)) {
     return null;
   }
 

@@ -4,6 +4,7 @@ import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageReposit
 import { findPublicCollectionsByIds } from "./collectionRepository";
 import { listMusicalWorksByComposer } from "./musicalWorkRepository";
 import { assembleEntityPageData } from "../../mmke/entityPage/assembleEntityPageData";
+import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
 import type {
   Artist,
   Choir,
@@ -141,19 +142,27 @@ export async function resolveRelatedContent(input: RelatedContentInput): Promise
   );
 
   // A Recording only counts as "canonically related" for public purposes
-  // once it is itself published (status PUBLISHED with a current published
-  // revision) AND that specific candidate revision is the one currently
-  // live — a superseded or draft revision's old performance/work links
-  // must not resurrect a relationship the catalogue has since moved away
-  // from. This mirrors, but is stricter than, recordingRepository.ts's
-  // findPublishedRecordingBySlug (which does not check `status`).
+  // once it is itself published AND that specific candidate revision is
+  // the one currently live — a superseded or draft revision's old
+  // performance/work links must not resurrect a relationship the
+  // catalogue has since moved away from. The where-clause below is a
+  // cheap coarse filter; isRecordingPublished (modules/mmke/catalogue,
+  // Phase 6G-5A) is the single authoritative predicate for "is this
+  // Recording public" — recordingRepository.ts's
+  // findPublishedRecordingBySlug now defers to the exact same function,
+  // so the two can no longer independently drift apart the way they did
+  // before 6G-5A (that predicate used to only check
+  // currentPublishedRevisionId, which an ARCHIVED Recording still
+  // satisfies).
   const recordings =
     candidateRevisionIds.length > 0
-      ? ((await prisma.recording.findMany({
-          where: { status: "PUBLISHED", currentPublishedRevisionId: { in: candidateRevisionIds } },
-          include: { currentPublishedRevision: true },
-          orderBy: { createdAt: "desc" },
-        })) as RecordingWithPublishedRevision[])
+      ? ((
+          await prisma.recording.findMany({
+            where: { status: "PUBLISHED", currentPublishedRevisionId: { in: candidateRevisionIds } },
+            include: { currentPublishedRevision: true },
+            orderBy: { createdAt: "desc" },
+          })
+        ).filter((r) => isRecordingPublished(r)) as RecordingWithPublishedRevision[])
       : [];
 
   const recordingIds = recordings.map((r) => r.id);

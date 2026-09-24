@@ -12,7 +12,7 @@ export type StudioAction =
   | "CATALOGUE_WRITE" // create/edit Composer, MusicalWork, Artist, Choir, Conductor, Venue, Organisation, Collection
   | "RECORDING_WRITE" // create/edit a Recording draft revision
   | "EDITORIAL_REVIEW" // move a recording through DRAFT -> ENRICHMENT -> EDITORIAL_REVIEW -> APPROVED
-  | "RECORDING_PUBLISH" // move an APPROVED recording to PUBLISHED, or unpublish/archive
+  | "RECORDING_PUBLISH" // move an APPROVED recording to PUBLISHED, or unpublish/archive/restore it
   | "USER_MANAGE" // invite, disable, change roles
   | "SETTINGS_MANAGE" // Studio-wide settings
   | "AUDIT_VIEW"; // read the audit log
