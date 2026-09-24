@@ -65,7 +65,7 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
       <EntityBreadcrumbs
         items={[
           { label: "Music Madras", href: "/" },
-          { label: "Archive", href: "/#archive" },
+          { label: "Archive", href: "/archive" },
           { label: "Venues" },
           { label: venue.name },
         ]}

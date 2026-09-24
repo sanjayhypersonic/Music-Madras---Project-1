@@ -592,3 +592,94 @@
     padding-right: 1rem;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Phase 6G-7 — Archive search. The first real form input on the public
+   Museum side; styled with the same tokens/border-radius/transition
+   language as .museum-category-card and .museum-button rather than a new
+   visual system.
+--------------------------------------------------------------------- */
+
+.museum-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.museum-search-form {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0 0 1.5rem;
+}
+
+.museum-search-input {
+  flex: 1;
+  min-width: 12rem;
+  padding: 0.65rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--mm-border);
+  background: var(--mm-surface);
+  color: var(--mm-text);
+  font-family: var(--mm-font-sans);
+  font-size: 0.95rem;
+}
+
+.museum-search-input::placeholder {
+  color: var(--mm-text-muted);
+}
+
+.museum-search-input:focus-visible {
+  border-color: var(--mm-accent-tertiary);
+}
+
+.museum-filter-pills {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0;
+  margin: 0 0 2rem;
+}
+
+.museum-root .museum-filter-pills a {
+  display: inline-block;
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--mm-border);
+  border-radius: 999px;
+  font-family: var(--mm-font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--mm-text-muted);
+  transition: border-color var(--mm-transition), color var(--mm-transition);
+}
+
+.museum-root .museum-filter-pills a:hover {
+  border-color: var(--mm-accent-tertiary);
+}
+
+.museum-root .museum-filter-pills a.museum-filter-pill--active {
+  border-color: var(--mm-accent);
+  color: var(--mm-text);
+  background: var(--mm-surface-raised);
+}
+
+.museum-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  font-family: var(--mm-font-sans);
+  font-size: 0.9rem;
+}
+
+.museum-root .museum-pagination__status {
+  color: var(--mm-text-muted);
+}

@@ -68,7 +68,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       <EntityBreadcrumbs
         items={[
           { label: "Music Madras", href: "/" },
-          { label: "Archive", href: "/#archive" },
+          { label: "Archive", href: "/archive" },
           { label: "Musical Works" },
           { label: work.title },
         ]}

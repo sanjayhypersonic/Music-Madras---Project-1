@@ -70,7 +70,7 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
       <EntityBreadcrumbs
         items={[
           { label: "Music Madras", href: "/" },
-          { label: "Archive", href: "/#archive" },
+          { label: "Archive", href: "/archive" },
           { label: "Composers" },
           { label: composer.name },
         ]}

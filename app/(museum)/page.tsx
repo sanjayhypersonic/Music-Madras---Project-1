@@ -59,7 +59,7 @@ export default async function MuseumHomePage() {
           performers, choirs, conductors, venues and recordings — so the city&rsquo;s concert life remains
           discoverable for generations to come.
         </p>
-        <Link href="#archive" className="museum-button">
+        <Link href="/archive" className="museum-button">
           Explore the Archive
         </Link>
       </section>
@@ -89,6 +89,11 @@ export default async function MuseumHomePage() {
             )
           )}
         </ul>
+        <p>
+          <Link href="/archive" className="museum-button">
+            Search the full archive →
+          </Link>
+        </p>
       </section>
 
       <section id="discover" className="museum-section" aria-labelledby="discover-heading">

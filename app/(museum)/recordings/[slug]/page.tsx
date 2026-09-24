@@ -76,7 +76,7 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
       <EntityBreadcrumbs
         items={[
           { label: "Music Madras", href: "/" },
-          { label: "Archive", href: "/#archive" },
+          { label: "Archive", href: "/archive" },
           { label: "Recordings" },
           { label: displayTitle },
         ]}

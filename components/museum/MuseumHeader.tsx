@@ -11,9 +11,15 @@ import { ThemeToggle } from "./ThemeToggle";
 // brand is wrapped in a link to "/". Nav links point at anchors on that
 // homepage (not separate routes) — those sections are real and always
 // present; there is no browsable index/entity route to link to yet.
+//
+// Phase 6G-7 — "Archive" now points to the real /archive search/discovery
+// route instead of the homepage's #archive taxonomy preview, giving every
+// page a persistent path into the archive without adding a link to each
+// page individually (brief §19: "do not clutter every page with
+// duplicate Archive links").
 
 const NAV_LINKS = [
-  { href: "/#archive", label: "Archive" },
+  { href: "/archive", label: "Archive" },
   { href: "/#discover", label: "Discover" },
   { href: "/#story", label: "About" },
 ];
