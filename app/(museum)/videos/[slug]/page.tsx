@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { findPublishedBySlug } from "../../../../modules/db/repositories/youtubeVideoPageRepository";
+import { findPublishedRecordingSlugForYouTubeVideo } from "../../../../modules/db/repositories/mediaResourceRepository";
+import { toIso8601Duration } from "../../../../modules/mmke/catalogue/toIso8601Duration";
 
 // Phase 6G-2A (route) / Phase 6G-2B (visual design) — the first real
 // public Museum route. Uses ONLY findPublishedBySlug (the sanctioned
@@ -11,6 +14,13 @@ import { findPublishedBySlug } from "../../../../modules/db/repositories/youtube
 // work is explicitly a later increment. Styling uses only the shared,
 // reusable classes from app/(museum)/museum.css — nothing here is
 // hardcoded specifically around this one page.
+//
+// Phase 6G-11: adds factual VideoObject JSON-LD (only fields already on
+// the canonical YouTubeVideo/YouTubeVideoPage records — nothing inferred)
+// and a back-link to the canonical Recording, found ONLY through the real
+// MediaResource -> RecordingRevision FK chain
+// (findPublishedRecordingSlugForYouTubeVideo) — never by title/keyword
+// matching. A video with no such canonical relationship gets no back-link.
 
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -53,6 +63,23 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
   }
 
   const { page, youtubeVideo } = result;
+  const recordingSlug = await findPublishedRecordingSlugForYouTubeVideo(youtubeVideo.id);
+
+  const embedUrl = `https://www.youtube.com/embed/${youtubeVideo.youtubeVideoId}`;
+  const watchUrl = `https://www.youtube.com/watch?v=${youtubeVideo.youtubeVideoId}`;
+
+  const videoJsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    name: youtubeVideo.title ?? "Untitled",
+    description: youtubeVideo.description ?? undefined,
+    thumbnailUrl: youtubeVideo.thumbnailUrl ?? undefined,
+    uploadDate: youtubeVideo.publishedAt ? new Date(youtubeVideo.publishedAt).toISOString() : undefined,
+    duration: youtubeVideo.durationSeconds !== null ? toIso8601Duration(youtubeVideo.durationSeconds) : undefined,
+    url: `${SITE_ORIGIN}/videos/${page.slug}`,
+    embedUrl,
+    contentUrl: watchUrl,
+  };
 
   return (
     <article className="museum-container">
@@ -61,7 +88,7 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
 
       <div className="museum-media">
         <iframe
-          src={`https://www.youtube.com/embed/${youtubeVideo.youtubeVideoId}`}
+          src={embedUrl}
           title={youtubeVideo.title ?? "Music Madras video"}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
@@ -77,16 +104,24 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
 
       <p className="museum-prose">{youtubeVideo.description}</p>
 
+      {recordingSlug && (
+        <p>
+          <Link href={`/recordings/${recordingSlug}`} className="museum-button">
+            View this Recording in the Archive →
+          </Link>
+        </p>
+      )}
+
       <p>
-        <a
-          className="museum-button"
-          href={`https://www.youtube.com/watch?v=${youtubeVideo.youtubeVideoId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <a className="museum-button" href={watchUrl} target="_blank" rel="noopener noreferrer">
           Watch on YouTube
         </a>
       </p>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }}
+      />
     </article>
   );
 }

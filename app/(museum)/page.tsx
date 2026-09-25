@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { listPublishedVideoPages } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { listPublishedCollections } from "../../modules/db/repositories/collectionRepository";
-import { ARCHIVE_CATEGORIES } from "../../modules/mmke/homepage/archiveCategories";
+import { ARCHIVE_CATEGORIES, CONTINUE_EXPLORING_LINKS } from "../../modules/mmke/homepage/archiveCategories";
 import { RecordingCard } from "../../components/museum/RecordingCard";
 
 // Phase 6G-3 — the real Museum homepage. "Archive at the foundation,
@@ -68,26 +68,17 @@ export default async function MuseumHomePage() {
         <h2 id="archive-heading">Explore the Archive</h2>
         <p className="museum-section__intro">
           Music Madras is built around a knowledge base connecting the people, works and places behind every
-          performance. Several of these categories are still being catalogued — this is where they will live as the
-          archive grows.
+          performance. Explore any category below, or search the full archive.
         </p>
         <ul className="museum-category-grid">
-          {ARCHIVE_CATEGORIES.map((category) =>
-            category.href ? (
-              <li key={category.key} className="museum-category-card">
-                <Link href={category.href}>
-                  <h3>{category.label}</h3>
-                  <p>{category.description}</p>
-                </Link>
-              </li>
-            ) : (
-              <li key={category.key} className="museum-category-card">
+          {ARCHIVE_CATEGORIES.map((category) => (
+            <li key={category.key} className="museum-category-card">
+              <Link href={category.href}>
                 <h3>{category.label}</h3>
                 <p>{category.description}</p>
-                <span className="museum-category-card__status">Cataloguing under way</span>
-              </li>
-            )
-          )}
+              </Link>
+            </li>
+          ))}
         </ul>
         <p>
           <Link href="/archive" className="museum-button">
@@ -125,11 +116,18 @@ export default async function MuseumHomePage() {
           <ul className="museum-category-grid">
             {collections.map((collection) => (
               <li key={collection.id} className="museum-category-card">
-                <h3>{collection.title}</h3>
-                {collection.description && <p>{collection.description}</p>}
+                <Link href={`/collections/${collection.slug}`}>
+                  <h3>{collection.title}</h3>
+                  {collection.description && <p>{collection.description}</p>}
+                </Link>
               </li>
             ))}
           </ul>
+          <p>
+            <Link href="/collections" className="museum-button">
+              Browse all collections →
+            </Link>
+          </p>
         </section>
       )}
 
@@ -151,11 +149,11 @@ export default async function MuseumHomePage() {
       <section className="museum-section" aria-labelledby="continue-heading">
         <h2 id="continue-heading">Continue Exploring</h2>
         <ul className="museum-pathways">
-          <li>People</li>
-          <li>Music</li>
-          <li>Performances</li>
-          <li>Places</li>
-          <li>Recordings</li>
+          {CONTINUE_EXPLORING_LINKS.map((link) => (
+            <li key={link.label}>
+              <Link href={link.href}>{link.label}</Link>
+            </li>
+          ))}
         </ul>
         <Link href="#discover" className="museum-button">
           See Published Recordings
