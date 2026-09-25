@@ -6,10 +6,13 @@ import { findCollectionById } from "../../../../../../../modules/db/repositories
 import { listRecordingsForStudio } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { listMusicalWorksByComposer } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
+import { listActiveOccasions, listOccasionsForEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
 import {
   addRecordingAction,
   addWorkAction,
   archiveCollectionAction,
+  attachOccasionAction,
+  detachOccasionAction,
   moveRecordingAction,
   moveWorkAction,
   publishCollectionAction,
@@ -64,6 +67,13 @@ export default async function CollectionDetailPage({
   const composers = await listActiveComposers();
   const worksByComposer = await Promise.all(
     composers.map(async (composer) => ({ composer, works: await listMusicalWorksByComposer(composer.id) }))
+  );
+  const [activeOccasions, attachedOccasions] = await Promise.all([
+    listActiveOccasions(),
+    listOccasionsForEntity("COLLECTION", collection.id),
+  ]);
+  const attachableOccasions = activeOccasions.filter(
+    (occasion) => !attachedOccasions.some((link) => link.occasionId === occasion.id)
   );
 
   return (
@@ -123,6 +133,37 @@ export default async function CollectionDetailPage({
             </form>
           )}
         </div>
+      )}
+
+      <h2>Occasions ({attachedOccasions.length})</h2>
+      {attachedOccasions.length === 0 ? (
+        <p>No occasions have been attached to this collection yet.</p>
+      ) : (
+        <ul>
+          {attachedOccasions.map((link) => (
+            <li key={link.occasionId}>
+              {link.occasion.name}
+              {link.occasion.archivedAt ? " (archived)" : ""}
+              {canWrite && (
+                <form action={detachOccasionAction.bind(null, collection.id, link.occasionId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableOccasions.length > 0 && (
+        <form action={attachOccasionAction.bind(null, collection.id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="occasionId" required style={{ flex: 1 }}>
+            {attachableOccasions.map((occasion) => (
+              <option key={occasion.id} value={occasion.id}>
+                {occasion.name}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach occasion</button>
+        </form>
       )}
 
       <h2>Recordings ({collection.recordingLinks.length})</h2>

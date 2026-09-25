@@ -8,11 +8,14 @@ import { listVenuesForStudio } from "../../../../../../../modules/db/repositorie
 import { listActiveArtists } from "../../../../../../../modules/db/repositories/artistRepository";
 import { listActiveChoirs } from "../../../../../../../modules/db/repositories/choirRepository";
 import { listActiveConductors } from "../../../../../../../modules/db/repositories/conductorRepository";
+import { listActiveOccasions, listOccasionsForEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
 import {
   addArtistAction,
   addChoirAction,
   addConductorAction,
   archivePerformanceAction,
+  attachOccasionAction,
+  detachOccasionAction,
   removeArtistAction,
   removeChoirAction,
   removeConductorAction,
@@ -47,13 +50,18 @@ export default async function PerformanceDetailPage({
   }
 
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
-  const [programmes, venues, artists, choirs, conductors] = await Promise.all([
+  const [programmes, venues, artists, choirs, conductors, activeOccasions, attachedOccasions] = await Promise.all([
     listProgrammesForStudio(),
     listVenuesForStudio(),
     listActiveArtists(),
     listActiveChoirs(),
     listActiveConductors(),
+    listActiveOccasions(),
+    listOccasionsForEntity("PERFORMANCE", performance.id),
   ]);
+  const attachableOccasions = activeOccasions.filter(
+    (occasion) => !attachedOccasions.some((link) => link.occasionId === occasion.id)
+  );
 
   const performanceDateValue = performance.performanceDate
     ? new Date(performance.performanceDate).toISOString().slice(0, 10)
@@ -127,6 +135,37 @@ export default async function PerformanceDetailPage({
             </form>
           )}
         </div>
+      )}
+
+      <h2>Occasions ({attachedOccasions.length})</h2>
+      {attachedOccasions.length === 0 ? (
+        <p>No occasions have been attached to this performance yet.</p>
+      ) : (
+        <ul>
+          {attachedOccasions.map((link) => (
+            <li key={link.occasionId}>
+              {link.occasion.name}
+              {link.occasion.archivedAt ? " (archived)" : ""}
+              {canWrite && (
+                <form action={detachOccasionAction.bind(null, performance.id, link.occasionId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableOccasions.length > 0 && (
+        <form action={attachOccasionAction.bind(null, performance.id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="occasionId" required style={{ flex: 1 }}>
+            {attachableOccasions.map((occasion) => (
+              <option key={occasion.id} value={occasion.id}>
+                {occasion.name}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach occasion</button>
+        </form>
       )}
 
       <h2>Artists ({performance.performers.length})</h2>

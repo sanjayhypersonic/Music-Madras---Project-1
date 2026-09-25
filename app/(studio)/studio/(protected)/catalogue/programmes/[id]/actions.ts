@@ -11,6 +11,7 @@ import {
   restoreProgramme,
   updateProgramme,
 } from "../../../../../../../modules/db/repositories/programmeRepository";
+import { attachOccasionToEntity, detachOccasionFromEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
 
 function errorRedirect(programmeId: string, message: string): never {
   redirect(`/studio/catalogue/programmes/${programmeId}?error=${encodeURIComponent(message)}`);
@@ -95,5 +96,34 @@ export async function moveProgrammeItemAction(programmeId: string, itemId: strin
   }
 
   await reorderProgrammeItem(programmeId, itemId, targetIndex, session!.user.id);
+  redirect(`/studio/catalogue/programmes/${programmeId}`);
+}
+
+export async function attachOccasionAction(programmeId: string, formData: FormData) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(programmeId, "You do not have permission to edit this programme.");
+  }
+
+  const occasionId = String(formData.get("occasionId") ?? "");
+  if (!occasionId) {
+    errorRedirect(programmeId, "Select an occasion to attach.");
+  }
+
+  try {
+    await attachOccasionToEntity({ entityType: "PROGRAMME", entityId: programmeId, occasionId, actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(programmeId, err instanceof Error ? err.message : "Could not attach the occasion.");
+  }
+  redirect(`/studio/catalogue/programmes/${programmeId}`);
+}
+
+export async function detachOccasionAction(programmeId: string, occasionId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(programmeId, "You do not have permission to edit this programme.");
+  }
+
+  await detachOccasionFromEntity("PROGRAMME", programmeId, occasionId, session!.user.id);
   redirect(`/studio/catalogue/programmes/${programmeId}`);
 }

@@ -16,6 +16,7 @@ import {
   unpublishCollection,
   updateCollection,
 } from "../../../../../../../modules/db/repositories/collectionRepository";
+import { attachOccasionToEntity, detachOccasionFromEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
 
 function errorRedirect(collectionId: string, message: string): never {
   redirect(`/studio/catalogue/collections/${collectionId}?error=${encodeURIComponent(message)}`);
@@ -78,6 +79,35 @@ export async function restoreCollectionAction(collectionId: string) {
   }
 
   await restoreCollection(collectionId, session!.user.id);
+  redirect(`/studio/catalogue/collections/${collectionId}`);
+}
+
+export async function attachOccasionAction(collectionId: string, formData: FormData) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(collectionId, "You do not have permission to edit this collection.");
+  }
+
+  const occasionId = String(formData.get("occasionId") ?? "");
+  if (!occasionId) {
+    errorRedirect(collectionId, "Select an occasion to attach.");
+  }
+
+  try {
+    await attachOccasionToEntity({ entityType: "COLLECTION", entityId: collectionId, occasionId, actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(collectionId, err instanceof Error ? err.message : "Could not attach the occasion.");
+  }
+  redirect(`/studio/catalogue/collections/${collectionId}`);
+}
+
+export async function detachOccasionAction(collectionId: string, occasionId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(collectionId, "You do not have permission to edit this collection.");
+  }
+
+  await detachOccasionFromEntity("COLLECTION", collectionId, occasionId, session!.user.id);
   redirect(`/studio/catalogue/collections/${collectionId}`);
 }
 

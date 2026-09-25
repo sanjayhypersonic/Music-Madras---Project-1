@@ -5,9 +5,12 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { findProgrammeById } from "../../../../../../../modules/db/repositories/programmeRepository";
 import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { listMusicalWorksByComposer } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
+import { listActiveOccasions, listOccasionsForEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
 import {
   addProgrammeItemAction,
   archiveProgrammeAction,
+  attachOccasionAction,
+  detachOccasionAction,
   moveProgrammeItemAction,
   removeProgrammeItemAction,
   restoreProgrammeAction,
@@ -43,6 +46,13 @@ export default async function ProgrammeDetailPage({
   const composers = await listActiveComposers();
   const worksByComposer = await Promise.all(
     composers.map(async (composer) => ({ composer, works: await listMusicalWorksByComposer(composer.id) }))
+  );
+  const [activeOccasions, attachedOccasions] = await Promise.all([
+    listActiveOccasions(),
+    listOccasionsForEntity("PROGRAMME", programme.id),
+  ]);
+  const attachableOccasions = activeOccasions.filter(
+    (occasion) => !attachedOccasions.some((link) => link.occasionId === occasion.id)
   );
 
   return (
@@ -91,6 +101,42 @@ export default async function ProgrammeDetailPage({
             </form>
           )}
         </div>
+      )}
+
+      <h2>Occasions ({attachedOccasions.length})</h2>
+      {attachedOccasions.length === 0 ? (
+        <p>No occasions have been attached to this programme yet.</p>
+      ) : (
+        <ul>
+          {attachedOccasions.map((link) => (
+            <li key={link.occasionId}>
+              {link.occasion.name}
+              {link.occasion.archivedAt ? " (archived)" : ""}
+              {canWrite && (
+                <form action={detachOccasionAction.bind(null, programme.id, link.occasionId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableOccasions.length > 0 && (
+        <form action={attachOccasionAction.bind(null, programme.id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="occasionId" required style={{ flex: 1 }}>
+            {attachableOccasions.map((occasion) => (
+              <option key={occasion.id} value={occasion.id}>
+                {occasion.name}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach occasion</button>
+        </form>
+      )}
+      {activeOccasions.length === 0 && (
+        <p>
+          No occasions exist yet. <Link href="/studio/catalogue/occasions/new">Create one</Link>.
+        </p>
       )}
 
       <h2>Running order ({programme.items.length})</h2>

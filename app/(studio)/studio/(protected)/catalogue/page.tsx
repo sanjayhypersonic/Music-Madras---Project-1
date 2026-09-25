@@ -11,6 +11,7 @@ const ENTITY_LINKS = [
   { href: "/studio/catalogue/organisations", label: "Organisations" },
   { href: "/studio/catalogue/performances", label: "Performances" },
   { href: "/studio/catalogue/collections", label: "Collections" },
+  { href: "/studio/catalogue/occasions", label: "Occasions" },
 ];
 
 export default function CataloguePage() {

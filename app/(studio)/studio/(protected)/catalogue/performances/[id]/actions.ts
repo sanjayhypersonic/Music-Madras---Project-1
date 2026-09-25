@@ -17,6 +17,7 @@ import {
   restorePerformance,
   updatePerformance,
 } from "../../../../../../../modules/db/repositories/performanceRepository";
+import { attachOccasionToEntity, detachOccasionFromEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
 
 function errorRedirect(performanceId: string, message: string): never {
   redirect(`/studio/catalogue/performances/${performanceId}?error=${encodeURIComponent(message)}`);
@@ -84,6 +85,35 @@ export async function restorePerformanceAction(performanceId: string) {
   }
 
   await restorePerformance(performanceId, session!.user.id);
+  redirect(`/studio/catalogue/performances/${performanceId}`);
+}
+
+export async function attachOccasionAction(performanceId: string, formData: FormData) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(performanceId, "You do not have permission to edit this performance.");
+  }
+
+  const occasionId = String(formData.get("occasionId") ?? "");
+  if (!occasionId) {
+    errorRedirect(performanceId, "Select an occasion to attach.");
+  }
+
+  try {
+    await attachOccasionToEntity({ entityType: "PERFORMANCE", entityId: performanceId, occasionId, actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(performanceId, err instanceof Error ? err.message : "Could not attach the occasion.");
+  }
+  redirect(`/studio/catalogue/performances/${performanceId}`);
+}
+
+export async function detachOccasionAction(performanceId: string, occasionId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(performanceId, "You do not have permission to edit this performance.");
+  }
+
+  await detachOccasionFromEntity("PERFORMANCE", performanceId, occasionId, session!.user.id);
   redirect(`/studio/catalogue/performances/${performanceId}`);
 }
 

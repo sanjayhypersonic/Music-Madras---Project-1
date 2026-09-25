@@ -186,6 +186,8 @@ model StudioUser {
   instrumentsUpdated        Instrument[]         @relation("InstrumentUpdatedBy")
   collectionsCreated        Collection[]         @relation("CollectionCreatedBy")
   collectionsUpdated        Collection[]         @relation("CollectionUpdatedBy")
+  occasionsCreated          Occasion[]           @relation("OccasionCreatedBy")
+  occasionsUpdated          Occasion[]           @relation("OccasionUpdatedBy")
   learningGuidesCreated     LearningGuide[]      @relation("LearningGuideCreatedBy")
   learningGuidesUpdated     LearningGuide[]      @relation("LearningGuideUpdatedBy")
   educationalContentCreated EducationalContent[] @relation("EducationalContentCreatedBy")
@@ -774,6 +776,41 @@ model CollectionWork {
 
   @@id([collectionId, musicalWorkId])
   @@map("collection_works")
+}
+
+// ---------------------------------------------------------------------------
+// Occasion (Phase 6G-12) — a canonical cultural, liturgical, ceremonial,
+// seasonal, or contextual circumstance (Christmas, Easter, a Wedding, ...)
+// associated with a Programme/Performance/Recording/Collection. A simple
+// direct-edit entity, following the exact Composer/Venue/Artist/Choir/
+// Conductor precedent — not part of the Draft/Revision model.
+//
+// Deliberately distinct from Collection: Collection is editorial curation
+// (a specific grouping of recordings/works an editor chose to assemble);
+// Occasion is a controlled contextual dimension (why/when in the cultural
+// calendar). A Collection MAY be built around an Occasion, but the two are
+// never interchangeable and neither model is renamed/merged into the
+// other.
+// ---------------------------------------------------------------------------
+
+model Occasion {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  name        String
+  description String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("OccasionCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("OccasionUpdatedBy", fields: [updatedById], references: [id])
+
+  entityLinks EntityOccasion[]
+
+  @@index([archivedAt])
+  @@map("occasions")
 }
 
 // ---------------------------------------------------------------------------
@@ -1487,6 +1524,37 @@ model EntityEducationalContent {
 
   @@index([entityType, entityId])
   @@map("entity_educational_content")
+}
+
+// Generic entity-level Occasion attachment (Phase 6G-12) — mirrors
+// EntitySource/EntityRights/EntityEducationalContent exactly: entityType
+// stays a plain string (never a database enum), so the V1-supported set
+// (PROGRAMME/PERFORMANCE/RECORDING/COLLECTION — enforced in
+// modules/mmke/occasion/occasionEntityType.ts) can grow later without a
+// migration. Deliberately excludes Work and Video: a MusicalWork is
+// occasion-agnostic (the same setting can be performed at any service),
+// and a Video's context is always derived transitively through its
+// canonical Recording (the same single-source-of-truth pattern
+// isRecordingPublished/isYouTubeVideoPagePublic already establish), never
+// a second, independently-driftable link.
+//
+// @@unique guarantees a given entity cannot attach the same Occasion
+// twice (brief §3). onDelete: Cascade on the Occasion relation is a
+// database-level safety net only — application code never hard-deletes an
+// Occasion (archive/restore only, mirroring Composer), so this should
+// never fire in normal operation.
+model EntityOccasion {
+  id         String @id @default(uuid())
+  entityType String
+  entityId   String
+  occasionId String
+
+  occasion Occasion @relation(fields: [occasionId], references: [id], onDelete: Cascade)
+
+  @@unique([entityType, entityId, occasionId])
+  @@index([entityType, entityId])
+  @@index([occasionId])
+  @@map("entity_occasions")
 }
 
 // ---------------------------------------------------------------------------
