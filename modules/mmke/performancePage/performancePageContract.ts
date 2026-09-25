@@ -49,8 +49,17 @@ export interface PerformancePageVenue {
 
 export interface PerformancePagePerformer {
   id: string;
+  /** Phase 6G-9: links to the existing /artists/[slug] route. */
+  slug: string;
   name: string;
   role: string | null;
+}
+
+/** Phase 6G-9: a Choir/Conductor — links to /choirs|conductors/[slug], which now exist. */
+export interface PerformancePageParticipant {
+  id: string;
+  slug: string;
+  name: string;
 }
 
 /** A published Recording of this Performance — always links to the existing /recordings/[slug] route. */
@@ -81,10 +90,10 @@ export interface PerformancePageData {
   programme: PerformancePageProgramme;
   venue: PerformancePageVenue;
 
-  /** No public route exists for any of these entity types (brief: do not create Artist/Choir/Conductor routes) — identity only. */
+  /** Phase 6G-9: each links to its own /artists|choirs|conductors/[slug] route. */
   artists: PerformancePagePerformer[];
-  choirs: { id: string; name: string }[];
-  conductors: { id: string; name: string }[];
+  choirs: PerformancePageParticipant[];
+  conductors: PerformancePageParticipant[];
 
   recordings: PerformancePageRecording[];
   videos: PerformancePageVideo[];

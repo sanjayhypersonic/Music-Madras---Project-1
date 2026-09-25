@@ -1,9 +1,12 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { DuplicateEntityError, findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
+import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
+import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
 import type { Choir } from "@prisma/client";
 
 export interface CreateChoirInput {
+  slug: string;
   name: string;
   directorName?: string;
   description?: string;
@@ -17,15 +20,24 @@ export async function createChoir(input: CreateChoirInput): Promise<Choir> {
     throw new DuplicateEntityError("Choir", duplicate);
   }
 
-  const choir = await prisma.choir.create({
-    data: {
-      name: input.name,
-      directorName: input.directorName,
-      description: input.description,
-      createdById: input.actorId,
-      updatedById: input.actorId,
-    },
-  });
+  let choir: Choir;
+  try {
+    choir = await prisma.choir.create({
+      data: {
+        slug: input.slug,
+        name: input.name,
+        directorName: input.directorName,
+        description: input.description,
+        createdById: input.actorId,
+        updatedById: input.actorId,
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err, "slug")) {
+      throw new SlugConflictError(input.slug);
+    }
+    throw err;
+  }
 
   await writeAuditLog({
     actorId: input.actorId,
@@ -40,6 +52,10 @@ export async function createChoir(input: CreateChoirInput): Promise<Choir> {
 
 export function findChoirById(id: string): Promise<Choir | null> {
   return prisma.choir.findUnique({ where: { id } });
+}
+
+export function findChoirBySlug(slug: string): Promise<Choir | null> {
+  return prisma.choir.findUnique({ where: { slug } });
 }
 
 export function listActiveChoirs(): Promise<Choir[]> {

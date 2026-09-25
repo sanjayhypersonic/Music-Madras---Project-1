@@ -50,16 +50,16 @@ interface RawVenue {
 }
 
 interface RawPerformer {
-  artist: { id: string; name: string };
+  artist: { id: string; slug: string; name: string };
   role: string | null;
 }
 
 interface RawChoirLink {
-  choir: { id: string; name: string };
+  choir: { id: string; slug: string; name: string };
 }
 
 interface RawConductorLink {
-  conductor: { id: string; name: string };
+  conductor: { id: string; slug: string; name: string };
 }
 
 interface RawRecording {
@@ -109,7 +109,11 @@ function toProgrammeItem(item: RawProgrammeItem): PerformancePageProgrammeItem {
 }
 
 function toPerformer(performer: RawPerformer): PerformancePagePerformer {
-  return { id: performer.artist.id, name: performer.artist.name, role: performer.role };
+  return { id: performer.artist.id, slug: performer.artist.slug, name: performer.artist.name, role: performer.role };
+}
+
+function toParticipant(participant: { id: string; slug: string; name: string }) {
+  return { id: participant.id, slug: participant.slug, name: participant.name };
 }
 
 function toRecording(recording: RawRecording): PerformancePageRecording {
@@ -137,8 +141,8 @@ export function assemblePerformancePageData(input: AssemblePerformancePageDataIn
     },
     venue: input.venue,
     artists: input.performers.map(toPerformer),
-    choirs: input.choirs.map((link) => link.choir),
-    conductors: input.conductors.map((link) => link.conductor),
+    choirs: input.choirs.map((link) => toParticipant(link.choir)),
+    conductors: input.conductors.map((link) => toParticipant(link.conductor)),
     recordings: input.recordings.map(toRecording),
     videos: input.videos.map(toVideo),
     collections: input.collections.map(toCollection),

@@ -362,6 +362,93 @@ export async function getPublicWorkPageData(slug: string): Promise<WorkPageData 
 }
 
 // ---------------------------------------------------------------------------
+// Phase 6G-9 — Artist/Choir/Conductor get real public entity pages,
+// completing the participant side of the archive graph. These reuse the
+// generic EntityPageData contract exactly like Composer/Venue (their
+// shape — one canonical identity + several typed related-lists — fits
+// cleanly, unlike Work/Recording/Programme/Performance's stronger own
+// identity). getArtistRelatedContent/getChoirRelatedContent/
+// getConductorRelatedContent already existed (used since 6G-4A to derive
+// OTHER entities' "related participants" sections) — this is the first
+// time they're used as a page's own root subject.
+// ---------------------------------------------------------------------------
+
+export async function getArtistEntityPageData(slug: string): Promise<EntityPageData | null> {
+  const artist = await prisma.artist.findUnique({ where: { slug } });
+  if (!artist || artist.archivedAt !== null) return null;
+
+  const content = await getArtistRelatedContent(artist.id);
+
+  return assembleEntityPageData({
+    entityType: "artist",
+    id: artist.id,
+    slug: artist.slug,
+    name: artist.name,
+    description: artist.biography,
+    lifespan: null,
+    venueDetails: null,
+    secondaryDetail: artist.instrument,
+    works: null,
+    composers: null,
+    programmes: content.programmes,
+    performances: content.performances,
+    recordings: content.recordings,
+    videos: content.videos,
+    collections: content.collections,
+  });
+}
+
+export async function getChoirEntityPageData(slug: string): Promise<EntityPageData | null> {
+  const choir = await prisma.choir.findUnique({ where: { slug } });
+  if (!choir || choir.archivedAt !== null) return null;
+
+  const content = await getChoirRelatedContent(choir.id);
+
+  return assembleEntityPageData({
+    entityType: "choir",
+    id: choir.id,
+    slug: choir.slug,
+    name: choir.name,
+    description: choir.description,
+    lifespan: null,
+    venueDetails: null,
+    secondaryDetail: choir.directorName,
+    works: null,
+    composers: null,
+    programmes: content.programmes,
+    performances: content.performances,
+    recordings: content.recordings,
+    videos: content.videos,
+    collections: content.collections,
+  });
+}
+
+export async function getConductorEntityPageData(slug: string): Promise<EntityPageData | null> {
+  const conductor = await prisma.conductor.findUnique({ where: { slug } });
+  if (!conductor || conductor.archivedAt !== null) return null;
+
+  const content = await getConductorRelatedContent(conductor.id);
+
+  return assembleEntityPageData({
+    entityType: "conductor",
+    id: conductor.id,
+    slug: conductor.slug,
+    name: conductor.name,
+    description: conductor.biography,
+    lifespan: null,
+    venueDetails: null,
+    secondaryDetail: null,
+    works: null,
+    composers: null,
+    programmes: content.programmes,
+    performances: content.performances,
+    recordings: content.recordings,
+    videos: content.videos,
+    collections: content.collections,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Phase 6G-8 — Programme gets its own bespoke assembly (ProgrammePageData),
 // for the same reason Work did in 6G-6: a Programme has its own strong
 // identity (an ordered list of works/movements/encores) that doesn't fit

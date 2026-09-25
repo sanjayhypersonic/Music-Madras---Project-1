@@ -24,11 +24,17 @@ describe("normalizeArchiveType", () => {
     expect(normalizeArchiveType("performance")).toEqual({ type: "performance", invalid: false });
     expect(normalizeArchiveType("performances")).toEqual({ type: "performance", invalid: false });
     expect(normalizeArchiveType("PERFORMANCES")).toEqual({ type: "performance", invalid: false });
+    expect(normalizeArchiveType("artist")).toEqual({ type: "artist", invalid: false });
+    expect(normalizeArchiveType("artists")).toEqual({ type: "artist", invalid: false });
+    expect(normalizeArchiveType("ARTISTS")).toEqual({ type: "artist", invalid: false });
+    expect(normalizeArchiveType("choir")).toEqual({ type: "choir", invalid: false });
+    expect(normalizeArchiveType("choirs")).toEqual({ type: "choir", invalid: false });
+    expect(normalizeArchiveType("conductor")).toEqual({ type: "conductor", invalid: false });
+    expect(normalizeArchiveType("conductors")).toEqual({ type: "conductor", invalid: false });
   });
 
   it("flags an unrecognized type as invalid, never guessing a type", () => {
-    expect(normalizeArchiveType("artist")).toEqual({ type: null, invalid: true });
-    expect(normalizeArchiveType("choir")).toEqual({ type: null, invalid: true });
+    expect(normalizeArchiveType("soloist")).toEqual({ type: null, invalid: true });
     expect(normalizeArchiveType("nonsense")).toEqual({ type: null, invalid: true });
   });
 });

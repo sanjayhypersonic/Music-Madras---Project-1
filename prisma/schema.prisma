@@ -442,6 +442,14 @@ model Performance {
 
 model Artist {
   id          String    @id @default(uuid())
+  // Phase 6G-9: added so Artist can have its own public /artists/[slug]
+  // route, mirroring Composer/Venue's slugify(name) convention. New rows
+  // get a clean slug via createArtist; existing rows were backfilled with
+  // a name+id-suffix slug (see the phase6g9 migration) since a one-shot
+  // SQL backfill across pre-existing rows can't safely resolve
+  // name collisions the way a Studio editor can at create time. Never
+  // regenerated after creation, even if the name is edited later.
+  slug        String    @unique
   name        String
   instrument  String?
   biography   String?   @db.Text
@@ -461,6 +469,8 @@ model Artist {
 
 model Choir {
   id           String    @id @default(uuid())
+  // Phase 6G-9: see Artist.slug's comment above — identical rationale.
+  slug         String    @unique
   name         String
   directorName String?
   description  String?   @db.Text
@@ -480,6 +490,8 @@ model Choir {
 
 model Conductor {
   id          String    @id @default(uuid())
+  // Phase 6G-9: see Artist.slug's comment above — identical rationale.
+  slug        String    @unique
   name        String
   biography   String?   @db.Text
   archivedAt  DateTime?

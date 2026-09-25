@@ -10,7 +10,16 @@
 // modules/db/repositories/archiveSearchRepository.ts, and one more branch
 // in the archive page's rendering — never a rewrite of the existing ones.
 
-export type ArchiveEntityType = "composer" | "work" | "recording" | "venue" | "programme" | "performance";
+export type ArchiveEntityType =
+  | "composer"
+  | "work"
+  | "recording"
+  | "venue"
+  | "programme"
+  | "performance"
+  | "artist"
+  | "choir"
+  | "conductor";
 
 export interface ArchiveSearchResultComposer {
   entityType: "composer";
@@ -73,13 +82,45 @@ export interface ArchiveSearchResultPerformance {
   performanceDate: Date | null;
 }
 
+/** An Artist's own canonical fields, with instrument/biography as factual secondary context. */
+export interface ArchiveSearchResultArtist {
+  entityType: "artist";
+  id: string;
+  slug: string;
+  name: string;
+  instrument: string | null;
+  biography: string | null;
+}
+
+/** A Choir's own canonical fields. */
+export interface ArchiveSearchResultChoir {
+  entityType: "choir";
+  id: string;
+  slug: string;
+  name: string;
+  directorName: string | null;
+  description: string | null;
+}
+
+/** A Conductor's own canonical fields. */
+export interface ArchiveSearchResultConductor {
+  entityType: "conductor";
+  id: string;
+  slug: string;
+  name: string;
+  biography: string | null;
+}
+
 export type ArchiveSearchResult =
   | ArchiveSearchResultComposer
   | ArchiveSearchResultWork
   | ArchiveSearchResultRecording
   | ArchiveSearchResultVenue
   | ArchiveSearchResultProgramme
-  | ArchiveSearchResultPerformance;
+  | ArchiveSearchResultPerformance
+  | ArchiveSearchResultArtist
+  | ArchiveSearchResultChoir
+  | ArchiveSearchResultConductor;
 
 /** One entity type's page of results, for the single-type paginated view. */
 export interface ArchiveSearchPage<T> {
@@ -97,4 +138,7 @@ export interface ArchiveSearchAllResult {
   venues: ArchiveSearchPage<ArchiveSearchResultVenue>;
   programmes: ArchiveSearchPage<ArchiveSearchResultProgramme>;
   performances: ArchiveSearchPage<ArchiveSearchResultPerformance>;
+  artists: ArchiveSearchPage<ArchiveSearchResultArtist>;
+  choirs: ArchiveSearchPage<ArchiveSearchResultChoir>;
+  conductors: ArchiveSearchPage<ArchiveSearchResultConductor>;
 }

@@ -49,8 +49,17 @@ export interface RecordingPageVenue {
 
 export interface RecordingPagePerformer {
   id: string;
+  /** Phase 6G-9: links to the existing /artists/[slug] route. */
+  slug: string;
   name: string;
   role: string | null;
+}
+
+/** Phase 6G-9: a Choir/Conductor — links to /choirs|conductors/[slug], which now exist. */
+export interface RecordingPageParticipant {
+  id: string;
+  slug: string;
+  name: string;
 }
 
 export interface RecordingPagePerformance {
@@ -60,8 +69,8 @@ export interface RecordingPagePerformance {
   performanceDate: Date | null;
   venue: RecordingPageVenue | null;
   artists: RecordingPagePerformer[];
-  choirs: { id: string; name: string }[];
-  conductors: { id: string; name: string }[];
+  choirs: RecordingPageParticipant[];
+  conductors: RecordingPageParticipant[];
 }
 
 /** A publicly discoverable MusicMadras video — always links to the existing /videos/[slug] route. */

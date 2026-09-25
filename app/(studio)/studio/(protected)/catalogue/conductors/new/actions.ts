@@ -5,6 +5,8 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { createConductor } from "../../../../../../../modules/db/repositories/conductorRepository";
 import { DuplicateEntityError } from "../../../../../../../modules/mmke/duplicate-detection/detectDuplicateName";
+import { SlugConflictError } from "../../../../../../../modules/mmke/slug/SlugConflictError";
+import { slugify } from "../../../../../../../modules/mmke/slug/slugify";
 
 function errorRedirect(message: string): never {
   redirect(`/studio/catalogue/conductors/new?error=${encodeURIComponent(message)}`);
@@ -24,12 +26,13 @@ export async function createConductorAction(formData: FormData) {
   let conductor;
   try {
     conductor = await createConductor({
+      slug: slugify(name),
       name,
       biography: String(formData.get("biography") ?? "") || undefined,
       actorId: session!.user.id,
     });
   } catch (err) {
-    if (err instanceof DuplicateEntityError) {
+    if (err instanceof DuplicateEntityError || err instanceof SlugConflictError) {
       errorRedirect(err.message);
     }
     throw err;

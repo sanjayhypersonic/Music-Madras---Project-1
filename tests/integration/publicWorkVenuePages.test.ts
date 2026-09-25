@@ -82,9 +82,9 @@ async function createFixture(): Promise<Fixture> {
   await addProgrammeItem({ programmeId: programme.id, musicalWorkId: work.id, movement: "I. Allegro", actorId: user.id });
   const venue = await createVenue({ slug: uniqueSlug("venue"), name: "Test Venue", type: "CHURCH", organisationId: organisation.id, actorId: user.id });
   const performance = await createPerformance({ programmeId: programme.id, venueId: venue.id, performanceDate: new Date("2020-05-01"), actorId: user.id });
-  const choir = await createChoir({ name: `Test Choir ${randomUUID().slice(0, 8)}`, actorId: user.id });
-  const conductor = await createConductor({ name: `Test Conductor ${randomUUID().slice(0, 8)}`, actorId: user.id });
-  const artist = await createArtist({ name: `Test Artist ${randomUUID().slice(0, 8)}`, actorId: user.id });
+  const choir = await createChoir({ slug: uniqueSlug("choir"), name: `Test Choir ${randomUUID().slice(0, 8)}`, actorId: user.id });
+  const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: `Test Conductor ${randomUUID().slice(0, 8)}`, actorId: user.id });
+  const artist = await createArtist({ slug: uniqueSlug("artist"), name: `Test Artist ${randomUUID().slice(0, 8)}`, actorId: user.id });
   await addChoirToPerformance(performance.id, choir.id, user.id);
   await addConductorToPerformance(performance.id, conductor.id, user.id);
   await addPerformerToPerformance(performance.id, artist.id, "Soloist", user.id);

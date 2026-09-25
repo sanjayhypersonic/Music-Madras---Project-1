@@ -97,13 +97,27 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
         {venue.relatedPerformances.length > 0 ? (
           <ul className="museum-related-list">
             {venue.relatedPerformances.map((performance) => {
-              const participants = [...performance.conductors, ...performance.choirs, ...performance.artists];
+              const participants = [
+                ...performance.conductors.map((c) => ({ ...c, href: `/conductors/${c.slug}` })),
+                ...performance.choirs.map((c) => ({ ...c, href: `/choirs/${c.slug}` })),
+                ...performance.artists.map((a) => ({ ...a, href: `/artists/${a.slug}` })),
+              ];
               return (
                 <li key={performance.id}>
                   <Link href={`/performances/${performance.slug}`}>
                     {formatPerformanceDate(performance.performanceDate) ?? "Date unknown"}
                   </Link>
-                  {participants.length > 0 && <span className="museum-performance-participants"> · {participants.join(", ")}</span>}
+                  {participants.length > 0 && (
+                    <span className="museum-performance-participants">
+                      {" · "}
+                      {participants.map((person, index) => (
+                        <span key={person.slug}>
+                          {index > 0 && ", "}
+                          <Link href={person.href}>{person.name}</Link>
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </li>
               );
             })}
@@ -144,14 +158,20 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
         venue.relatedParticipants.conductors.length > 0) && (
         <EntitySection id="related" heading="Related People">
           <ul className="museum-pathways">
-            {venue.relatedParticipants.conductors.map((name) => (
-              <li key={name}>{name}</li>
+            {venue.relatedParticipants.conductors.map((conductor) => (
+              <li key={conductor.slug}>
+                <Link href={`/conductors/${conductor.slug}`}>{conductor.name}</Link>
+              </li>
             ))}
-            {venue.relatedParticipants.choirs.map((name) => (
-              <li key={name}>{name}</li>
+            {venue.relatedParticipants.choirs.map((choir) => (
+              <li key={choir.slug}>
+                <Link href={`/choirs/${choir.slug}`}>{choir.name}</Link>
+              </li>
             ))}
-            {venue.relatedParticipants.artists.map((name) => (
-              <li key={name}>{name}</li>
+            {venue.relatedParticipants.artists.map((artist) => (
+              <li key={artist.slug}>
+                <Link href={`/artists/${artist.slug}`}>{artist.name}</Link>
+              </li>
             ))}
           </ul>
         </EntitySection>

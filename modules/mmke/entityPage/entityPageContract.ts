@@ -23,6 +23,12 @@ export interface EntityPageRelatedProgramme {
   title: string;
 }
 
+/** Phase 6G-9: an Artist/Choir/Conductor surfaced as related context — links to /artists|choirs|conductors/[slug], which now exist. */
+export interface EntityPageRelatedParticipantRef {
+  name: string;
+  slug: string;
+}
+
 export interface EntityPageRelatedPerformance {
   id: string;
   /** Phase 6G-8: now that /performances/[slug] exists, every relatedPerformance links there. */
@@ -31,10 +37,10 @@ export interface EntityPageRelatedPerformance {
   venueName: string | null;
   /** Phase 6G-6: null only when there is no venue at all; non-null whenever venueName is, now that /venues/[slug] exists. */
   venueSlug: string | null;
-  /** Participant names only (brief §5E) — not links, since no public route exists yet for any of these entity types. */
-  artists: string[];
-  choirs: string[];
-  conductors: string[];
+  /** Phase 6G-9: upgraded from plain names to {name, slug} now that /artists|choirs|conductors/[slug] exist — these render as real links. */
+  artists: EntityPageRelatedParticipantRef[];
+  choirs: EntityPageRelatedParticipantRef[];
+  conductors: EntityPageRelatedParticipantRef[];
 }
 
 export interface EntityPageRelatedRecording {
@@ -82,15 +88,15 @@ export interface EntityPageLifespan {
 }
 
 /**
- * Related people/places (brief §5I), deduped by name across every
- * relatedPerformance — plain names, not links, since none of these
- * entity types have a public route yet.
+ * Related people/places (brief §5I), deduped by slug across every
+ * relatedPerformance.
  */
 export interface EntityPageRelatedParticipants {
-  artists: string[];
-  choirs: string[];
-  conductors: string[];
-  /** Phase 6G-6: upgraded from plain names to {name, slug} now that /venues/[slug] exists — these render as real links, unlike artists/choirs/conductors, which still have no public route. */
+  /** Phase 6G-9: upgraded from plain names to {name, slug} now that /artists|choirs|conductors/[slug] exist. */
+  artists: EntityPageRelatedParticipantRef[];
+  choirs: EntityPageRelatedParticipantRef[];
+  conductors: EntityPageRelatedParticipantRef[];
+  /** Phase 6G-6: upgraded from plain names to {name, slug} now that /venues/[slug] exists. */
   venues: EntityPageRelatedVenueRef[];
 }
 
@@ -123,6 +129,8 @@ export interface EntityPageData {
   lifespan: EntityPageLifespan | null;
   /** Venue-only (Phase 6G-6); null for every other entity type. */
   venueDetails: EntityPageVenueDetails | null;
+  /** Phase 6G-9: a single stored factual detail specific to the entity type, where one exists — Artist's instrument, Choir's director name. Null for every other entity type (including Conductor, which has no equivalent field). */
+  secondaryDetail: string | null;
 
   // Archive relationships.
   relatedWorks: EntityPageRelatedWork[] | null;

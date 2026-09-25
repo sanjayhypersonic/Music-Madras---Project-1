@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+﻿import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
 import { can } from "../../modules/auth/policy";
@@ -73,7 +73,7 @@ async function cleanupConductor(conductorId: string) {
 }
 
 describe("Studio permission policy for Performance (brief, cross-checked against 6G-4C/E/F/G)", () => {
-  it("CATALOGUE_WRITE is the only permission gating Performance writes — no new permission was introduced", () => {
+  it("CATALOGUE_WRITE is the only permission gating Performance writes â€” no new permission was introduced", () => {
     expect(can("CONTRIBUTOR", "CATALOGUE_WRITE")).toBe(false);
     expect(can("EDITOR", "CATALOGUE_WRITE")).toBe(true);
     expect(can("ADMINISTRATOR", "CATALOGUE_WRITE")).toBe(true);
@@ -284,7 +284,7 @@ describe("Performance participant management (Artists/Choirs/Conductors) against
     const user = await createTestUser();
     userId = user.id;
     const performance = await setUpPerformance(user);
-    const artist = await createArtist({ name: "QA Soloist", actorId: user.id });
+    const artist = await createArtist({ slug: uniqueSlug("artist"), name: "QA Soloist", actorId: user.id });
     artistId = artist.id;
 
     await addPerformerToPerformance(performance.id, artist.id, "Soloist", user.id);
@@ -306,7 +306,7 @@ describe("Performance participant management (Artists/Choirs/Conductors) against
     const user = await createTestUser();
     userId = user.id;
     const performance = await setUpPerformance(user);
-    const choir = await createChoir({ name: "QA Chamber Choir", actorId: user.id });
+    const choir = await createChoir({ slug: uniqueSlug("choir"), name: "QA Chamber Choir", actorId: user.id });
     choirId = choir.id;
 
     await addChoirToPerformance(performance.id, choir.id, user.id);
@@ -327,7 +327,7 @@ describe("Performance participant management (Artists/Choirs/Conductors) against
     const user = await createTestUser();
     userId = user.id;
     const performance = await setUpPerformance(user);
-    const conductor = await createConductor({ name: "QA Maestro", actorId: user.id });
+    const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: "QA Maestro", actorId: user.id });
     conductorId = conductor.id;
 
     await addConductorToPerformance(performance.id, conductor.id, user.id);
@@ -348,11 +348,11 @@ describe("Performance participant management (Artists/Choirs/Conductors) against
     const user = await createTestUser();
     userId = user.id;
     const performance = await setUpPerformance(user);
-    const artist = await createArtist({ name: "QA Preserved Artist", actorId: user.id });
+    const artist = await createArtist({ slug: uniqueSlug("artist"), name: "QA Preserved Artist", actorId: user.id });
     artistId = artist.id;
-    const choir = await createChoir({ name: "QA Preserved Choir", actorId: user.id });
+    const choir = await createChoir({ slug: uniqueSlug("choir"), name: "QA Preserved Choir", actorId: user.id });
     choirId = choir.id;
-    const conductor = await createConductor({ name: "QA Preserved Conductor", actorId: user.id });
+    const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: "QA Preserved Conductor", actorId: user.id });
     conductorId = conductor.id;
 
     await addPerformerToPerformance(performance.id, artist.id, undefined, user.id);

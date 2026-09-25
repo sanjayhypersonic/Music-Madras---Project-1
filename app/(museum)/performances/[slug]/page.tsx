@@ -15,10 +15,9 @@ import type { PerformancePageData } from "../../../../modules/mmke/performancePa
 // -> Video. Built from the same resolveRelatedContent core every other
 // public entity page uses (scoped to this one Performance's own id) via
 // getPublicPerformancePageData — no Prisma import here, matching the
-// Programme/Work/Venue pages' exact pattern. Artist/Choir/Conductor have
-// no public route of their own in this phase, so participants are shown
-// as identity only, never a link (same convention already used
-// elsewhere for these three entity types).
+// Programme/Work/Venue pages' exact pattern. Phase 6G-9: each Artist/
+// Choir/Conductor now links to its own /artists|choirs|conductors/[slug]
+// route.
 
 const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
 
@@ -120,14 +119,18 @@ export default async function PerformancePage({ params }: { params: Promise<{ sl
         {participants.length > 0 ? (
           <ul className="museum-pathways">
             {performance.conductors.map((conductor) => (
-              <li key={`conductor-${conductor.id}`}>{conductor.name} · Conductor</li>
+              <li key={`conductor-${conductor.id}`}>
+                <Link href={`/conductors/${conductor.slug}`}>{conductor.name}</Link> · Conductor
+              </li>
             ))}
             {performance.choirs.map((choir) => (
-              <li key={`choir-${choir.id}`}>{choir.name}</li>
+              <li key={`choir-${choir.id}`}>
+                <Link href={`/choirs/${choir.slug}`}>{choir.name}</Link>
+              </li>
             ))}
             {performance.artists.map((artist) => (
               <li key={`artist-${artist.id}`}>
-                {artist.name}
+                <Link href={`/artists/${artist.slug}`}>{artist.name}</Link>
                 {artist.role ? ` · ${artist.role}` : ""}
               </li>
             ))}

@@ -29,15 +29,21 @@ export interface ProgrammePageItem {
   work: ProgrammePageWork;
 }
 
+/** Phase 6G-9: an Artist/Choir/Conductor — links to /artists|choirs|conductors/[slug], which now exist. */
+export interface ProgrammePageParticipant {
+  name: string;
+  slug: string;
+}
+
 export interface ProgrammePagePerformance {
   id: string;
   /** Phase 6G-8: links to the existing /performances/[slug] route. */
   slug: string;
   performanceDate: Date | null;
   venue: { name: string; slug: string } | null;
-  artists: string[];
-  choirs: string[];
-  conductors: string[];
+  artists: ProgrammePageParticipant[];
+  choirs: ProgrammePageParticipant[];
+  conductors: ProgrammePageParticipant[];
 }
 
 /** A published Recording of this Programme — always links to the existing /recordings/[slug] route. */

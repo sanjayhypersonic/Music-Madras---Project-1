@@ -63,7 +63,11 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
 
   const lifespanLabel = formatLifespan(composer.lifespan);
   const { artists, choirs, conductors, venues } = composer.relatedParticipants;
-  const relatedPeopleNames = [...conductors, ...choirs, ...artists];
+  const relatedPeople = [
+    ...conductors.map((c) => ({ ...c, href: `/conductors/${c.slug}` })),
+    ...choirs.map((c) => ({ ...c, href: `/choirs/${c.slug}` })),
+    ...artists.map((a) => ({ ...a, href: `/artists/${a.slug}` })),
+  ];
 
   return (
     <article>
@@ -110,7 +114,11 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
         {composer.relatedPerformances.length > 0 ? (
           <ul className="museum-related-list">
             {composer.relatedPerformances.map((performance) => {
-              const participants = [...performance.conductors, ...performance.choirs, ...performance.artists];
+              const participants = [
+                ...performance.conductors.map((c) => ({ ...c, href: `/conductors/${c.slug}` })),
+                ...performance.choirs.map((c) => ({ ...c, href: `/choirs/${c.slug}` })),
+                ...performance.artists.map((a) => ({ ...a, href: `/artists/${a.slug}` })),
+              ];
               return (
                 <li key={performance.id}>
                   <Link href={`/performances/${performance.slug}`}>
@@ -122,7 +130,17 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
                       {performance.venueSlug ? <Link href={`/venues/${performance.venueSlug}`}>{performance.venueName}</Link> : performance.venueName}
                     </>
                   )}
-                  {participants.length > 0 && <span className="museum-performance-participants"> · {participants.join(", ")}</span>}
+                  {participants.length > 0 && (
+                    <span className="museum-performance-participants">
+                      {" · "}
+                      {participants.map((person, index) => (
+                        <span key={person.slug}>
+                          {index > 0 && ", "}
+                          <Link href={person.href}>{person.name}</Link>
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </li>
               );
             })}
@@ -146,7 +164,7 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
         )}
       </EntitySection>
 
-      {(relatedPeopleNames.length > 0 || venues.length > 0) && (
+      {(relatedPeople.length > 0 || venues.length > 0) && (
         <EntitySection id="related" heading="Related People &amp; Places">
           <ul className="museum-pathways">
             {venues.map((venue) => (
@@ -154,8 +172,10 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
                 <Link href={`/venues/${venue.slug}`}>{venue.name}</Link>
               </li>
             ))}
-            {relatedPeopleNames.map((name) => (
-              <li key={name}>{name}</li>
+            {relatedPeople.map((person) => (
+              <li key={person.slug}>
+                <Link href={person.href}>{person.name}</Link>
+              </li>
             ))}
           </ul>
         </EntitySection>

@@ -1,9 +1,12 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { DuplicateEntityError, findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
+import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
+import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
 import type { Conductor } from "@prisma/client";
 
 export interface CreateConductorInput {
+  slug: string;
   name: string;
   biography?: string;
   actorId: string;
@@ -16,14 +19,23 @@ export async function createConductor(input: CreateConductorInput): Promise<Cond
     throw new DuplicateEntityError("Conductor", duplicate);
   }
 
-  const conductor = await prisma.conductor.create({
-    data: {
-      name: input.name,
-      biography: input.biography,
-      createdById: input.actorId,
-      updatedById: input.actorId,
-    },
-  });
+  let conductor: Conductor;
+  try {
+    conductor = await prisma.conductor.create({
+      data: {
+        slug: input.slug,
+        name: input.name,
+        biography: input.biography,
+        createdById: input.actorId,
+        updatedById: input.actorId,
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err, "slug")) {
+      throw new SlugConflictError(input.slug);
+    }
+    throw err;
+  }
 
   await writeAuditLog({
     actorId: input.actorId,
@@ -38,6 +50,10 @@ export async function createConductor(input: CreateConductorInput): Promise<Cond
 
 export function findConductorById(id: string): Promise<Conductor | null> {
   return prisma.conductor.findUnique({ where: { id } });
+}
+
+export function findConductorBySlug(slug: string): Promise<Conductor | null> {
+  return prisma.conductor.findUnique({ where: { slug } });
 }
 
 export function listActiveConductors(): Promise<Conductor[]> {

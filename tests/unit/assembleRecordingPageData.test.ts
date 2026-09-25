@@ -76,16 +76,16 @@ describe("assembleRecordingPageData", () => {
       slug: "performance-1",
       performanceDate: new Date("2020-01-01"),
       venue: { id: "venue-1", slug: "test-hall", name: "Test Hall", organisation: { id: "org-1", name: "Test Org" } },
-      performers: [{ artist: { id: "artist-1", name: "Test Artist" }, role: "Soloist" }],
-      choirs: [{ choir: { id: "choir-1", name: "Test Choir" } }],
-      conductors: [{ conductor: { id: "conductor-1", name: "Test Conductor" } }],
+      performers: [{ artist: { id: "artist-1", slug: "test-artist", name: "Test Artist" }, role: "Soloist" }],
+      choirs: [{ choir: { id: "choir-1", slug: "test-choir", name: "Test Choir" } }],
+      conductors: [{ conductor: { id: "conductor-1", slug: "test-conductor", name: "Test Conductor" } }],
     };
 
     const result = assembleRecordingPageData(input);
     expect(result.performance?.venue?.organisation?.name).toBe("Test Org");
-    expect(result.performance?.artists[0]).toEqual({ id: "artist-1", name: "Test Artist", role: "Soloist" });
-    expect(result.performance?.choirs[0]).toEqual({ id: "choir-1", name: "Test Choir" });
-    expect(result.performance?.conductors[0]).toEqual({ id: "conductor-1", name: "Test Conductor" });
+    expect(result.performance?.artists[0]).toEqual({ id: "artist-1", slug: "test-artist", name: "Test Artist", role: "Soloist" });
+    expect(result.performance?.choirs[0]).toEqual({ id: "choir-1", slug: "test-choir", name: "Test Choir" });
+    expect(result.performance?.conductors[0]).toEqual({ id: "conductor-1", slug: "test-conductor", name: "Test Conductor" });
   });
 
   it("maps a performance with no venue to a null venue, never throwing", () => {

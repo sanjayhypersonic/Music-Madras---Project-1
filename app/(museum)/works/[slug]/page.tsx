@@ -105,7 +105,11 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         {work.performances.length > 0 ? (
           <ul className="museum-related-list">
             {work.performances.map((performance) => {
-              const participants = [...performance.conductors, ...performance.choirs, ...performance.artists];
+              const participants = [
+                ...performance.conductors.map((c) => ({ ...c, href: `/conductors/${c.slug}` })),
+                ...performance.choirs.map((c) => ({ ...c, href: `/choirs/${c.slug}` })),
+                ...performance.artists.map((a) => ({ ...a, href: `/artists/${a.slug}` })),
+              ];
               return (
                 <li key={performance.id}>
                   <Link href={`/performances/${performance.slug}`}>
@@ -117,7 +121,17 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
                       <Link href={`/venues/${performance.venue.slug}`}>{performance.venue.name}</Link>
                     </>
                   )}
-                  {participants.length > 0 && <span className="museum-performance-participants"> · {participants.join(", ")}</span>}
+                  {participants.length > 0 && (
+                    <span className="museum-performance-participants">
+                      {" · "}
+                      {participants.map((person, index) => (
+                        <span key={person.slug}>
+                          {index > 0 && ", "}
+                          <Link href={person.href}>{person.name}</Link>
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </li>
               );
             })}

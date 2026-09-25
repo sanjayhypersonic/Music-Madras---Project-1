@@ -53,7 +53,7 @@ describe("buildRecordingJsonLd", () => {
           slug: "performance-1",
           performanceDate: null,
           venue: null,
-          artists: [{ id: "artist-1", name: "Test Artist", role: "Soloist" }],
+          artists: [{ id: "artist-1", slug: "test-artist", name: "Test Artist", role: "Soloist" }],
           choirs: [],
           conductors: [],
         },

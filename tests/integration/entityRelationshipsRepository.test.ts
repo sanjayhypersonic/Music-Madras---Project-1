@@ -94,9 +94,9 @@ async function createFullChainFixture() {
   const venue = await createVenue({ slug: uniqueSlug("venue"), name: "Test Venue", type: "CHURCH", actorId: user.id });
   const performance = await createPerformance({ programmeId: programme.id, venueId: venue.id, actorId: user.id });
 
-  const choir = await createChoir({ name: `Test Choir ${randomUUID().slice(0, 8)}`, actorId: user.id });
-  const conductor = await createConductor({ name: `Test Conductor ${randomUUID().slice(0, 8)}`, actorId: user.id });
-  const artist = await createArtist({ name: `Test Artist ${randomUUID().slice(0, 8)}`, actorId: user.id });
+  const choir = await createChoir({ slug: uniqueSlug("choir"), name: `Test Choir ${randomUUID().slice(0, 8)}`, actorId: user.id });
+  const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: `Test Conductor ${randomUUID().slice(0, 8)}`, actorId: user.id });
+  const artist = await createArtist({ slug: uniqueSlug("artist"), name: `Test Artist ${randomUUID().slice(0, 8)}`, actorId: user.id });
   await addChoirToPerformance(performance.id, choir.id, user.id);
   await addConductorToPerformance(performance.id, conductor.id, user.id);
   await addPerformerToPerformance(performance.id, artist.id, "Soloist", user.id);
@@ -224,15 +224,16 @@ describe("entityRelationshipsRepository against a real database", () => {
       const composerVideo = composerPage!.relatedVideos.find((v) => v.slug === fixture!.videoPage.slug);
       expect(composerVideo?.thumbnailUrl).toBe("https://i.ytimg.com/vi/test/hqdefault.jpg");
       expect(composerPage!.relatedCollections.map((c) => c.id)).toContain(fixture.collection.id);
-      expect(composerPage!.relatedParticipants.choirs).toContain(fixture.choir.name);
-      expect(composerPage!.relatedParticipants.conductors).toContain(fixture.conductor.name);
-      expect(composerPage!.relatedParticipants.artists).toContain(fixture.artist.name);
+      // Phase 6G-9: artists/choirs/conductors upgraded from plain names to {name, slug} now that /artists|choirs|conductors/[slug] exist.
+      expect(composerPage!.relatedParticipants.choirs).toContainEqual({ name: fixture.choir.name, slug: fixture.choir.slug });
+      expect(composerPage!.relatedParticipants.conductors).toContainEqual({ name: fixture.conductor.name, slug: fixture.conductor.slug });
+      expect(composerPage!.relatedParticipants.artists).toContainEqual({ name: fixture.artist.name, slug: fixture.artist.slug });
       // Phase 6G-6: venues upgraded from plain names to {name, slug} now that /venues/[slug] exists.
       expect(composerPage!.relatedParticipants.venues).toContainEqual({ name: fixture.venue.name, slug: fixture.venue.slug });
       const composerPerformance = composerPage!.relatedPerformances.find((p) => p.id === fixture!.performance.id);
-      expect(composerPerformance?.choirs).toContain(fixture.choir.name);
-      expect(composerPerformance?.conductors).toContain(fixture.conductor.name);
-      expect(composerPerformance?.artists).toContain(fixture.artist.name);
+      expect(composerPerformance?.choirs).toContainEqual({ name: fixture.choir.name, slug: fixture.choir.slug });
+      expect(composerPerformance?.conductors).toContainEqual({ name: fixture.conductor.name, slug: fixture.conductor.slug });
+      expect(composerPerformance?.artists).toContainEqual({ name: fixture.artist.name, slug: fixture.artist.slug });
 
       const venuePage = await getVenueEntityPageData(fixture.venue.slug);
       expect(venuePage).not.toBeNull();
@@ -263,7 +264,7 @@ describe("entityRelationshipsRepository against a real database", () => {
       // video IS related here only because of the real MediaResource chain
       // built above, not because of the matching words. Prove the negative
       // with a second choir sharing no such chain at all.
-      const unrelatedChoir = await createChoir({ name: `Unrelated Choir ${randomUUID().slice(0, 8)}`, actorId: fixture.user.id });
+      const unrelatedChoir = await createChoir({ slug: uniqueSlug("choir"), name: `Unrelated Choir ${randomUUID().slice(0, 8)}`, actorId: fixture.user.id });
       try {
         const content = await getChoirRelatedContent(unrelatedChoir.id);
         expect(content.videos).toEqual([]);
@@ -288,7 +289,7 @@ describe("entityRelationshipsRepository against a real database", () => {
         // The playlist contains the video, but no Collection references
         // this recording/work — a second, unrelated choir must see zero
         // collections despite the playlist's existence.
-        const unrelatedChoir = await createChoir({ name: `Playlist Test Choir ${randomUUID().slice(0, 8)}`, actorId: fixture.user.id });
+        const unrelatedChoir = await createChoir({ slug: uniqueSlug("choir"), name: `Playlist Test Choir ${randomUUID().slice(0, 8)}`, actorId: fixture.user.id });
         try {
           const content = await getChoirRelatedContent(unrelatedChoir.id);
           expect(content.collections).toEqual([]);
@@ -306,7 +307,7 @@ describe("entityRelationshipsRepository against a real database", () => {
   describe("empty relationship sets", () => {
     it("returns empty arrays, not an error, for an entity with no performances or works", async () => {
       const user = await createTestUser();
-      const choir = await createChoir({ name: `Lonely Choir ${randomUUID().slice(0, 8)}`, actorId: user.id });
+      const choir = await createChoir({ slug: uniqueSlug("choir"), name: `Lonely Choir ${randomUUID().slice(0, 8)}`, actorId: user.id });
 
       try {
         const content = await getChoirRelatedContent(choir.id);
@@ -339,7 +340,7 @@ describe("entityRelationshipsRepository against a real database", () => {
       await addProgrammeItem({ programmeId: programme.id, musicalWorkId: work.id, actorId: user.id });
       const venue = await createVenue({ slug: uniqueSlug("vis-venue"), name: "Vis Venue", type: "CHURCH", actorId: user.id });
       const performance = await createPerformance({ programmeId: programme.id, venueId: venue.id, actorId: user.id });
-      const choir = await createChoir({ name: `Vis Choir ${randomUUID().slice(0, 8)}`, actorId: user.id });
+      const choir = await createChoir({ slug: uniqueSlug("choir"), name: `Vis Choir ${randomUUID().slice(0, 8)}`, actorId: user.id });
       await addChoirToPerformance(performance.id, choir.id, user.id);
 
       const draft = await createDraftRecording({ slug: uniqueSlug("vis-recording"), actorId: user.id });

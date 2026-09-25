@@ -59,9 +59,9 @@ describe("assembleEntityPageData", () => {
           slug: "requiem-premiere-st-andrews-church-2024-01-01",
           performanceDate: new Date("2024-01-01"),
           venue: { name: "St. Andrew's Church", slug: "st-andrews-church" },
-          performers: [{ artist: { name: "Jane Soloist" } }],
-          choirs: [{ choir: { name: "St. Andrew's Choir" } }],
-          conductors: [{ conductor: { name: "John Conductor" } }],
+          performers: [{ artist: { name: "Jane Soloist", slug: "jane-soloist" } }],
+          choirs: [{ choir: { name: "St. Andrew's Choir", slug: "st-andrews-choir" } }],
+          conductors: [{ conductor: { name: "John Conductor", slug: "john-conductor" } }],
         },
         { id: "p2", slug: "second-performance", performanceDate: null, venue: null, performers: [], choirs: [], conductors: [] },
       ],
@@ -73,9 +73,9 @@ describe("assembleEntityPageData", () => {
         performanceDate: new Date("2024-01-01"),
         venueName: "St. Andrew's Church",
         venueSlug: "st-andrews-church",
-        artists: ["Jane Soloist"],
-        choirs: ["St. Andrew's Choir"],
-        conductors: ["John Conductor"],
+        artists: [{ name: "Jane Soloist", slug: "jane-soloist" }],
+        choirs: [{ name: "St. Andrew's Choir", slug: "st-andrews-choir" }],
+        conductors: [{ name: "John Conductor", slug: "john-conductor" }],
       },
       {
         id: "p2",
@@ -99,25 +99,25 @@ describe("assembleEntityPageData", () => {
           slug: "performance-one",
           performanceDate: null,
           venue: { name: "St. Andrew's Church", slug: "st-andrews-church" },
-          performers: [{ artist: { name: "Jane Soloist" } }],
-          choirs: [{ choir: { name: "St. Andrew's Choir" } }],
-          conductors: [{ conductor: { name: "John Conductor" } }],
+          performers: [{ artist: { name: "Jane Soloist", slug: "jane-soloist" } }],
+          choirs: [{ choir: { name: "St. Andrew's Choir", slug: "st-andrews-choir" } }],
+          conductors: [{ conductor: { name: "John Conductor", slug: "john-conductor" } }],
         },
         {
           id: "p2",
           slug: "performance-two",
           performanceDate: null,
           venue: { name: "St. Andrew's Church", slug: "st-andrews-church" }, // same venue again — must dedupe
-          performers: [{ artist: { name: "Jane Soloist" } }], // same artist again — must dedupe
+          performers: [{ artist: { name: "Jane Soloist", slug: "jane-soloist" } }], // same artist again — must dedupe
           choirs: [],
-          conductors: [{ conductor: { name: "Second Conductor" } }],
+          conductors: [{ conductor: { name: "Second Conductor", slug: "second-conductor" } }],
         },
       ],
     });
     expect(result.relatedParticipants).toEqual({
-      artists: ["Jane Soloist"],
-      choirs: ["St. Andrew's Choir"],
-      conductors: ["John Conductor", "Second Conductor"],
+      artists: [{ name: "Jane Soloist", slug: "jane-soloist" }],
+      choirs: [{ name: "St. Andrew's Choir", slug: "st-andrews-choir" }],
+      conductors: [{ name: "John Conductor", slug: "john-conductor" }, { name: "Second Conductor", slug: "second-conductor" }],
       venues: [{ name: "St. Andrew's Church", slug: "st-andrews-church" }],
     });
   });

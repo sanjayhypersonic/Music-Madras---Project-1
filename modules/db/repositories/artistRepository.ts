@@ -1,9 +1,12 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { DuplicateEntityError, findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
+import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
+import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
 import type { Artist } from "@prisma/client";
 
 export interface CreateArtistInput {
+  slug: string;
   name: string;
   instrument?: string;
   biography?: string;
@@ -17,15 +20,24 @@ export async function createArtist(input: CreateArtistInput): Promise<Artist> {
     throw new DuplicateEntityError("Artist", duplicate);
   }
 
-  const artist = await prisma.artist.create({
-    data: {
-      name: input.name,
-      instrument: input.instrument,
-      biography: input.biography,
-      createdById: input.actorId,
-      updatedById: input.actorId,
-    },
-  });
+  let artist: Artist;
+  try {
+    artist = await prisma.artist.create({
+      data: {
+        slug: input.slug,
+        name: input.name,
+        instrument: input.instrument,
+        biography: input.biography,
+        createdById: input.actorId,
+        updatedById: input.actorId,
+      },
+    });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err, "slug")) {
+      throw new SlugConflictError(input.slug);
+    }
+    throw err;
+  }
 
   await writeAuditLog({
     actorId: input.actorId,
@@ -40,6 +52,10 @@ export async function createArtist(input: CreateArtistInput): Promise<Artist> {
 
 export function findArtistById(id: string): Promise<Artist | null> {
   return prisma.artist.findUnique({ where: { id } });
+}
+
+export function findArtistBySlug(slug: string): Promise<Artist | null> {
+  return prisma.artist.findUnique({ where: { slug } });
 }
 
 export function listActiveArtists(): Promise<Artist[]> {

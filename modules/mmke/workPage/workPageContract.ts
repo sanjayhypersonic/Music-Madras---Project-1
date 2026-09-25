@@ -20,15 +20,21 @@ export interface WorkPageProgramme {
   title: string;
 }
 
+/** Phase 6G-9: an Artist/Choir/Conductor — links to /artists|choirs|conductors/[slug], which now exist. */
+export interface WorkPageParticipant {
+  name: string;
+  slug: string;
+}
+
 export interface WorkPagePerformance {
   id: string;
   /** Phase 6G-8: links to the existing /performances/[slug] route. */
   slug: string;
   performanceDate: Date | null;
   venue: { name: string; slug: string } | null;
-  artists: string[];
-  choirs: string[];
-  conductors: string[];
+  artists: WorkPageParticipant[];
+  choirs: WorkPageParticipant[];
+  conductors: WorkPageParticipant[];
 }
 
 /** A published Recording of this Work — always links to the existing /recordings/[slug] route. */

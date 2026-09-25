@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+﻿import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
 import { can } from "../../modules/auth/policy";
@@ -78,8 +78,8 @@ async function cleanupConductor(conductorId: string) {
   await prisma.conductor.delete({ where: { id: conductorId } });
 }
 
-describe("Studio permission policy for Artist/Choir/Conductor (brief §4, cross-checked against §4/§7/§16 of 6G-4C)", () => {
-  it("CATALOGUE_WRITE is the only permission gating these writes — no new permission was introduced", () => {
+describe("Studio permission policy for Artist/Choir/Conductor (brief Â§4, cross-checked against Â§4/Â§7/Â§16 of 6G-4C)", () => {
+  it("CATALOGUE_WRITE is the only permission gating these writes â€” no new permission was introduced", () => {
     expect(can("CONTRIBUTOR", "CATALOGUE_WRITE")).toBe(false);
     expect(can("EDITOR", "CATALOGUE_WRITE")).toBe(true);
     expect(can("ADMINISTRATOR", "CATALOGUE_WRITE")).toBe(true);
@@ -105,7 +105,7 @@ describe("Artist catalogue management against a real database", () => {
     const user = await createTestUser();
     userId = user.id;
 
-    const artist = await createArtist({ name: uniqueName("QA Soloist"), instrument: "Violin", actorId: user.id });
+    const artist = await createArtist({ slug: uniqueSlug("artist"), name: uniqueName("QA Soloist"), instrument: "Violin", actorId: user.id });
     artistId = artist.id;
 
     expect(artist.instrument).toBe("Violin");
@@ -119,16 +119,16 @@ describe("Artist catalogue management against a real database", () => {
     userId = user.id;
     const name = uniqueName("Duplicate Test Artist");
 
-    const first = await createArtist({ name, actorId: user.id });
+    const first = await createArtist({ slug: uniqueSlug("artist"), name, actorId: user.id });
     artistId = first.id;
 
-    await expect(createArtist({ name: `  ${name.toUpperCase()}  `, actorId: user.id })).rejects.toThrow(DuplicateEntityError);
+    await expect(createArtist({ slug: uniqueSlug("artist"), name: `  ${name.toUpperCase()}  `, actorId: user.id })).rejects.toThrow(DuplicateEntityError);
   });
 
   it("edits an Artist's fields and audit-logs before/after", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const artist = await createArtist({ name: uniqueName("Editable Artist"), actorId: user.id });
+    const artist = await createArtist({ slug: uniqueSlug("artist"), name: uniqueName("Editable Artist"), actorId: user.id });
     artistId = artist.id;
 
     const updated = await updateArtist(artist.id, { name: "Renamed Artist", instrument: "Cello", actorId: user.id });
@@ -142,7 +142,7 @@ describe("Artist catalogue management against a real database", () => {
   it("archives and restores an Artist, audit-logging both, without deleting the record", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const artist = await createArtist({ name: uniqueName("Archivable Artist"), actorId: user.id });
+    const artist = await createArtist({ slug: uniqueSlug("artist"), name: uniqueName("Archivable Artist"), actorId: user.id });
     artistId = artist.id;
 
     const archived = await archiveArtist(artist.id, user.id);
@@ -161,7 +161,7 @@ describe("Artist catalogue management against a real database", () => {
     const user = await createTestUser();
     userId = user.id;
     const uniqueMarker = randomUUID().slice(0, 8);
-    const artist = await createArtist({ name: `Searchable ${uniqueMarker} Artist`, actorId: user.id });
+    const artist = await createArtist({ slug: uniqueSlug("artist"), name: `Searchable ${uniqueMarker} Artist`, actorId: user.id });
     artistId = artist.id;
 
     const found = await listArtistsForStudio(uniqueMarker);
@@ -192,7 +192,7 @@ describe("Choir catalogue management against a real database", () => {
     const user = await createTestUser();
     userId = user.id;
 
-    const choir = await createChoir({ name: uniqueName("QA Choir"), directorName: "Jane Director", actorId: user.id });
+    const choir = await createChoir({ slug: uniqueSlug("choir"), name: uniqueName("QA Choir"), directorName: "Jane Director", actorId: user.id });
     choirId = choir.id;
 
     expect(choir.directorName).toBe("Jane Director");
@@ -205,16 +205,16 @@ describe("Choir catalogue management against a real database", () => {
     userId = user.id;
     const name = uniqueName("Duplicate Test Choir");
 
-    const first = await createChoir({ name, actorId: user.id });
+    const first = await createChoir({ slug: uniqueSlug("choir"), name, actorId: user.id });
     choirId = first.id;
 
-    await expect(createChoir({ name: `  ${name.toUpperCase()}  `, actorId: user.id })).rejects.toThrow(DuplicateEntityError);
+    await expect(createChoir({ slug: uniqueSlug("choir"), name: `  ${name.toUpperCase()}  `, actorId: user.id })).rejects.toThrow(DuplicateEntityError);
   });
 
   it("edits a Choir's fields and audit-logs before/after", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const choir = await createChoir({ name: uniqueName("Editable Choir"), actorId: user.id });
+    const choir = await createChoir({ slug: uniqueSlug("choir"), name: uniqueName("Editable Choir"), actorId: user.id });
     choirId = choir.id;
 
     const updated = await updateChoir(choir.id, { name: "Renamed Choir", directorName: "New Director", actorId: user.id });
@@ -228,7 +228,7 @@ describe("Choir catalogue management against a real database", () => {
   it("archives and restores a Choir, audit-logging both, without deleting the record", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const choir = await createChoir({ name: uniqueName("Archivable Choir"), actorId: user.id });
+    const choir = await createChoir({ slug: uniqueSlug("choir"), name: uniqueName("Archivable Choir"), actorId: user.id });
     choirId = choir.id;
 
     const archived = await archiveChoir(choir.id, user.id);
@@ -247,7 +247,7 @@ describe("Choir catalogue management against a real database", () => {
     const user = await createTestUser();
     userId = user.id;
     const uniqueMarker = randomUUID().slice(0, 8);
-    const choir = await createChoir({ name: `Searchable ${uniqueMarker} Choir`, actorId: user.id });
+    const choir = await createChoir({ slug: uniqueSlug("choir"), name: `Searchable ${uniqueMarker} Choir`, actorId: user.id });
     choirId = choir.id;
 
     const found = await listChoirsForStudio(uniqueMarker);
@@ -278,7 +278,7 @@ describe("Conductor catalogue management against a real database", () => {
     const user = await createTestUser();
     userId = user.id;
 
-    const conductor = await createConductor({ name: uniqueName("QA Conductor"), biography: "A test biography.", actorId: user.id });
+    const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: uniqueName("QA Conductor"), biography: "A test biography.", actorId: user.id });
     conductorId = conductor.id;
 
     expect(conductor.biography).toBe("A test biography.");
@@ -293,16 +293,16 @@ describe("Conductor catalogue management against a real database", () => {
     userId = user.id;
     const name = uniqueName("Duplicate Test Conductor");
 
-    const first = await createConductor({ name, actorId: user.id });
+    const first = await createConductor({ slug: uniqueSlug("conductor"), name, actorId: user.id });
     conductorId = first.id;
 
-    await expect(createConductor({ name: `  ${name.toUpperCase()}  `, actorId: user.id })).rejects.toThrow(DuplicateEntityError);
+    await expect(createConductor({ slug: uniqueSlug("conductor"), name: `  ${name.toUpperCase()}  `, actorId: user.id })).rejects.toThrow(DuplicateEntityError);
   });
 
   it("edits a Conductor's fields and audit-logs before/after", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const conductor = await createConductor({ name: uniqueName("Editable Conductor"), actorId: user.id });
+    const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: uniqueName("Editable Conductor"), actorId: user.id });
     conductorId = conductor.id;
 
     const updated = await updateConductor(conductor.id, { name: "Renamed Conductor", biography: "New bio.", actorId: user.id });
@@ -318,7 +318,7 @@ describe("Conductor catalogue management against a real database", () => {
   it("archives and restores a Conductor, audit-logging both, without deleting the record", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const conductor = await createConductor({ name: uniqueName("Archivable Conductor"), actorId: user.id });
+    const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: uniqueName("Archivable Conductor"), actorId: user.id });
     conductorId = conductor.id;
 
     const archived = await archiveConductor(conductor.id, user.id);
@@ -341,7 +341,7 @@ describe("Conductor catalogue management against a real database", () => {
     const user = await createTestUser();
     userId = user.id;
     const uniqueMarker = randomUUID().slice(0, 8);
-    const conductor = await createConductor({ name: `Searchable ${uniqueMarker} Conductor`, actorId: user.id });
+    const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: `Searchable ${uniqueMarker} Conductor`, actorId: user.id });
     conductorId = conductor.id;
 
     const found = await listConductorsForStudio(uniqueMarker);
@@ -353,7 +353,7 @@ describe("Conductor catalogue management against a real database", () => {
   });
 });
 
-describe("Performance relationship preservation through archive/restore (brief §15/§22)", () => {
+describe("Performance relationship preservation through archive/restore (brief Â§15/Â§22)", () => {
   let userId: string | null = null;
   let composerId: string | null = null;
   let workId: string | null = null;
@@ -412,7 +412,7 @@ describe("Performance relationship preservation through archive/restore (brief �
     const user = await createTestUser();
     userId = user.id;
 
-    // A minimal Performance fixture — just enough to attach participants to, not a full Recording chain.
+    // A minimal Performance fixture â€” just enough to attach participants to, not a full Recording chain.
     const composer = await createComposer({ slug: uniqueSlug("composer"), name: uniqueName("Fixture Composer"), actorId: user.id });
     composerId = composer.id;
     const work = await createMusicalWork({ slug: uniqueSlug("work"), title: "Fixture Work", composerId: composer.id, actorId: user.id });
@@ -425,11 +425,11 @@ describe("Performance relationship preservation through archive/restore (brief �
     const performance = await createPerformance({ programmeId: programme.id, venueId: venue.id, actorId: user.id });
     performanceId = performance.id;
 
-    const artist = await createArtist({ name: uniqueName("Relationship Artist"), actorId: user.id });
+    const artist = await createArtist({ slug: uniqueSlug("artist"), name: uniqueName("Relationship Artist"), actorId: user.id });
     artistId = artist.id;
-    const choir = await createChoir({ name: uniqueName("Relationship Choir"), actorId: user.id });
+    const choir = await createChoir({ slug: uniqueSlug("choir"), name: uniqueName("Relationship Choir"), actorId: user.id });
     choirId = choir.id;
-    const conductor = await createConductor({ name: uniqueName("Relationship Conductor"), actorId: user.id });
+    const conductor = await createConductor({ slug: uniqueSlug("conductor"), name: uniqueName("Relationship Conductor"), actorId: user.id });
     conductorId = conductor.id;
 
     await addPerformerToPerformance(performance.id, artist.id, "Soloist", user.id);

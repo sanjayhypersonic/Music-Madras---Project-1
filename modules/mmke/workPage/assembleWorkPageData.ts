@@ -13,9 +13,9 @@ interface RawPerformance {
   slug: string;
   performanceDate: Date | null;
   venue: { name: string; slug: string } | null;
-  performers: { artist: { name: string } }[];
-  choirs: { choir: { name: string } }[];
-  conductors: { conductor: { name: string } }[];
+  performers: { artist: { name: string; slug: string } }[];
+  choirs: { choir: { name: string; slug: string } }[];
+  conductors: { conductor: { name: string; slug: string } }[];
 }
 
 interface RawProgramme {
@@ -62,15 +62,19 @@ function toProgramme(programme: RawProgramme) {
   return { id: programme.id, slug: programme.slug, title: programme.title };
 }
 
+function toParticipant(participant: { name: string; slug: string }) {
+  return { name: participant.name, slug: participant.slug };
+}
+
 function toPerformance(performance: RawPerformance): WorkPagePerformance {
   return {
     id: performance.id,
     slug: performance.slug,
     performanceDate: performance.performanceDate,
     venue: performance.venue,
-    artists: performance.performers.map((link) => link.artist.name),
-    choirs: performance.choirs.map((link) => link.choir.name),
-    conductors: performance.conductors.map((link) => link.conductor.name),
+    artists: performance.performers.map((link) => toParticipant(link.artist)),
+    choirs: performance.choirs.map((link) => toParticipant(link.choir)),
+    conductors: performance.conductors.map((link) => toParticipant(link.conductor)),
   };
 }
 

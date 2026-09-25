@@ -42,9 +42,9 @@ interface RawPerformance {
   slug: string;
   performanceDate: Date | null;
   venue: { id: string; slug: string; name: string; organisation: { id: string; name: string } | null } | null;
-  performers: { artist: { id: string; name: string }; role: string | null }[];
-  choirs: { choir: { id: string; name: string } }[];
-  conductors: { conductor: { id: string; name: string } }[];
+  performers: { artist: { id: string; slug: string; name: string }; role: string | null }[];
+  choirs: { choir: { id: string; slug: string; name: string } }[];
+  conductors: { conductor: { id: string; slug: string; name: string } }[];
 }
 
 interface RawVideo {
@@ -102,9 +102,9 @@ function toPerformance(performance: RawPerformance | null): RecordingPagePerform
     slug: performance.slug,
     performanceDate: performance.performanceDate,
     venue: performance.venue,
-    artists: performance.performers.map((link) => ({ id: link.artist.id, name: link.artist.name, role: link.role })),
-    choirs: performance.choirs.map((link) => link.choir),
-    conductors: performance.conductors.map((link) => link.conductor),
+    artists: performance.performers.map((link) => ({ id: link.artist.id, slug: link.artist.slug, name: link.artist.name, role: link.role })),
+    choirs: performance.choirs.map((link) => ({ id: link.choir.id, slug: link.choir.slug, name: link.choir.name })),
+    conductors: performance.conductors.map((link) => ({ id: link.conductor.id, slug: link.conductor.slug, name: link.conductor.name })),
   };
 }
 

@@ -157,14 +157,18 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
               recording.performance.conductors.length > 0) && (
               <ul className="museum-pathways">
                 {recording.performance.conductors.map((conductor) => (
-                  <li key={`conductor-${conductor.id}`}>{conductor.name} · Conductor</li>
+                  <li key={`conductor-${conductor.id}`}>
+                    <Link href={`/conductors/${conductor.slug}`}>{conductor.name}</Link> · Conductor
+                  </li>
                 ))}
                 {recording.performance.choirs.map((choir) => (
-                  <li key={`choir-${choir.id}`}>{choir.name}</li>
+                  <li key={`choir-${choir.id}`}>
+                    <Link href={`/choirs/${choir.slug}`}>{choir.name}</Link>
+                  </li>
                 ))}
                 {recording.performance.artists.map((artist) => (
                   <li key={`artist-${artist.id}`}>
-                    {artist.name}
+                    <Link href={`/artists/${artist.slug}`}>{artist.name}</Link>
                     {artist.role ? ` · ${artist.role}` : ""}
                   </li>
                 ))}
