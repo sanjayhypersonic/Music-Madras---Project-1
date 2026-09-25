@@ -6,7 +6,6 @@ import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBr
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
-import { RelatedItemList } from "../../../../components/museum/entity/RelatedItemList";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 import type { PerformancePageData } from "../../../../modules/mmke/performancePage/performancePageContract";
 
@@ -176,7 +175,15 @@ export default async function PerformancePage({ params }: { params: Promise<{ sl
 
       {performance.collections.length > 0 && (
         <EntitySection id="collections" heading="Collections">
-          <RelatedItemList items={performance.collections.map((c) => ({ id: c.id, title: c.title }))} asCards />
+          <ul className="museum-category-grid">
+            {performance.collections.map((c) => (
+              <li key={c.id} className="museum-category-card">
+                <h3>
+                  <Link href={`/collections/${c.slug}`}>{c.title}</Link>
+                </h3>
+              </li>
+            ))}
+          </ul>
         </EntitySection>
       )}
 

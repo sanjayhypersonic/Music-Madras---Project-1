@@ -6,7 +6,6 @@ import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBr
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
-import { RelatedItemList } from "../../../../components/museum/entity/RelatedItemList";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 import type { WorkPageData } from "../../../../modules/mmke/workPage/workPageContract";
 
@@ -177,7 +176,15 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
 
       {work.collections.length > 0 && (
         <EntitySection id="collections" heading="Collections">
-          <RelatedItemList items={work.collections.map((c) => ({ id: c.id, title: c.title }))} asCards />
+          <ul className="museum-category-grid">
+            {work.collections.map((c) => (
+              <li key={c.id} className="museum-category-card">
+                <h3>
+                  <Link href={`/collections/${c.slug}`}>{c.title}</Link>
+                </h3>
+              </li>
+            ))}
+          </ul>
         </EntitySection>
       )}
 

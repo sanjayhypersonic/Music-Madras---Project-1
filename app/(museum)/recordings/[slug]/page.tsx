@@ -8,7 +8,6 @@ import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBr
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
-import { RelatedItemList } from "../../../../components/museum/entity/RelatedItemList";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 
 // Phase 6G-5B — the first public page for a canonical MusicMadras
@@ -190,9 +189,15 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
 
       {recording.collections.length > 0 && (
         <EntitySection id="collections" heading="Collections">
-          {/* Collection identity only — no public /collections/[slug] route exists yet, so this renders
-              as non-linked cards rather than a fake or broken URL, matching Composer page's own pattern. */}
-          <RelatedItemList items={recording.collections.map((c) => ({ id: c.id, title: c.title }))} asCards />
+          <ul className="museum-category-grid">
+            {recording.collections.map((c) => (
+              <li key={c.id} className="museum-category-card">
+                <h3>
+                  <Link href={`/collections/${c.slug}`}>{c.title}</Link>
+                </h3>
+              </li>
+            ))}
+          </ul>
         </EntitySection>
       )}
 

@@ -14,6 +14,8 @@ import { assembleProgrammePageData } from "../../mmke/programmePage/assembleProg
 import type { ProgrammePageData } from "../../mmke/programmePage/programmePageContract";
 import { assemblePerformancePageData } from "../../mmke/performancePage/assemblePerformancePageData";
 import type { PerformancePageData } from "../../mmke/performancePage/performancePageContract";
+import { assembleCollectionPageData } from "../../mmke/collectionPage/assembleCollectionPageData";
+import type { CollectionPageData } from "../../mmke/collectionPage/collectionPageContract";
 import type {
   Artist,
   Choir,
@@ -634,5 +636,124 @@ export async function getPublicRecordingPageData(slug: string): Promise<Recordin
       : null,
     videos,
     collections,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6G-10 — Collection gets its own bespoke assembly (CollectionPageData),
+// for the same reason Programme/Performance/Recording did: a Collection is
+// built around its own canonical, editorially-ordered membership
+// (CollectionRecording/CollectionWork), never reached via a Performance —
+// so resolveRelatedContent's Performance-rooted traversal has no entry
+// point for it. This is the first Collection-rooted traversal in the
+// codebase; every other place Collection appears (Composer, Venue, Work,
+// Programme, Performance, Artist, Choir, Conductor, Recording pages) only
+// ever reaches it as a *leaf* via findPublicCollectionsByIds. Recording
+// visibility within a Collection is re-checked independently via
+// isRecordingPublished (never a second predicate) — a Recording being
+// linked to a published Collection does not itself make the Recording
+// public, and vice versa.
+// ---------------------------------------------------------------------------
+
+/**
+ * The public /collections/[slug] page's sole data source. Returns null
+ * for a nonexistent, unpublished, or archived Collection (never
+ * distinguishes the three, same convention as every other public
+ * entity-page function in this file).
+ */
+export async function getPublicCollectionPageData(slug: string): Promise<CollectionPageData | null> {
+  const collection = await prisma.collection.findUnique({
+    where: { slug },
+    include: {
+      recordingLinks: {
+        orderBy: { order: "asc" },
+        include: {
+          recording: {
+            include: {
+              currentPublishedRevision: {
+                include: {
+                  works: { include: { musicalWork: { include: { composer: true } } } },
+                  mediaResources: true,
+                  performance: {
+                    include: {
+                      programme: true,
+                      venue: true,
+                      performers: { include: { artist: true } },
+                      choirs: { include: { choir: true } },
+                      conductors: { include: { conductor: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      workLinks: {
+        orderBy: { order: "asc" },
+        include: { musicalWork: { include: { composer: true } } },
+      },
+    },
+  });
+
+  if (!collection || collection.status !== "PUBLISHED" || collection.archivedAt !== null) return null;
+
+  const publishedRecordingLinks = collection.recordingLinks.filter(
+    (link) => link.recording.currentPublishedRevision !== null && isRecordingPublished(link.recording)
+  );
+
+  // Archived Works are never publicly shown, same convention as every
+  // other public page's catalogue-visibility rule.
+  const activeWorkLinks = collection.workLinks.filter((link) => link.musicalWork.archivedAt === null);
+
+  const candidateYouTubeVideoIds = Array.from(
+    new Set(
+      publishedRecordingLinks.flatMap((link) =>
+        (link.recording.currentPublishedRevision?.mediaResources ?? [])
+          .filter((media) => media.provider === "YOUTUBE" && media.youtubeVideoId !== null)
+          .map((media) => media.youtubeVideoId as string)
+      )
+    )
+  );
+  const publicVideoPages = await findPublicVideoPagesByYouTubeVideoIds(candidateYouTubeVideoIds);
+  const videos = dedupeById(publicVideoPages.map((result) => ({ id: result.youtubeVideo.id, ...result })));
+
+  return assembleCollectionPageData({
+    id: collection.id,
+    slug: collection.slug,
+    title: collection.title,
+    description: collection.description,
+    recordings: publishedRecordingLinks.map((link) => {
+      const revision = link.recording.currentPublishedRevision!;
+      return {
+        id: link.recording.id,
+        slug: link.recording.slug,
+        title: revision.title,
+        order: link.order,
+        performance: revision.performance
+          ? {
+              id: revision.performance.id,
+              slug: revision.performance.slug,
+              performanceDate: revision.performance.performanceDate,
+              programme: revision.performance.programme
+                ? {
+                    id: revision.performance.programme.id,
+                    slug: revision.performance.programme.slug,
+                    title: revision.performance.programme.title,
+                  }
+                : null,
+              venue: revision.performance.venue
+                ? { id: revision.performance.venue.id, slug: revision.performance.venue.slug, name: revision.performance.venue.name }
+                : null,
+              performers: revision.performance.performers,
+              choirs: revision.performance.choirs,
+              conductors: revision.performance.conductors,
+            }
+          : null,
+        works: revision.works.map((link) => link.musicalWork),
+      };
+    }),
+    works: activeWorkLinks.map((link) => ({ order: link.order, musicalWork: link.musicalWork })),
+    videos,
   });
 }

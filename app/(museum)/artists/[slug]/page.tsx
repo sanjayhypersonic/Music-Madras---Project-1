@@ -6,7 +6,6 @@ import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBr
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
-import { RelatedItemList } from "../../../../components/museum/entity/RelatedItemList";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 
 // Phase 6G-9 — the public /artists/[slug] page, completing the
@@ -154,7 +153,15 @@ export default async function ArtistPage({ params }: { params: Promise<{ slug: s
 
       {artist.relatedCollections.length > 0 && (
         <EntitySection id="collections" heading="Collections">
-          <RelatedItemList items={artist.relatedCollections.map((c) => ({ id: c.id, title: c.title }))} asCards />
+          <ul className="museum-category-grid">
+            {artist.relatedCollections.map((c) => (
+              <li key={c.id} className="museum-category-card">
+                <h3>
+                  <Link href={`/collections/${c.slug}`}>{c.title}</Link>
+                </h3>
+              </li>
+            ))}
+          </ul>
         </EntitySection>
       )}
 

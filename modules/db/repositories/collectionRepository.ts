@@ -3,6 +3,7 @@ import { writeAuditLog } from "../../audit/writeAuditLog";
 import { computeNextOrder, reorderProgrammeItems } from "../../mmke/programme/reorderProgrammeItems";
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
 import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
+import type { CollectionIndexPage } from "../../mmke/collectionPage/collectionPageContract";
 import type { Collection } from "@prisma/client";
 
 // Collections (brief §8): database-driven curated groupings. No hardcoded
@@ -343,6 +344,51 @@ export function findPublicCollectionsByIds(ids: string[]): Promise<Collection[]>
     where: { id: { in: ids }, status: "PUBLISHED", archivedAt: null },
     orderBy: { title: "asc" },
   });
+}
+
+export const COLLECTION_INDEX_PAGE_SIZE = 20;
+
+function clampCollectionIndexPage(page: number): number {
+  return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+}
+
+/**
+ * Phase 6G-10: the public /collections index's sole data source — a
+ * simple published-only, non-archived, paginated browse listing. This is
+ * deliberately NOT the /archive search system (brief: "do not create a
+ * second generic search system for Collections") — no query parameter,
+ * no full-text matching, just the same visibility predicate
+ * findPublicCollectionsByIds already uses, with pagination and cheap
+ * membership counts for display.
+ */
+export async function listPublicCollectionsPage(page = 1, pageSize = COLLECTION_INDEX_PAGE_SIZE): Promise<CollectionIndexPage> {
+  const currentPage = clampCollectionIndexPage(page);
+  const where = { status: "PUBLISHED" as const, archivedAt: null };
+
+  const [rows, total] = await Promise.all([
+    prisma.collection.findMany({
+      where,
+      include: { _count: { select: { recordingLinks: true, workLinks: true } } },
+      orderBy: { title: "asc" },
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.collection.count({ where }),
+  ]);
+
+  return {
+    items: rows.map((collection) => ({
+      id: collection.id,
+      slug: collection.slug,
+      title: collection.title,
+      description: collection.description,
+      recordingCount: collection._count.recordingLinks,
+      workCount: collection._count.workLinks,
+    })),
+    total,
+    page: currentPage,
+    pageSize,
+  };
 }
 
 /** Studio-facing list (Phase 4): drafts too, not just what the Museum shows. */

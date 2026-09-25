@@ -7,7 +7,6 @@ import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBr
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
-import { RelatedItemList } from "../../../../components/museum/entity/RelatedItemList";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 
 // Phase 6G-4B — the first real public Archive entity page, proving the
@@ -15,10 +14,9 @@ import { RecordingCard } from "../../../../components/museum/RecordingCard";
 // -> EntityPageData contract -> Museum presentation. No Prisma import
 // here (brief §9) — getComposerEntityPageData is the only data access.
 //
-// Phase 6G-6: Works, Recordings and Venues now have their own public
-// routes, so this page links to them directly instead of using the
-// non-linked RelatedItemList placeholder — Artists/Choirs/Conductors
-// still have no public route, so they remain plain text.
+// Phase 6G-6/6G-9/6G-10: Works, Recordings, Venues, Artists, Choirs,
+// Conductors, and Collections all now have their own public routes, so
+// this page links to all of them directly.
 
 const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
 
@@ -203,7 +201,15 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
 
       {composer.relatedCollections.length > 0 && (
         <EntitySection id="collections" heading="Collections">
-          <RelatedItemList items={composer.relatedCollections.map((c) => ({ id: c.id, title: c.title }))} asCards />
+          <ul className="museum-category-grid">
+            {composer.relatedCollections.map((c) => (
+              <li key={c.id} className="museum-category-card">
+                <h3>
+                  <Link href={`/collections/${c.slug}`}>{c.title}</Link>
+                </h3>
+              </li>
+            ))}
+          </ul>
         </EntitySection>
       )}
 
