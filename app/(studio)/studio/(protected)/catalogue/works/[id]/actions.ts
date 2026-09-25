@@ -10,6 +10,8 @@ import {
   restoreMusicalWork,
   updateMusicalWork,
 } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
+import { attachSourceToEntity, detachSourceFromEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
+import { attachRightsInformationToEntity, detachRightsInformationFromEntity } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
 
 function errorRedirect(workId: string, message: string): never {
   redirect(`/studio/catalogue/works/${workId}?error=${encodeURIComponent(message)}`);
@@ -72,5 +74,63 @@ export async function restoreWorkAction(workId: string) {
   }
 
   await restoreMusicalWork(workId, session!.user.id);
+  redirect(`/studio/catalogue/works/${workId}`);
+}
+
+export async function attachSourceAction(workId: string, formData: FormData) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(workId, "You do not have permission to edit this musical work.");
+  }
+
+  const sourceId = String(formData.get("sourceId") ?? "");
+  if (!sourceId) {
+    errorRedirect(workId, "Select a source to attach.");
+  }
+
+  try {
+    await attachSourceToEntity({ entityType: "WORK", entityId: workId, sourceId, actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(workId, err instanceof Error ? err.message : "Could not attach the source.");
+  }
+  redirect(`/studio/catalogue/works/${workId}`);
+}
+
+export async function detachSourceAction(workId: string, sourceId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(workId, "You do not have permission to edit this musical work.");
+  }
+
+  await detachSourceFromEntity("WORK", workId, sourceId, session!.user.id);
+  redirect(`/studio/catalogue/works/${workId}`);
+}
+
+export async function attachRightsAction(workId: string, formData: FormData) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(workId, "You do not have permission to edit this musical work.");
+  }
+
+  const rightsInformationId = String(formData.get("rightsInformationId") ?? "");
+  if (!rightsInformationId) {
+    errorRedirect(workId, "Select a rights information record to attach.");
+  }
+
+  try {
+    await attachRightsInformationToEntity({ entityType: "WORK", entityId: workId, rightsInformationId, actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(workId, err instanceof Error ? err.message : "Could not attach the rights information.");
+  }
+  redirect(`/studio/catalogue/works/${workId}`);
+}
+
+export async function detachRightsAction(workId: string, rightsInformationId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(workId, "You do not have permission to edit this musical work.");
+  }
+
+  await detachRightsInformationFromEntity("WORK", workId, rightsInformationId, session!.user.id);
   redirect(`/studio/catalogue/works/${workId}`);
 }

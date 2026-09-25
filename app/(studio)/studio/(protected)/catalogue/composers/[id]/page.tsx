@@ -4,7 +4,17 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { findComposerById } from "../../../../../../../modules/db/repositories/composerRepository";
 import { getComposerRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
-import { archiveComposerAction, restoreComposerAction, updateComposerAction } from "./actions";
+import { listSources, listSourcesForEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
+import { listRightsForEntity, listRightsInformation } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
+import {
+  archiveComposerAction,
+  attachRightsAction,
+  attachSourceAction,
+  detachRightsAction,
+  detachSourceAction,
+  restoreComposerAction,
+  updateComposerAction,
+} from "./actions";
 
 // Phase 6G-4C — the Composer editorial management view. Distinct from
 // the public /composers/[slug] page (brief §11: "do not reproduce the
@@ -32,6 +42,14 @@ export default async function ComposerDetailPage({
 
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
   const related = await getComposerRelatedContent(composer.id);
+  const [allSources, attachedSources, allRights, attachedRights] = await Promise.all([
+    listSources(),
+    listSourcesForEntity("COMPOSER", composer.id),
+    listRightsInformation(),
+    listRightsForEntity("COMPOSER", composer.id),
+  ]);
+  const attachableSources = allSources.filter((s) => !attachedSources.some((l) => l.sourceId === s.id));
+  const attachableRights = allRights.filter((r) => !attachedRights.some((l) => l.rightsInformationId === r.id));
 
   return (
     <div>
@@ -99,6 +117,66 @@ export default async function ComposerDetailPage({
             </form>
           )}
         </div>
+      )}
+
+      <h2>Sources ({attachedSources.length})</h2>
+      {attachedSources.length === 0 ? (
+        <p>No sources have been attached to this composer yet.</p>
+      ) : (
+        <ul>
+          {attachedSources.map((link) => (
+            <li key={link.sourceId}>
+              {link.source.title ?? link.source.url ?? "Untitled Source"}
+              {canWrite && (
+                <form action={detachSourceAction.bind(null, composer.id, link.sourceId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableSources.length > 0 && (
+        <form action={attachSourceAction.bind(null, composer.id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="sourceId" required style={{ flex: 1 }}>
+            {attachableSources.map((source) => (
+              <option key={source.id} value={source.id}>
+                {source.title ?? source.url ?? "Untitled Source"}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach source</button>
+        </form>
+      )}
+
+      <h2>Rights Information ({attachedRights.length})</h2>
+      {attachedRights.length === 0 ? (
+        <p>No rights information has been attached to this composer yet.</p>
+      ) : (
+        <ul>
+          {attachedRights.map((link) => (
+            <li key={link.rightsInformationId}>
+              {link.rightsInformation.holder ?? link.rightsInformation.licenseType ?? "Untitled Rights Information"}
+              {canWrite && (
+                <form action={detachRightsAction.bind(null, composer.id, link.rightsInformationId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableRights.length > 0 && (
+        <form action={attachRightsAction.bind(null, composer.id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="rightsInformationId" required style={{ flex: 1 }}>
+            {attachableRights.map((rights) => (
+              <option key={rights.id} value={rights.id}>
+                {rights.holder ?? rights.licenseType ?? "Untitled Rights Information"}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach rights information</button>
+        </form>
       )}
 
       <h2>Relationships</h2>

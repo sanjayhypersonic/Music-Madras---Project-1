@@ -4,7 +4,17 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { findRecordingById, getCanonicalContextForRevision } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { listCollections } from "../../../../../../../modules/db/repositories/collectionRepository";
 import { listActiveOccasions, listOccasionsForEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
-import { addToCollectionAction, attachOccasionAction, detachOccasionAction } from "./actions";
+import { listSources, listSourcesForEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
+import { listRightsForEntity, listRightsInformation } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
+import {
+  addToCollectionAction,
+  attachOccasionAction,
+  attachRightsAction,
+  attachSourceAction,
+  detachOccasionAction,
+  detachRightsAction,
+  detachSourceAction,
+} from "./actions";
 
 export default async function RelationshipsStepPage({
   params,
@@ -32,6 +42,14 @@ export default async function RelationshipsStepPage({
   const attachableOccasions = activeOccasions.filter(
     (occasion) => !attachedOccasions.some((link) => link.occasionId === occasion.id)
   );
+  const [allSources, attachedSources, allRights, attachedRights] = await Promise.all([
+    listSources(),
+    listSourcesForEntity("RECORDING", recording.id),
+    listRightsInformation(),
+    listRightsForEntity("RECORDING", recording.id),
+  ]);
+  const attachableSources = allSources.filter((s) => !attachedSources.some((l) => l.sourceId === s.id));
+  const attachableRights = allRights.filter((r) => !attachedRights.some((l) => l.rightsInformationId === r.id));
 
   return (
     <div>
@@ -102,6 +120,66 @@ export default async function RelationshipsStepPage({
         </form>
       )}
       {activeOccasions.length === 0 && <p>No occasions exist yet.</p>}
+
+      <h3>Sources</h3>
+      {attachedSources.length === 0 ? (
+        <p>No sources have been attached to this recording yet.</p>
+      ) : (
+        <ul>
+          {attachedSources.map((link) => (
+            <li key={link.sourceId}>
+              {link.source.title ?? link.source.url ?? "Untitled Source"}
+              {canWrite && (
+                <form action={detachSourceAction.bind(null, id, link.sourceId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableSources.length > 0 && (
+        <form action={attachSourceAction.bind(null, id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="sourceId" required style={{ flex: 1 }}>
+            {attachableSources.map((source) => (
+              <option key={source.id} value={source.id}>
+                {source.title ?? source.url ?? "Untitled Source"}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach source</button>
+        </form>
+      )}
+
+      <h3>Rights Information</h3>
+      {attachedRights.length === 0 ? (
+        <p>No rights information has been attached to this recording yet.</p>
+      ) : (
+        <ul>
+          {attachedRights.map((link) => (
+            <li key={link.rightsInformationId}>
+              {link.rightsInformation.holder ?? link.rightsInformation.licenseType ?? "Untitled Rights Information"}
+              {canWrite && (
+                <form action={detachRightsAction.bind(null, id, link.rightsInformationId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableRights.length > 0 && (
+        <form action={attachRightsAction.bind(null, id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="rightsInformationId" required style={{ flex: 1 }}>
+            {attachableRights.map((rights) => (
+              <option key={rights.id} value={rights.id}>
+                {rights.holder ?? rights.licenseType ?? "Untitled Rights Information"}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach rights information</button>
+        </form>
+      )}
     </div>
   );
 }

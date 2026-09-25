@@ -4,7 +4,17 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { listActiveComposers, findComposerById } from "../../../../../../../modules/db/repositories/composerRepository";
 import { findMusicalWorkDetailForStudio } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
-import { archiveWorkAction, restoreWorkAction, updateWorkAction } from "./actions";
+import { listSources, listSourcesForEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
+import { listRightsForEntity, listRightsInformation } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
+import {
+  archiveWorkAction,
+  attachRightsAction,
+  attachSourceAction,
+  detachRightsAction,
+  detachSourceAction,
+  restoreWorkAction,
+  updateWorkAction,
+} from "./actions";
 
 // Phase 6G-4C — the Musical Work editorial management view. No public
 // /works/[slug] route exists yet (deliberately deferred, per 6G-4A/4B),
@@ -36,6 +46,14 @@ export default async function MusicalWorkDetailPage({
   // composer doesn't silently reassign it to whatever is first in the list.
   const currentComposerStillActive = composers.some((c) => c.id === work.composerId);
   const currentComposer = currentComposerStillActive ? null : await findComposerById(work.composerId);
+  const [allSources, attachedSources, allRights, attachedRights] = await Promise.all([
+    listSources(),
+    listSourcesForEntity("WORK", work.id),
+    listRightsInformation(),
+    listRightsForEntity("WORK", work.id),
+  ]);
+  const attachableSources = allSources.filter((s) => !attachedSources.some((l) => l.sourceId === s.id));
+  const attachableRights = allRights.filter((r) => !attachedRights.some((l) => l.rightsInformationId === r.id));
 
   return (
     <div>
@@ -110,6 +128,66 @@ export default async function MusicalWorkDetailPage({
             </form>
           )}
         </div>
+      )}
+
+      <h2>Sources ({attachedSources.length})</h2>
+      {attachedSources.length === 0 ? (
+        <p>No sources have been attached to this work yet.</p>
+      ) : (
+        <ul>
+          {attachedSources.map((link) => (
+            <li key={link.sourceId}>
+              {link.source.title ?? link.source.url ?? "Untitled Source"}
+              {canWrite && (
+                <form action={detachSourceAction.bind(null, work.id, link.sourceId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableSources.length > 0 && (
+        <form action={attachSourceAction.bind(null, work.id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="sourceId" required style={{ flex: 1 }}>
+            {attachableSources.map((source) => (
+              <option key={source.id} value={source.id}>
+                {source.title ?? source.url ?? "Untitled Source"}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach source</button>
+        </form>
+      )}
+
+      <h2>Rights Information ({attachedRights.length})</h2>
+      {attachedRights.length === 0 ? (
+        <p>No rights information has been attached to this work yet.</p>
+      ) : (
+        <ul>
+          {attachedRights.map((link) => (
+            <li key={link.rightsInformationId}>
+              {link.rightsInformation.holder ?? link.rightsInformation.licenseType ?? "Untitled Rights Information"}
+              {canWrite && (
+                <form action={detachRightsAction.bind(null, work.id, link.rightsInformationId)} style={{ display: "inline" }}>
+                  <button type="submit">Remove</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canWrite && attachableRights.length > 0 && (
+        <form action={attachRightsAction.bind(null, work.id)} style={{ display: "flex", gap: "0.5rem", maxWidth: "28rem" }}>
+          <select name="rightsInformationId" required style={{ flex: 1 }}>
+            {attachableRights.map((rights) => (
+              <option key={rights.id} value={rights.id}>
+                {rights.holder ?? rights.licenseType ?? "Untitled Rights Information"}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Attach rights information</button>
+        </form>
       )}
 
       <h2>Relationships</h2>
