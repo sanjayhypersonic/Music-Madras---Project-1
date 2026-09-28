@@ -16,6 +16,11 @@ import { assemblePerformancePageData } from "../../mmke/performancePage/assemble
 import type { PerformancePageData } from "../../mmke/performancePage/performancePageContract";
 import { assembleCollectionPageData } from "../../mmke/collectionPage/assembleCollectionPageData";
 import type { CollectionPageData } from "../../mmke/collectionPage/collectionPageContract";
+import { assembleOrganisationPageData } from "../../mmke/organisationPage/assembleOrganisationPageData";
+import type { OrganisationPageData } from "../../mmke/organisationPage/organisationPageContract";
+import { listOccasionsForEntity } from "./occasionRepository";
+import { listSourcesForEntity } from "./sourceRepository";
+import { listRightsForEntity } from "./rightsInformationRepository";
 import type {
   Artist,
   Choir,
@@ -312,7 +317,7 @@ export async function getVenueEntityPageData(slug: string): Promise<EntityPageDa
       address: venue.address,
       city: venue.city,
       country: venue.country,
-      organisation: venue.organisation ? { id: venue.organisation.id, name: venue.organisation.name } : null,
+      organisation: venue.organisation ? { id: venue.organisation.id, slug: venue.organisation.slug, name: venue.organisation.name } : null,
     },
     works: worksPerformedHere.map((work) => ({ id: work.id, slug: work.slug, title: work.title })),
     composers: composersPerformedHere.map((composer) => ({ id: composer.id, slug: composer.slug, name: composer.name })),
@@ -540,7 +545,7 @@ export async function getPublicPerformancePageData(slug: string): Promise<Perfor
       slug: performance.venue.slug,
       name: performance.venue.name,
       organisation: performance.venue.organisation
-        ? { id: performance.venue.organisation.id, name: performance.venue.organisation.name }
+        ? { id: performance.venue.organisation.id, slug: performance.venue.organisation.slug, name: performance.venue.organisation.name }
         : null,
     },
     performers: performance.performers,
@@ -755,5 +760,88 @@ export async function getPublicCollectionPageData(slug: string): Promise<Collect
     }),
     works: activeWorkLinks.map((link) => ({ order: link.order, musicalWork: link.musicalWork })),
     videos,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6G-14 — Organisation gets its own bespoke root-resolver, mirroring
+// Collection/Recording/Work/Programme/Performance: Organisation's shape
+// (a direct list of its own Venues, plus content derived transitively
+// through those venues' Performances) doesn't fit the generic
+// EntityPageData contract, which has no slot for "my own Venues" as a
+// top-level list. The ONLY canonical relationship Organisation has is
+// Venue.organisationId (confirmed in the Phase 6G-14 preflight) — every
+// other section here is derived by walking Organisation -> Venue ->
+// Performance -> Programme/Recording/Collection, reusing the exact same
+// resolveRelatedContent core every other entity page already uses, never
+// a second, independently-invented traversal.
+// ---------------------------------------------------------------------------
+
+export async function getPublicOrganisationPageData(slug: string): Promise<OrganisationPageData | null> {
+  const organisation = await prisma.organisation.findUnique({
+    where: { slug },
+    include: { venues: { where: { archivedAt: null }, orderBy: { name: "asc" } } },
+  });
+  if (!organisation || organisation.archivedAt !== null) return null;
+
+  const venueIds = organisation.venues.map((v) => v.id);
+  const performanceRows =
+    venueIds.length > 0
+      ? await prisma.performance.findMany({ where: { venueId: { in: venueIds }, archivedAt: null }, select: { id: true } })
+      : [];
+
+  const content = await resolveRelatedContent({ performanceIds: performanceRows.map((p) => p.id) });
+
+  // Occasions: aggregated across this Organisation's own derived
+  // Performances/Programmes/Recordings/Collections' existing
+  // EntityOccasion attachments (Phase 6G-12) — never a direct
+  // Organisation-level attachment, which does not exist. Only active
+  // (non-archived) Occasions are surfaced publicly, the same convention
+  // every other public page already applies to its own entities.
+  const occasionLinkLists = await Promise.all([
+    ...content.performances.map((p) => listOccasionsForEntity("PERFORMANCE", p.id)),
+    ...content.programmes.map((p) => listOccasionsForEntity("PROGRAMME", p.id)),
+    ...content.recordings.map((r) => listOccasionsForEntity("RECORDING", r.id)),
+    ...content.collections.map((c) => listOccasionsForEntity("COLLECTION", c.id)),
+  ]);
+  const occasions = dedupeById(occasionLinkLists.flat().map((link) => link.occasion))
+    .filter((occasion) => occasion.archivedAt === null)
+    .map((occasion) => ({ id: occasion.id, name: occasion.name }));
+
+  // Sources / Rights Information: aggregated across this Organisation's
+  // own derived Recordings' existing EntitySource/EntityRights
+  // attachments (Phase 6G-13 — Recording is a supported provenance entity
+  // type; Organisation itself is not, and no direct Organisation-level
+  // attachment is added here).
+  const [sourceLinkLists, rightsLinkLists] = await Promise.all([
+    Promise.all(content.recordings.map((r) => listSourcesForEntity("RECORDING", r.id))),
+    Promise.all(content.recordings.map((r) => listRightsForEntity("RECORDING", r.id))),
+  ]);
+  const sources = dedupeById(sourceLinkLists.flat().map((link) => link.source)).map((source) => ({
+    id: source.id,
+    title: source.title,
+    url: source.url,
+    publisher: source.publisher,
+  }));
+  const rights = dedupeById(rightsLinkLists.flat().map((link) => link.rightsInformation)).map((rightsInformation) => ({
+    id: rightsInformation.id,
+    holder: rightsInformation.holder,
+    licenseType: rightsInformation.licenseType,
+  }));
+
+  return assembleOrganisationPageData({
+    id: organisation.id,
+    slug: organisation.slug,
+    name: organisation.name,
+    description: organisation.description,
+    venues: organisation.venues.map((venue) => ({ id: venue.id, slug: venue.slug, name: venue.name })),
+    programmes: content.programmes,
+    performances: content.performances,
+    recordings: content.recordings,
+    videos: content.videos,
+    collections: content.collections,
+    occasions,
+    sources,
+    rights,
   });
 }

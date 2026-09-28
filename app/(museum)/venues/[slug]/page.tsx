@@ -74,7 +74,9 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
 
       {venue.venueDetails?.organisation && (
         <EntitySection id="organisation" heading="Operated By">
-          <p className="museum-meta">{venue.venueDetails.organisation.name}</p>
+          <p className="museum-meta">
+            <Link href={`/organisations/${venue.venueDetails.organisation.slug}`}>{venue.venueDetails.organisation.name}</Link>
+          </p>
         </EntitySection>
       )}
 

@@ -6,9 +6,10 @@ import { findOrganisationById } from "../../../../../../../modules/db/repositori
 import { listVenuesByOrganisation } from "../../../../../../../modules/db/repositories/venueRepository";
 import { archiveOrganisationAction, restoreOrganisationAction, updateOrganisationAction } from "./actions";
 
-// Phase 6G-4E — the Organisation editorial management view. No public
-// /organisations/[slug] route exists yet (Organisation has no slug field
-// at all today — explicitly out of scope this phase).
+// Phase 6G-4E — the Organisation editorial management view.
+// Phase 6G-14: Organisation now has a slug and a public
+// /organisations/[slug] route — "View public page" mirrors Composer's
+// detail page exactly.
 
 export default async function OrganisationDetailPage({
   params,
@@ -41,6 +42,16 @@ export default async function OrganisationDetailPage({
 
       <p>
         Status: <strong>{organisation.archivedAt ? "Archived" : "Active"}</strong>
+        <br />
+        Slug: <code>{organisation.slug}</code>
+        {!organisation.archivedAt && (
+          <>
+            {" — "}
+            <Link href={`/organisations/${organisation.slug}`} target="_blank" rel="noopener noreferrer">
+              View public page
+            </Link>
+          </>
+        )}
       </p>
 
       <h2>Edit</h2>

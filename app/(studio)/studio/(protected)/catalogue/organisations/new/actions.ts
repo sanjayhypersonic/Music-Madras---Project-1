@@ -5,6 +5,8 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { createOrganisation } from "../../../../../../../modules/db/repositories/organisationRepository";
 import { DuplicateEntityError } from "../../../../../../../modules/mmke/duplicate-detection/detectDuplicateName";
+import { SlugConflictError } from "../../../../../../../modules/mmke/slug/SlugConflictError";
+import { slugify } from "../../../../../../../modules/mmke/slug/slugify";
 
 function errorRedirect(message: string): never {
   redirect(`/studio/catalogue/organisations/new?error=${encodeURIComponent(message)}`);
@@ -24,12 +26,13 @@ export async function createOrganisationAction(formData: FormData) {
   let organisation;
   try {
     organisation = await createOrganisation({
+      slug: slugify(name),
       name,
       description: String(formData.get("description") ?? "") || undefined,
       actorId: session!.user.id,
     });
   } catch (err) {
-    if (err instanceof DuplicateEntityError) {
+    if (err instanceof DuplicateEntityError || err instanceof SlugConflictError) {
       errorRedirect(err.message);
     }
     throw err;

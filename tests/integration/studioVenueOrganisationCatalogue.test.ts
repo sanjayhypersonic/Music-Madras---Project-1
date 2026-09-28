@@ -144,7 +144,7 @@ describe("Venue catalogue management against a real database", () => {
   it("links a Venue to an Organisation and unlinks it, with the established distinct audit events", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const organisation = await createOrganisation({ name: uniqueName("Link Test Organisation"), actorId: user.id });
+    const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: uniqueName("Link Test Organisation"), actorId: user.id });
     organisationId = organisation.id;
     const venue = await createVenue({ slug: uniqueSlug("venue"), name: uniqueName("Linkable Venue"), type: "CHURCH", actorId: user.id });
     venueId = venue.id;
@@ -186,7 +186,7 @@ describe("Venue catalogue management against a real database", () => {
   it("lists and searches Venues for Studio, including archived ones, with the Organisation joined", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const organisation = await createOrganisation({ name: uniqueName("List Test Organisation"), actorId: user.id });
+    const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: uniqueName("List Test Organisation"), actorId: user.id });
     organisationId = organisation.id;
     const uniqueMarker = randomUUID().slice(0, 8);
     const venue = await createVenue({
@@ -232,7 +232,7 @@ describe("Organisation catalogue management against a real database", () => {
     const user = await createTestUser();
     userId = user.id;
 
-    const organisation = await createOrganisation({ name: uniqueName("Test Organisation"), description: "A test description.", actorId: user.id });
+    const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: uniqueName("Test Organisation"), description: "A test description.", actorId: user.id });
     organisationId = organisation.id;
 
     expect(organisation.description).toBe("A test description.");
@@ -247,16 +247,18 @@ describe("Organisation catalogue management against a real database", () => {
     userId = user.id;
     const name = uniqueName("Duplicate Test Organisation");
 
-    const first = await createOrganisation({ name, actorId: user.id });
+    const first = await createOrganisation({ slug: uniqueSlug("organisation"), name, actorId: user.id });
     organisationId = first.id;
 
-    await expect(createOrganisation({ name: `  ${name.toUpperCase()}  `, actorId: user.id })).rejects.toThrow(DuplicateEntityError);
+    await expect(
+      createOrganisation({ slug: uniqueSlug("organisation"), name: `  ${name.toUpperCase()}  `, actorId: user.id })
+    ).rejects.toThrow(DuplicateEntityError);
   });
 
   it("edits an Organisation's fields and audit-logs before/after", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const organisation = await createOrganisation({ name: uniqueName("Editable Organisation"), actorId: user.id });
+    const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: uniqueName("Editable Organisation"), actorId: user.id });
     organisationId = organisation.id;
 
     const updated = await updateOrganisation(organisation.id, { name: "Renamed Organisation", description: "New description.", actorId: user.id });
@@ -272,7 +274,7 @@ describe("Organisation catalogue management against a real database", () => {
   it("archives and restores an Organisation, audit-logging both, without deleting the record", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const organisation = await createOrganisation({ name: uniqueName("Archivable Organisation"), actorId: user.id });
+    const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: uniqueName("Archivable Organisation"), actorId: user.id });
     organisationId = organisation.id;
 
     const archived = await archiveOrganisation(organisation.id, user.id);
@@ -295,7 +297,7 @@ describe("Organisation catalogue management against a real database", () => {
     const user = await createTestUser();
     userId = user.id;
     const uniqueMarker = randomUUID().slice(0, 8);
-    const organisation = await createOrganisation({ name: `Searchable ${uniqueMarker} Organisation`, actorId: user.id });
+    const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: `Searchable ${uniqueMarker} Organisation`, actorId: user.id });
     organisationId = organisation.id;
     const venue = await createVenue({
       slug: uniqueSlug("venue"),
@@ -339,7 +341,7 @@ describe("Venue ↔ Organisation relationship integrity", () => {
   it("a linked Venue resolves through listVenuesByOrganisation, and the Organisation relationship survives archiving the Venue", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const organisation = await createOrganisation({ name: uniqueName("Relationship Test Organisation"), actorId: user.id });
+    const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: uniqueName("Relationship Test Organisation"), actorId: user.id });
     organisationId = organisation.id;
     const venue = await createVenue({
       slug: uniqueSlug("venue"),
@@ -362,7 +364,7 @@ describe("Venue ↔ Organisation relationship integrity", () => {
   it("archiving an Organisation preserves its Venues' organisationId — no cascade, no orphaning", async () => {
     const user = await createTestUser();
     userId = user.id;
-    const organisation = await createOrganisation({ name: uniqueName("Archivable Parent Organisation"), actorId: user.id });
+    const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: uniqueName("Archivable Parent Organisation"), actorId: user.id });
     organisationId = organisation.id;
     const venue = await createVenue({
       slug: uniqueSlug("venue"),

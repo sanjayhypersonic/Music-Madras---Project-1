@@ -23,19 +23,23 @@ import type {
 // real model naturally satisfies it — so this function is testable with
 // plain object literals and never needs a database.
 
-interface RawWork {
+// Exported (Phase 6G-14) so getPublicOrganisationPageData's own bespoke
+// assembler can reuse the exact same mapping logic — Organisation's
+// performances/programmes/recordings/videos/collections all come from the
+// same resolveRelatedContent shape these Raw* types already describe.
+export interface RawWork {
   id: string;
   slug: string;
   title: string;
 }
 
-interface RawProgramme {
+export interface RawProgramme {
   id: string;
   slug: string;
   title: string;
 }
 
-interface RawPerformance {
+export interface RawPerformance {
   id: string;
   slug: string;
   performanceDate: Date | null;
@@ -45,18 +49,18 @@ interface RawPerformance {
   conductors: { conductor: { name: string; slug: string } }[];
 }
 
-interface RawRecording {
+export interface RawRecording {
   id: string;
   slug: string;
   currentPublishedRevision: { title: string | null } | null;
 }
 
-interface RawVideo {
+export interface RawVideo {
   page: { slug: string };
   youtubeVideo: { title: string | null; thumbnailUrl: string | null };
 }
 
-interface RawCollection {
+export interface RawCollection {
   id: string;
   slug: string;
   title: string;
@@ -85,19 +89,19 @@ export interface AssembleEntityPageDataInput {
   collections: RawCollection[];
 }
 
-function toWork(work: RawWork): EntityPageRelatedWork {
+export function toWork(work: RawWork): EntityPageRelatedWork {
   return { id: work.id, slug: work.slug, title: work.title };
 }
 
-function toProgramme(programme: RawProgramme): EntityPageRelatedProgramme {
+export function toProgramme(programme: RawProgramme): EntityPageRelatedProgramme {
   return { id: programme.id, slug: programme.slug, title: programme.title };
 }
 
-function toParticipantRef(participant: { name: string; slug: string }): EntityPageRelatedParticipantRef {
+export function toParticipantRef(participant: { name: string; slug: string }): EntityPageRelatedParticipantRef {
   return { name: participant.name, slug: participant.slug };
 }
 
-function toPerformance(performance: RawPerformance): EntityPageRelatedPerformance {
+export function toPerformance(performance: RawPerformance): EntityPageRelatedPerformance {
   return {
     id: performance.id,
     slug: performance.slug,
@@ -110,15 +114,15 @@ function toPerformance(performance: RawPerformance): EntityPageRelatedPerformanc
   };
 }
 
-function toRecording(recording: RawRecording): EntityPageRelatedRecording {
+export function toRecording(recording: RawRecording): EntityPageRelatedRecording {
   return { id: recording.id, slug: recording.slug, title: recording.currentPublishedRevision?.title ?? null };
 }
 
-function toVideo(video: RawVideo): EntityPageRelatedVideo {
+export function toVideo(video: RawVideo): EntityPageRelatedVideo {
   return { slug: video.page.slug, title: video.youtubeVideo.title, thumbnailUrl: video.youtubeVideo.thumbnailUrl };
 }
 
-function toCollection(collection: RawCollection): EntityPageRelatedCollection {
+export function toCollection(collection: RawCollection): EntityPageRelatedCollection {
   return { id: collection.id, slug: collection.slug, title: collection.title };
 }
 
@@ -131,7 +135,7 @@ function dedupeBySlug<T extends { slug: string }>(refs: T[]): T[] {
 }
 
 /** Derived, not separately queried (brief §5I) — deduped by slug across every relatedPerformance. */
-function deriveRelatedParticipants(performances: RawPerformance[]): EntityPageRelatedParticipants {
+export function deriveRelatedParticipants(performances: RawPerformance[]): EntityPageRelatedParticipants {
   return {
     artists: dedupeBySlug<EntityPageRelatedParticipantRef>(performances.flatMap((p) => p.performers.map((l) => toParticipantRef(l.artist)))),
     choirs: dedupeBySlug<EntityPageRelatedParticipantRef>(performances.flatMap((p) => p.choirs.map((l) => toParticipantRef(l.choir)))),

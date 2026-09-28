@@ -19,7 +19,8 @@ export type ArchiveEntityType =
   | "performance"
   | "artist"
   | "choir"
-  | "conductor";
+  | "conductor"
+  | "organisation";
 
 export interface ArchiveSearchResultComposer {
   entityType: "composer";
@@ -111,6 +112,15 @@ export interface ArchiveSearchResultConductor {
   biography: string | null;
 }
 
+/** An Organisation's own canonical fields. */
+export interface ArchiveSearchResultOrganisation {
+  entityType: "organisation";
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+}
+
 export type ArchiveSearchResult =
   | ArchiveSearchResultComposer
   | ArchiveSearchResultWork
@@ -120,7 +130,8 @@ export type ArchiveSearchResult =
   | ArchiveSearchResultPerformance
   | ArchiveSearchResultArtist
   | ArchiveSearchResultChoir
-  | ArchiveSearchResultConductor;
+  | ArchiveSearchResultConductor
+  | ArchiveSearchResultOrganisation;
 
 /** One entity type's page of results, for the single-type paginated view. */
 export interface ArchiveSearchPage<T> {
@@ -141,4 +152,5 @@ export interface ArchiveSearchAllResult {
   artists: ArchiveSearchPage<ArchiveSearchResultArtist>;
   choirs: ArchiveSearchPage<ArchiveSearchResultChoir>;
   conductors: ArchiveSearchPage<ArchiveSearchResultConductor>;
+  organisations: ArchiveSearchPage<ArchiveSearchResultOrganisation>;
 }

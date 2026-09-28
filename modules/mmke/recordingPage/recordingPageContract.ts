@@ -37,6 +37,8 @@ export interface RecordingPageProgramme {
 
 export interface RecordingPageOrganisation {
   id: string;
+  /** Phase 6G-14: links to the existing /organisations/[slug] route. */
+  slug: string;
   name: string;
 }
 

@@ -512,6 +512,14 @@ model Conductor {
 
 model Organisation {
   id          String    @id @default(uuid())
+  // Phase 6G-14: added so Organisation can have its own public
+  // /organisations/[slug] route, mirroring Composer/Venue/Artist/Choir/
+  // Conductor. Existing rows were backfilled from `name` (Artist/Choir/
+  // Conductor's pattern — Organisation already had a real human-typed
+  // name, unlike Performance) plus an id-suffix for guaranteed
+  // uniqueness; every new row going forward gets a clean
+  // slugify(name)-only slug with SlugConflictError on collision.
+  slug        String    @unique
   name        String
   description String?   @db.Text
   archivedAt  DateTime?

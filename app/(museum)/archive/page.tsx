@@ -7,6 +7,7 @@ import {
   searchChoirs,
   searchComposers,
   searchConductors,
+  searchOrganisations,
   searchPerformances,
   searchProgrammes,
   searchRecordings,
@@ -21,6 +22,7 @@ import type {
   ArchiveSearchResultChoir,
   ArchiveSearchResultComposer,
   ArchiveSearchResultConductor,
+  ArchiveSearchResultOrganisation,
   ArchiveSearchResultPerformance,
   ArchiveSearchResultProgramme,
   ArchiveSearchResultRecording,
@@ -76,7 +78,7 @@ export async function generateMetadata({
   const hasSearchState = Boolean(q?.trim()) || Boolean(type?.trim());
   const title = "Archive — Music Madras";
   const description =
-    "Explore the Music Madras archive of composers, musical works, programmes, performances, artists, choirs, conductors, recordings, and venues documenting Chennai's Western Classical Music heritage.";
+    "Explore the Music Madras archive of composers, musical works, programmes, performances, artists, choirs, conductors, recordings, venues, and organisations documenting Chennai's Western Classical Music heritage.";
 
   return {
     metadataBase: new URL(SITE_ORIGIN),
@@ -228,6 +230,19 @@ function VenueResult({ result }: { result: ArchiveSearchResultVenue }) {
   );
 }
 
+function OrganisationResult({ result }: { result: ArchiveSearchResultOrganisation }) {
+  const description = excerpt(result.description);
+  return (
+    <li className="museum-category-card">
+      <ResultTypeBadge entityType="organisation" />
+      <h3>
+        <Link href={`/organisations/${result.slug}`}>{result.name}</Link>
+      </h3>
+      {description && <p>{description}</p>}
+    </li>
+  );
+}
+
 function ResultCard({ result }: { result: ArchiveSearchResult }) {
   switch (result.entityType) {
     case "composer":
@@ -248,6 +263,8 @@ function ResultCard({ result }: { result: ArchiveSearchResult }) {
       return <ConductorResult result={result} />;
     case "venue":
       return <VenueResult result={result} />;
+    case "organisation":
+      return <OrganisationResult result={result} />;
   }
 }
 
@@ -263,7 +280,7 @@ function SearchForm({ query, type }: { query?: string; type: ArchiveEntityType |
         type="search"
         name="q"
         defaultValue={query ?? ""}
-        placeholder="Search composers, works, artists, choirs, conductors, recordings, venues…"
+        placeholder="Search composers, works, artists, choirs, conductors, recordings, venues, organisations…"
       />
       {type && <input type="hidden" name="type" value={type} />}
       <button type="submit" className="museum-button">
@@ -290,6 +307,7 @@ function FilterPills({ query, activeType }: { query?: string; activeType: Archiv
     { type: "choir", label: "Choirs" },
     { type: "conductor", label: "Conductors" },
     { type: "venue", label: "Venues" },
+    { type: "organisation", label: "Organisations" },
   ];
 
   return (
@@ -362,8 +380,8 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
         <h1>{heading}</h1>
         <p className="museum-entity-header__description">
           Search the MusicMadras collection of composers, musical works, programmes, performances, artists,
-          choirs, conductors, recordings, and the venues that hosted them — every result is drawn directly
-          from the canonical archive, never from raw synchronization data.
+          choirs, conductors, recordings, the venues that hosted them, and the organisations that operate
+          them — every result is drawn directly from the canonical archive, never from raw synchronization data.
         </p>
       </header>
 
@@ -442,6 +460,7 @@ async function AllTypesResults({ query }: { query?: string }) {
     { type: "choir", page: all.choirs },
     { type: "conductor", page: all.conductors },
     { type: "venue", page: all.venues },
+    { type: "organisation", page: all.organisations },
   ];
 
   const totalAcrossAllTypes = groups.reduce((sum, group) => sum + group.page.total, 0);
@@ -506,5 +525,7 @@ async function fetchPageForType(
       return searchConductors(query, page, ARCHIVE_PAGE_SIZE);
     case "venue":
       return searchVenues(query, page, ARCHIVE_PAGE_SIZE);
+    case "organisation":
+      return searchOrganisations(query, page, ARCHIVE_PAGE_SIZE);
   }
 }

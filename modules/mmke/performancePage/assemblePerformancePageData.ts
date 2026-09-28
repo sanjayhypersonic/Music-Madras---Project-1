@@ -39,6 +39,7 @@ interface RawProgramme {
 
 interface RawOrganisation {
   id: string;
+  slug: string;
   name: string;
 }
 

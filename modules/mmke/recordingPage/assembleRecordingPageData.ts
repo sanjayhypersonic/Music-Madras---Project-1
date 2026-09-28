@@ -41,7 +41,7 @@ interface RawPerformance {
   id: string;
   slug: string;
   performanceDate: Date | null;
-  venue: { id: string; slug: string; name: string; organisation: { id: string; name: string } | null } | null;
+  venue: { id: string; slug: string; name: string; organisation: { id: string; slug: string; name: string } | null } | null;
   performers: { artist: { id: string; slug: string; name: string }; role: string | null }[];
   choirs: { choir: { id: string; slug: string; name: string } }[];
   conductors: { conductor: { id: string; slug: string; name: string } }[];

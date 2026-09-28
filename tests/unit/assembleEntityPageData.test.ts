@@ -165,10 +165,10 @@ describe("assembleEntityPageData", () => {
       entityType: "venue",
       works: [{ id: "w1", slug: "requiem", title: "Requiem" }],
       composers: [{ id: "c1", slug: "mozart", name: "W.A. Mozart" }],
-      venueDetails: { type: "CHURCH", address: "1 Church St", city: "Chennai", country: "India", organisation: { id: "org-1", name: "Test Trust" } },
+      venueDetails: { type: "CHURCH", address: "1 Church St", city: "Chennai", country: "India", organisation: { id: "org-1", slug: "test-trust", name: "Test Trust" } },
     });
     expect(result.relatedComposers).toEqual([{ id: "c1", slug: "mozart", name: "W.A. Mozart" }]);
-    expect(result.venueDetails).toEqual({ type: "CHURCH", address: "1 Church St", city: "Chennai", country: "India", organisation: { id: "org-1", name: "Test Trust" } });
+    expect(result.venueDetails).toEqual({ type: "CHURCH", address: "1 Church St", city: "Chennai", country: "India", organisation: { id: "org-1", slug: "test-trust", name: "Test Trust" } });
   });
 
   it("returns venueDetails and relatedComposers as null for entity types that don't populate them", () => {

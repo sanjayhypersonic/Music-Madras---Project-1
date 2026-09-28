@@ -109,7 +109,8 @@ export interface EntityPageVenueDetails {
   address: string | null;
   city: string | null;
   country: string | null;
-  organisation: { id: string; name: string } | null;
+  /** Phase 6G-14: `slug` links to the existing /organisations/[slug] route. */
+  organisation: { id: string; slug: string; name: string } | null;
 }
 
 /**

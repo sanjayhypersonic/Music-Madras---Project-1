@@ -4,6 +4,7 @@ import { listActiveArtists } from "../modules/db/repositories/artistRepository";
 import { listActiveChoirs } from "../modules/db/repositories/choirRepository";
 import { listActiveConductors } from "../modules/db/repositories/conductorRepository";
 import { listActiveVenues } from "../modules/db/repositories/venueRepository";
+import { listActiveOrganisations } from "../modules/db/repositories/organisationRepository";
 import { listPublishedCollections } from "../modules/db/repositories/collectionRepository";
 import { listPublishedVideoPages } from "../modules/db/repositories/youtubeVideoPageRepository";
 import {
@@ -31,6 +32,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     choirs,
     conductors,
     venues,
+    organisations,
     works,
     programmes,
     performances,
@@ -43,6 +45,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     listActiveChoirs(),
     listActiveConductors(),
     listActiveVenues(),
+    listActiveOrganisations(),
     listPublicWorkSitemapEntries(),
     listPublicProgrammeSitemapEntries(),
     listPublicPerformanceSitemapEntries(),
@@ -64,6 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...choirs.map((c) => ({ url: `${SITE_ORIGIN}/choirs/${c.slug}`, lastModified: c.updatedAt })),
     ...conductors.map((c) => ({ url: `${SITE_ORIGIN}/conductors/${c.slug}`, lastModified: c.updatedAt })),
     ...venues.map((v) => ({ url: `${SITE_ORIGIN}/venues/${v.slug}`, lastModified: v.updatedAt })),
+    ...organisations.map((o) => ({ url: `${SITE_ORIGIN}/organisations/${o.slug}`, lastModified: o.updatedAt })),
     ...works.map((w) => ({ url: `${SITE_ORIGIN}/works/${w.slug}`, lastModified: w.updatedAt })),
     ...programmes.map((p) => ({ url: `${SITE_ORIGIN}/programmes/${p.slug}`, lastModified: p.updatedAt })),
     ...performances.map((p) => ({ url: `${SITE_ORIGIN}/performances/${p.slug}`, lastModified: p.updatedAt })),

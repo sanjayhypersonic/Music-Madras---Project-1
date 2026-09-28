@@ -147,7 +147,17 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
               {recording.performance.venue && (
                 <span>
                   <Link href={`/venues/${recording.performance.venue.slug}`}>{recording.performance.venue.name}</Link>
-                  {recording.performance.venue.organisation ? ` (${recording.performance.venue.organisation.name})` : ""}
+                  {recording.performance.venue.organisation ? (
+                    <>
+                      {" ("}
+                      <Link href={`/organisations/${recording.performance.venue.organisation.slug}`}>
+                        {recording.performance.venue.organisation.name}
+                      </Link>
+                      {")"}
+                    </>
+                  ) : (
+                    ""
+                  )}
                 </span>
               )}
             </p>

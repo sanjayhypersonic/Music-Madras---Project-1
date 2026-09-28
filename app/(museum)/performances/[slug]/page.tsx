@@ -110,7 +110,15 @@ export default async function PerformancePage({ params }: { params: Promise<{ sl
       <EntitySection id="venue" heading="Venue">
         <p className="museum-meta">
           <Link href={`/venues/${performance.venue.slug}`}>{performance.venue.name}</Link>
-          {performance.venue.organisation ? ` (${performance.venue.organisation.name})` : ""}
+          {performance.venue.organisation ? (
+            <>
+              {" ("}
+              <Link href={`/organisations/${performance.venue.organisation.slug}`}>{performance.venue.organisation.name}</Link>
+              {")"}
+            </>
+          ) : (
+            ""
+          )}
         </p>
       </EntitySection>
 
