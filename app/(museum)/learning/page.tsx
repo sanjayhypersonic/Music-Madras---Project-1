@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import Link from "next/link";
 import { listPublicLearningGuidesPage } from "../../../modules/db/repositories/learningGuideRepository";
 import { EntityBreadcrumbs } from "../../../components/museum/entity/EntityBreadcrumbs";
 import { EntitySection } from "../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../components/museum/entity/EntityEmptyState";
+import { trackPublicPageView } from "../../../modules/analytics/trackPublicPageView";
 
 // Phase 6G-17 — the public /learning index, mirroring /collections
 // exactly: a simple, published-only, non-archived, paginated browse
@@ -47,6 +49,8 @@ export default async function LearningIndexPage({ searchParams }: { searchParams
   const requestedPage = parsePage(rawPage);
   const result = await listPublicLearningGuidesPage(requestedPage);
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
+
+  after(() => trackPublicPageView({ path: "/learning" }));
 
   return (
     <article>

@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { findPublishedBySlug } from "../../../../modules/db/repositories/youtubeVideoPageRepository";
 import { findPublishedRecordingSlugForYouTubeVideo } from "../../../../modules/db/repositories/mediaResourceRepository";
 import { toIso8601Duration } from "../../../../modules/mmke/catalogue/toIso8601Duration";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
+import { OutboundYouTubeLink } from "../../../../components/museum/OutboundYouTubeLink";
 
 // Phase 6G-2A (route) / Phase 6G-2B (visual design) — the first real
 // public Museum route. Uses ONLY findPublishedBySlug (the sanctioned
@@ -65,6 +69,13 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
   const { page, youtubeVideo } = result;
   const recordingSlug = await findPublishedRecordingSlugForYouTubeVideo(youtubeVideo.id);
 
+  after(() =>
+    trackPublicPageView(
+      { path: `/videos/${page.slug}` },
+      createEntityViewEvent({ entityType: "YouTubeVideo", entityId: youtubeVideo.id, youtubeVideoId: youtubeVideo.id })
+    )
+  );
+
   const embedUrl = `https://www.youtube.com/embed/${youtubeVideo.youtubeVideoId}`;
   const watchUrl = `https://www.youtube.com/watch?v=${youtubeVideo.youtubeVideoId}`;
 
@@ -113,9 +124,9 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
       )}
 
       <p>
-        <a className="museum-button" href={watchUrl} target="_blank" rel="noopener noreferrer">
+        <OutboundYouTubeLink href={watchUrl} youtubeVideoId={youtubeVideo.id} className="museum-button">
           Watch on YouTube
-        </a>
+        </OutboundYouTubeLink>
       </p>
 
       <script

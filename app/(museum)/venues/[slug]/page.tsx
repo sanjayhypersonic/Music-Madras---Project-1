@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getVenueEntityPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -8,6 +9,8 @@ import { EntityHeader } from "../../../../components/museum/entity/EntityHeader"
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-6 — the public /venues/[slug] page, wiring up
 // getVenueEntityPageData (Phase 6G-4A, previously unwired to any route)
@@ -54,6 +57,10 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
   if (!venue) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView({ path: `/venues/${venue.slug}` }, createEntityViewEvent({ entityType: "Venue", entityId: venue.id }))
+  );
 
   const location = formatLocation(venue);
   const subtitleParts = [venue.venueDetails?.type, location].filter((part): part is string => Boolean(part));

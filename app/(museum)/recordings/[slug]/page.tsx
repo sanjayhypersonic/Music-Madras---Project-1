@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPublicRecordingPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -9,6 +10,8 @@ import { EntityHeader } from "../../../../components/museum/entity/EntityHeader"
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-5B — the first public page for a canonical MusicMadras
 // Recording (as opposed to a raw YouTube resource — see
@@ -56,6 +59,13 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
   if (!recording) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView(
+      { path: `/recordings/${recording.slug}` },
+      createEntityViewEvent({ entityType: "Recording", entityId: recording.id, recordingId: recording.id })
+    )
+  );
 
   const displayTitle = recording.title ?? "Untitled Recording";
   const subtitleParts: string[] = [];

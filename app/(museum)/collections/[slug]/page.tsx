@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPublicCollectionPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -8,6 +9,8 @@ import { EntitySection } from "../../../../components/museum/entity/EntitySectio
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 import type { CollectionPageData } from "../../../../modules/mmke/collectionPage/collectionPageContract";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-10 — the public /collections/[slug] page, completing the
 // public Museum layer for the MusicMadras Collection entity. Built from
@@ -65,6 +68,13 @@ export default async function CollectionPage({ params }: { params: Promise<{ slu
   if (!collection) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView(
+      { path: `/collections/${collection.slug}` },
+      createEntityViewEvent({ entityType: "Collection", entityId: collection.id, collectionId: collection.id })
+    )
+  );
 
   const numTracks = collection.recordings.length + collection.works.length;
 

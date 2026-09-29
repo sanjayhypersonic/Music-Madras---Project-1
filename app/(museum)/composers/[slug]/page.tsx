@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getComposerEntityPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -8,6 +9,8 @@ import { EntityHeader } from "../../../../components/museum/entity/EntityHeader"
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-4B — the first real public Archive entity page, proving the
 // Phase 6G-4A relationship layer end to end: public route -> repository
@@ -58,6 +61,13 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
   if (!composer) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView(
+      { path: `/composers/${composer.slug}` },
+      createEntityViewEvent({ entityType: "Composer", entityId: composer.id, composerId: composer.id })
+    )
+  );
 
   const lifespanLabel = formatLifespan(composer.lifespan);
   const { artists, choirs, conductors, venues } = composer.relatedParticipants;

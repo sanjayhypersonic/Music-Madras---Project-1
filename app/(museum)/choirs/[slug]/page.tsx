@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getChoirEntityPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -7,6 +8,8 @@ import { EntityHeader } from "../../../../components/museum/entity/EntityHeader"
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-9 — the public /choirs/[slug] page. Reuses the generic
 // EntityPageData contract exactly like Composer/Venue/Artist via
@@ -43,6 +46,10 @@ export default async function ChoirPage({ params }: { params: Promise<{ slug: st
   if (!choir) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView({ path: `/choirs/${choir.slug}` }, createEntityViewEvent({ entityType: "Choir", entityId: choir.id }))
+  );
 
   const subtitle = choir.secondaryDetail ? `Directed by ${choir.secondaryDetail}` : null;
 

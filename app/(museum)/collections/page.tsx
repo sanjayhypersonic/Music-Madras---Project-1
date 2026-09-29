@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import Link from "next/link";
 import { listPublicCollectionsPage } from "../../../modules/db/repositories/collectionRepository";
 import { EntityBreadcrumbs } from "../../../components/museum/entity/EntityBreadcrumbs";
 import { EntitySection } from "../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../components/museum/entity/EntityEmptyState";
+import { trackPublicPageView } from "../../../modules/analytics/trackPublicPageView";
 
 // Phase 6G-10 — the public /collections index: a simple, published-only,
 // non-archived, paginated browse listing. This is deliberately NOT a
@@ -53,6 +55,8 @@ export default async function CollectionsIndexPage({
   const requestedPage = parsePage(rawPage);
   const result = await listPublicCollectionsPage(requestedPage);
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
+
+  after(() => trackPublicPageView({ path: "/collections" }));
 
   return (
     <article>

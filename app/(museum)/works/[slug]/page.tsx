@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPublicWorkPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -8,6 +9,8 @@ import { EntitySection } from "../../../../components/museum/entity/EntitySectio
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 import type { WorkPageData } from "../../../../modules/mmke/workPage/workPageContract";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-6 — the public /works/[slug] page. Built from the same
 // resolveRelatedContent core the Composer page already uses (scoped to
@@ -56,6 +59,13 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
   if (!work) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView(
+      { path: `/works/${work.slug}` },
+      createEntityViewEvent({ entityType: "MusicalWork", entityId: work.id, musicalWorkId: work.id })
+    )
+  );
 
   const subtitleParts: string[] = [];
   if (work.catalogueNumber) subtitleParts.push(work.catalogueNumber);

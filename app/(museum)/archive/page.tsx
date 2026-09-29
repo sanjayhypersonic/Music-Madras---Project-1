@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import Link from "next/link";
+import { trackPublicPageView } from "../../../modules/analytics/trackPublicPageView";
+import { trackEvent } from "../../../modules/analytics/trackEvent";
+import { createCatalogueSearchEvent } from "../../../modules/analytics/events/factories";
 import {
   ARCHIVE_PAGE_SIZE,
   searchArchiveAll,
@@ -371,6 +375,8 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
 
   const heading = query ? `Search results for "${query}"` : "Explore the MusicMadras Archive";
 
+  after(() => trackPublicPageView({ path: "/archive" }));
+
   return (
     <article>
       <EntityBreadcrumbs items={[{ label: "Music Madras", href: "/" }, { label: "Archive" }]} />
@@ -422,6 +428,13 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
 async function SingleTypeResults({ type, query, page }: { type: ArchiveEntityType; query?: string; page: number }) {
   const result = await fetchPageForType(type, query, page);
 
+  // A type filter (with or without a text query) is a discovery action
+  // worth measuring — never the query text itself (brief §13). Uses
+  // trackEvent directly, not trackPublicPageView, so this never fires a
+  // second page_view for the /archive request that's already firing one
+  // at the top level (ArchivePage below).
+  after(() => trackEvent(createCatalogueSearchEvent(result.total, { entityType: type, page })));
+
   if (result.total === 0) {
     return (
       <EntityEmptyState>
@@ -464,6 +477,13 @@ async function AllTypesResults({ query }: { query?: string }) {
   ];
 
   const totalAcrossAllTypes = groups.reduce((sum, group) => sum + group.page.total, 0);
+
+  // Only a genuine text search is measured here — the plain /archive
+  // landing view (no query, no type) already gets its page_view from
+  // ArchivePage and needs no separate "search" event.
+  if (query) {
+    after(() => trackEvent(createCatalogueSearchEvent(totalAcrossAllTypes)));
+  }
 
   if (totalAcrossAllTypes === 0) {
     return (

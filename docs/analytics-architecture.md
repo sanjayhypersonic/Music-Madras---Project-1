@@ -144,3 +144,38 @@ The Phase 2 search foundation (`modules/mmke/search/`, `modules/db/search/postgr
 ## 14. Testing approach (brief §19)
 
 All Phase 3 tests are DB-free and network-free: pure-function tests for validation, GA4 mapping, dimensions hashing, and sync planning; orchestration tests for `runYouTubeAnalyticsSync` against an in-memory fake adapter and fake repository (verifying idempotent/duplicate-safe behavior and partial-failure checkpoint behavior without a real database). See `tests/unit/`.
+
+## 15. Phase 6G-18 — wiring the public Museum
+
+Phase 3 (above) built the contract and left it entirely unwired ("Not wired into any UI yet" — §2, §4). Phase 6G-18 is that wiring, reusing every piece of Phase 3's architecture unchanged: no second event abstraction, no second GA4 client, no new analytics SDK.
+
+### What was added
+
+- **`modules/analytics/service/getAnalyticsService.ts`** — the one place `AnalyticsService` is constructed, wired to `Ga4Adapter` reading `GA4_MEASUREMENT_ID`/`GA4_API_SECRET` from the environment (documented in `.env.example`, values intentionally blank — see below). A lazily-built module singleton.
+- **`modules/analytics/trackEvent.ts`** — wraps `AnalyticsService.track()` in a try/catch that swallows every failure (an invalid event, a misconfigured/unreachable provider). This is the only place an analytics failure is ever allowed to stop propagating — a public page must render identically whether GA4 is configured, reachable, or absent (brief §22/§23).
+- **`modules/analytics/createEphemeralSessionId.ts`** — see the taxonomy doc's Privacy section for the full privacy rationale: a fresh random id per server-rendered page load, never a cookie, never persisted, never reused across navigations.
+- **`modules/analytics/trackPublicPageView.ts`** — the one call every public page makes: always fires `page_view`, and (when the page has a canonical entity) the appropriate dedicated/generic view event from `factories.ts`, sharing one ephemeral session id.
+- **Taxonomy extensions** (`modules/analytics/events/*`): `Performance`/`Organisation` added to `CanonicalEntityType` (their public pages postdate Phase 3); a new `video_view` event dedicated to `YouTubeVideo` (previously falling through to generic `entity_view`); `catalogue_search`'s schema gained optional `entityType`/`page` params so it also covers "filtered by category" without a second `archive_filter` event.
+- **`components/museum/OutboundYouTubeLink.tsx`** + **`app/(museum)/videos/[slug]/actions.ts`** — the one Client Component boundary this phase introduces, for the one outbound YouTube link in the entire public Museum. Fires the existing `youtube_click` event via a fire-and-forget Server Action on click; never calls `preventDefault`, never delays the outbound navigation.
+
+### Instrumentation pattern
+
+Every `app/(museum)/**/page.tsx` calls, right after resolving its own data (and its own `notFound()` check, where applicable):
+
+```ts
+after(() => trackPublicPageView({ path: `/composers/${composer.slug}` }, createEntityViewEvent({ entityType: "Composer", entityId: composer.id, composerId: composer.id })));
+```
+
+`after()` (`next/server`, stable since Next 15.1) schedules the callback to run *after* the response has already been sent — analytics can never delay or fail a page render. This is done at the **page** level, never the shared `(museum)/layout.tsx`: a layout is not guaranteed to re-execute on every navigation between sibling routes the way a page's own function body is (the same reason `generateMetadata` is a per-page export, not a layout one) — putting tracking here is what actually guarantees one `page_view` per real navigation, with no risk of double-counting from re-renders (Server Components render once per request; there is no client-side effect to double-fire in development/StrictMode).
+
+Studio (`app/(studio)/**`) is a structurally separate route group with its own layouts — this phase does not touch a single file under it, which is the entire isolation guarantee for "Studio must never emit public Museum events" (brief §8/§19).
+
+`/archive`'s `catalogue_search` is fired once per rendered result set (in `SingleTypeResults`/`AllTypesResults`), directly via `trackEvent` (not `trackPublicPageView`, which would double-fire `page_view` for the same request) — only when a type filter or a text query is actually present, never on the bare landing view (which already gets its `page_view` from the top-level page component).
+
+### Configuration requirement (STOP condition, per brief §4)
+
+**No real GA4 Measurement ID or Measurement Protocol API secret exists anywhere in this repository or environment.** `GA4_MEASUREMENT_ID`/`GA4_API_SECRET` are now documented in `.env.example` with blank values, following the exact established convention (`YOUTUBE_API_KEY`, `GOOGLE_CLIENT_ID`, etc.) — this phase does not invent, guess, or placeholder a value as if it were real. Without both set, `Ga4Adapter.send()` remains the safe no-op Phase 3 already built (`{ delivered: false, reason: "not_configured" }`, no network call) — every code path above is fully wired and exercised by tests, but delivers nothing until a real GA4 property's credentials are supplied via the deployment's own environment configuration.
+
+### Privacy/consent (STOP condition avoided, per brief §5)
+
+No consent or cookie-banner mechanism exists anywhere in this codebase, and this phase does not add one. It avoids needing to by construction: `createEphemeralSessionId()` never sets a cookie and never persists an identifier anywhere — see the taxonomy doc's Privacy section for the accepted trade-off (no GA4 session/user stitching across page loads) this buys. A real client-side GA4 tag (reading/writing the `_ga` cookie for true session continuity) would need a genuine consent decision first — that remains a deliberately separate, larger future phase.

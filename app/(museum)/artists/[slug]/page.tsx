@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getArtistEntityPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -7,6 +8,8 @@ import { EntityHeader } from "../../../../components/museum/entity/EntityHeader"
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-9 — the public /artists/[slug] page, completing the
 // participant side of the archive graph. Reuses the generic
@@ -45,6 +48,10 @@ export default async function ArtistPage({ params }: { params: Promise<{ slug: s
   if (!artist) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView({ path: `/artists/${artist.slug}` }, createEntityViewEvent({ entityType: "Artist", entityId: artist.id }))
+  );
 
   return (
     <article>

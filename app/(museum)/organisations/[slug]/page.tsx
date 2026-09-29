@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPublicOrganisationPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -7,6 +8,8 @@ import { EntityHeader } from "../../../../components/museum/entity/EntityHeader"
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-14 — the public /organisations/[slug] page, completing the
 // public Museum layer for the Organisation entity. Built from
@@ -51,6 +54,13 @@ export default async function OrganisationPage({ params }: { params: Promise<{ s
   if (!organisation) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView(
+      { path: `/organisations/${organisation.slug}` },
+      createEntityViewEvent({ entityType: "Organisation", entityId: organisation.id })
+    )
+  );
 
   const { artists, choirs, conductors } = organisation.relatedParticipants;
   const relatedPeople = [

@@ -26,8 +26,12 @@ export const EVENT_PARAM_SCHEMAS: Record<AnalyticsEventName, EventParamSchema> =
   entity_view: {},
   // Deliberately no `query` param — raw search text may contain personal
   // information (brief §16) and is never sent to an analytics provider.
-  // Only the shape of the result is measured.
-  catalogue_search: { resultCount: { type: "number" } },
+  // Only the shape of the result is measured. `entityType`/`page` are
+  // optional (Phase 6G-18): the same event doubles as the "filtered by
+  // category, no free-text query" signal (what a dedicated `archive_filter`
+  // event would otherwise duplicate) — omit both entirely for the plain
+  // archive landing view.
+  catalogue_search: { resultCount: { type: "number" }, entityType: STRING_SHORT, page: { type: "number" } },
   search_result_select: { resultPosition: { type: "number" }, selectedEntityType: STRING_SHORT },
   recording_view: {},
   programme_view: {},
@@ -37,6 +41,7 @@ export const EVENT_PARAM_SCHEMAS: Record<AnalyticsEventName, EventParamSchema> =
   collection_view: {},
   educational_content_view: {},
   learning_guide_view: {},
+  video_view: {},
   youtube_click: {},
   youtube_play_intent: {},
   playlist_view: {},

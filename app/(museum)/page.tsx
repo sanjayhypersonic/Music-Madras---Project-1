@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import Image from "next/image";
 import Link from "next/link";
 import { listPublishedVideoPages } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { listPublishedCollections } from "../../modules/db/repositories/collectionRepository";
 import { ARCHIVE_CATEGORIES, CONTINUE_EXPLORING_LINKS } from "../../modules/mmke/homepage/archiveCategories";
 import { RecordingCard } from "../../components/museum/RecordingCard";
+import { trackPublicPageView } from "../../modules/analytics/trackPublicPageView";
 
 // Phase 6G-3 — the real Museum homepage. "Archive at the foundation,
 // discovery at the surface": every fact rendered here comes from MMKE
@@ -40,6 +42,8 @@ export default async function MuseumHomePage() {
     listPublishedVideoPages(RECENT_RECORDINGS_LIMIT),
     listPublishedCollections(),
   ]);
+
+  after(() => trackPublicPageView({ path: "/" }));
 
   return (
     <>

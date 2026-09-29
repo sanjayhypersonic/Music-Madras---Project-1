@@ -33,10 +33,28 @@ const DEDICATED_VIEW_EVENT_BY_ENTITY_TYPE: Partial<Record<CanonicalEntityType, A
   Collection: "collection_view",
   EducationalContent: "educational_content_view",
   LearningGuide: "learning_guide_view",
+  YouTubeVideo: "video_view",
 };
 
-export function createCatalogueSearchEvent(resultCount: number, sessionId?: string): AnalyticsEvent {
-  return { ...baseEvent("catalogue_search", sessionId), params: { resultCount } };
+/**
+ * Phase 6G-18: `entityType`/`page` are optional so the same event doubles
+ * as the "browsed/filtered by category, no free-text query" signal — see
+ * eventParamSchemas.ts's comment for why this isn't a second
+ * `archive_filter` event.
+ */
+export function createCatalogueSearchEvent(
+  resultCount: number,
+  options: { entityType?: string; page?: number; sessionId?: string } = {}
+): AnalyticsEvent {
+  const { entityType, page, sessionId } = options;
+  return {
+    ...baseEvent("catalogue_search", sessionId),
+    params: {
+      resultCount,
+      ...(entityType ? { entityType } : {}),
+      ...(page !== undefined ? { page } : {}),
+    },
+  };
 }
 
 export function createSearchResultSelectEvent(

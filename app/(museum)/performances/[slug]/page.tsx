@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPublicPerformancePageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -8,6 +9,8 @@ import { EntitySection } from "../../../../components/museum/entity/EntitySectio
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 import type { PerformancePageData } from "../../../../modules/mmke/performancePage/performancePageContract";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-8 — the public /performances/[slug] page, completing the
 // archive graph Composer -> Work -> Programme -> Performance -> Recording
@@ -65,6 +68,13 @@ export default async function PerformancePage({ params }: { params: Promise<{ sl
   if (!performance) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView(
+      { path: `/performances/${performance.slug}` },
+      createEntityViewEvent({ entityType: "Performance", entityId: performance.id })
+    )
+  );
 
   const dateLabel = formatPerformanceDate(performance.performanceDate);
   const label = buildPerformanceLabel(performance);

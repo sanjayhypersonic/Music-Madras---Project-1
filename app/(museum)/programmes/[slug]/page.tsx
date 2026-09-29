@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPublicProgrammePageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -8,6 +9,8 @@ import { EntitySection } from "../../../../components/museum/entity/EntitySectio
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
 import type { ProgrammePageData } from "../../../../modules/mmke/programmePage/programmePageContract";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-8 — the public /programmes/[slug] page, completing the archive
 // graph Composer -> Work -> Programme -> Performance -> Recording -> Video.
@@ -61,6 +64,13 @@ export default async function ProgrammePage({ params }: { params: Promise<{ slug
   if (!programme) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView(
+      { path: `/programmes/${programme.slug}` },
+      createEntityViewEvent({ entityType: "Programme", entityId: programme.id, programmeId: programme.id })
+    )
+  );
 
   return (
     <article>

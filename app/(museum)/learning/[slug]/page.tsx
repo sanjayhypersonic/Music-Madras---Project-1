@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPublicLearningGuidePageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
@@ -9,6 +10,8 @@ import { EntityHeader } from "../../../../components/museum/entity/EntityHeader"
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import type { LearningGuidePageData } from "../../../../modules/mmke/learningGuidePage/learningGuidePageContract";
+import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
+import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-17 — the public /learning/[slug] page. Built from
 // getPublicLearningGuidePageData's own LearningGuide-rooted traversal
@@ -70,6 +73,13 @@ export default async function LearningGuidePage({ params }: { params: Promise<{ 
   if (!guide) {
     notFound();
   }
+
+  after(() =>
+    trackPublicPageView(
+      { path: `/learning/${guide.slug}` },
+      createEntityViewEvent({ entityType: "LearningGuide", entityId: guide.id })
+    )
+  );
 
   const subtitleParts: string[] = [];
   if (guide.difficultyLevel) subtitleParts.push(guide.difficultyLevel);

@@ -8,6 +8,7 @@ import {
   createSheetMusicRequestSubmittedEvent,
   createYouTubeClickEvent,
 } from "../../modules/analytics/events/factories";
+import { isCanonicalEntityType } from "../../modules/analytics/events/eventTypes";
 
 class FakeAdapter implements AnalyticsProviderAdapter {
   public sentEvents: string[] = [];
@@ -60,6 +61,23 @@ describe("AnalyticsService", () => {
     expect(failingResult?.delivered).toBe(false);
     expect(failingResult?.reason).toBe("adapter_error");
   });
+
+  it("dispatches the new Phase 6G-18 entity types (Performance, Organisation, video_view) without validation errors", async () => {
+    const adapter = new FakeAdapter("fake");
+    const service = new AnalyticsService([adapter]);
+
+    await expect(
+      service.track(createEntityViewEvent({ entityType: "Performance", entityId: "perf-1" }))
+    ).resolves.toBeDefined();
+    await expect(
+      service.track(createEntityViewEvent({ entityType: "Organisation", entityId: "org-1" }))
+    ).resolves.toBeDefined();
+    await expect(
+      service.track(createEntityViewEvent({ entityType: "YouTubeVideo", entityId: "yt-1", youtubeVideoId: "yt-1" }))
+    ).resolves.toBeDefined();
+
+    expect(adapter.sentEvents).toHaveLength(3);
+  });
 });
 
 describe("event factories produce taxonomy-valid events", () => {
@@ -84,5 +102,32 @@ describe("event factories produce taxonomy-valid events", () => {
       { recordingId: "rec-1" }
     );
     expect(event.params).toEqual({ hasRecordingContext: true, hasMusicalWorkContext: false });
+  });
+
+  it("createEntityViewEvent routes YouTubeVideo to the dedicated video_view event (Phase 6G-18)", () => {
+    const event = createEntityViewEvent({ entityType: "YouTubeVideo", entityId: "yt-1", youtubeVideoId: "yt-1" });
+    expect(event.name).toBe("video_view");
+  });
+
+  it("recognizes Performance and Organisation as canonical entity types (Phase 6G-18 — public pages exist for both)", () => {
+    expect(isCanonicalEntityType("Performance")).toBe(true);
+    expect(isCanonicalEntityType("Organisation")).toBe(true);
+  });
+
+  it("createEntityViewEvent falls back to entity_view for Performance/Organisation (no dedicated event, same as Venue)", () => {
+    expect(createEntityViewEvent({ entityType: "Performance", entityId: "perf-1" }).name).toBe("entity_view");
+    expect(createEntityViewEvent({ entityType: "Organisation", entityId: "org-1" }).name).toBe("entity_view");
+  });
+
+  it("createCatalogueSearchEvent carries an optional entityType/page without ever carrying raw query text", () => {
+    const event = createCatalogueSearchEvent(5, { entityType: "work", page: 2 });
+    expect(event.params).toEqual({ resultCount: 5, entityType: "work", page: 2 });
+    expect(event.params).not.toHaveProperty("query");
+    expect(event.params).not.toHaveProperty("q");
+  });
+
+  it("createCatalogueSearchEvent omits entityType/page when not provided", () => {
+    const event = createCatalogueSearchEvent(0);
+    expect(event.params).toEqual({ resultCount: 0 });
   });
 });
