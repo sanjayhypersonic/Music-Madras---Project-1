@@ -12,6 +12,7 @@ const ENTITY_LINKS = [
   { href: "/studio/catalogue/performances", label: "Performances" },
   { href: "/studio/catalogue/collections", label: "Collections" },
   { href: "/studio/catalogue/occasions", label: "Occasions" },
+  { href: "/studio/catalogue/learning-guides", label: "Learning Guides" },
   { href: "/studio/catalogue/sources", label: "Sources" },
   { href: "/studio/catalogue/rights", label: "Rights Information" },
 ];
