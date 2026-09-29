@@ -6,6 +6,7 @@ import { findComposerById } from "../../../../../../../modules/db/repositories/c
 import { getComposerRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { listSources, listSourcesForEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { listRightsForEntity, listRightsInformation } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
+import EntityActivity from "../../../../../../../components/studio/EntityActivity";
 import {
   archiveComposerAction,
   attachRightsAction,
@@ -253,6 +254,8 @@ export default async function ComposerDetailPage({
       ) : (
         <p>Not part of any published collection yet.</p>
       )}
+
+      <EntityActivity entityType="Composer" entityId={composer.id} role={session.user.role} />
     </div>
   );
 }

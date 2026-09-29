@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findOccasionById } from "../../../../../../../modules/db/repositories/occasionRepository";
+import EntityActivity from "../../../../../../../components/studio/EntityActivity";
 import { archiveOccasionAction, restoreOccasionAction, updateOccasionAction } from "./actions";
 
 // Phase 6G-12 — the Occasion editorial management view, mirroring the
@@ -75,6 +76,8 @@ export default async function OccasionDetailPage({
           )}
         </div>
       )}
+
+      <EntityActivity entityType="Occasion" entityId={occasion.id} role={session.user.role} />
     </div>
   );
 }

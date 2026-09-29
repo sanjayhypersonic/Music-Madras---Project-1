@@ -4,6 +4,7 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { findOrganisationById } from "../../../../../../../modules/db/repositories/organisationRepository";
 import { listVenuesByOrganisation } from "../../../../../../../modules/db/repositories/venueRepository";
+import EntityActivity from "../../../../../../../components/studio/EntityActivity";
 import { archiveOrganisationAction, restoreOrganisationAction, updateOrganisationAction } from "./actions";
 
 // Phase 6G-4E — the Organisation editorial management view.
@@ -101,6 +102,8 @@ export default async function OrganisationDetailPage({
       ) : (
         <p>No venues linked to this organisation yet.</p>
       )}
+
+      <EntityActivity entityType="Organisation" entityId={organisation.id} role={session.user.role} />
     </div>
   );
 }
