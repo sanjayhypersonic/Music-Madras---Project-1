@@ -21,6 +21,9 @@ import type { OrganisationPageData } from "../../mmke/organisationPage/organisat
 import { listOccasionsForEntity } from "./occasionRepository";
 import { listSourcesForEntity } from "./sourceRepository";
 import { listRightsForEntity } from "./rightsInformationRepository";
+import { listPublicLearningGuidesForRecording, listPublicLearningGuidesForWorkIds } from "./learningGuideRepository";
+import { assembleLearningGuidePageData } from "../../mmke/learningGuidePage/assembleLearningGuidePageData";
+import type { LearningGuidePageData } from "../../mmke/learningGuidePage/learningGuidePageContract";
 import type {
   Artist,
   Choir,
@@ -270,6 +273,12 @@ export async function getComposerEntityPageData(slug: string): Promise<EntityPag
 
   const content = await getComposerRelatedContent(composer.id);
 
+  // Phase 6G-17: reverse discovery via Composer -> MusicalWork -> LearningGuide
+  // only — never resolveRelatedContent (which many other entity types also
+  // use; extending it there would leak LearningGuides onto pages the brief
+  // never asked for).
+  const learningGuides = await listPublicLearningGuidesForWorkIds(content.works.map((w) => w.id));
+
   return assembleEntityPageData({
     entityType: "composer",
     id: composer.id,
@@ -285,6 +294,7 @@ export async function getComposerEntityPageData(slug: string): Promise<EntityPag
     recordings: content.recordings,
     videos: content.videos,
     collections: content.collections,
+    learningGuides: learningGuides.map((g) => ({ id: g.id, slug: g.slug, title: g.title })),
   });
 }
 
@@ -349,6 +359,7 @@ export async function getPublicWorkPageData(slug: string): Promise<WorkPageData 
   if (!work || work.archivedAt !== null) return null;
 
   const content = await resolveRelatedContent({ workIds: [work.id] });
+  const learningGuides = await listPublicLearningGuidesForWorkIds([work.id]);
 
   return assembleWorkPageData({
     id: work.id,
@@ -365,6 +376,7 @@ export async function getPublicWorkPageData(slug: string): Promise<WorkPageData 
     recordings: content.recordings,
     videos: content.videos,
     collections: content.collections,
+    learningGuides: learningGuides.map((g) => ({ id: g.id, slug: g.slug, title: g.title })),
   });
 }
 
@@ -595,6 +607,7 @@ export async function getPublicRecordingPageData(slug: string): Promise<Recordin
     select: { collectionId: true },
   });
   const collections = await findPublicCollectionsByIds(collectionLinks.map((link) => link.collectionId));
+  const learningGuides = await listPublicLearningGuidesForRecording(recording.id);
 
   return assembleRecordingPageData({
     id: recording.id,
@@ -641,6 +654,7 @@ export async function getPublicRecordingPageData(slug: string): Promise<Recordin
       : null,
     videos,
     collections,
+    learningGuides: learningGuides.map((g) => ({ id: g.id, slug: g.slug, title: g.title })),
   });
 }
 
@@ -843,5 +857,108 @@ export async function getPublicOrganisationPageData(slug: string): Promise<Organ
     occasions,
     sources,
     rights,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6G-17 — LearningGuide gets its own bespoke root-resolver, for the
+// same reason Collection did: it is never reached through a Performance
+// (LearningGuideWork/LearningGuideRecording link directly to MusicalWork/
+// Recording), so resolveRelatedContent's Performance-rooted traversal has
+// no entry point for it. Programme/Performance/Venue/participant context
+// is surfaced per-Recording, where it genuinely exists, rather than as an
+// invented top-level LearningGuide relationship — mirrors
+// getPublicCollectionPageData's own recording `context` shape exactly.
+// Public visibility is the conjunction Phase 6G-17 requires:
+// status === "PUBLISHED" && archivedAt === null — never "not archived"
+// alone.
+// ---------------------------------------------------------------------------
+
+/**
+ * The public /learning/[slug] page's sole data source. Returns null for a
+ * nonexistent, unpublished (DRAFT), or archived LearningGuide (never
+ * distinguishes the three, same convention as every other public
+ * entity-page function in this file).
+ */
+export async function getPublicLearningGuidePageData(slug: string): Promise<LearningGuidePageData | null> {
+  const guide = await prisma.learningGuide.findUnique({
+    where: { slug },
+    include: {
+      workLinks: { include: { musicalWork: { include: { composer: true } } } },
+      recordingLinks: {
+        include: {
+          recording: {
+            include: {
+              currentPublishedRevision: {
+                include: {
+                  performance: {
+                    include: {
+                      venue: true,
+                      programme: true,
+                      performers: { include: { artist: true } },
+                      choirs: { include: { choir: true } },
+                      conductors: { include: { conductor: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!guide || guide.status !== "PUBLISHED" || guide.archivedAt !== null) return null;
+
+  // Archived Works are never publicly shown, same convention as every
+  // other public page's catalogue-visibility rule.
+  const activeWorkLinks = guide.workLinks.filter((link) => link.musicalWork.archivedAt === null);
+
+  // A Recording only counts as publicly attached once it is itself
+  // published — isRecordingPublished (Phase 6G-5A) is the single
+  // authoritative predicate, never a second one re-derived here.
+  const publishedRecordingLinks = guide.recordingLinks.filter(
+    (link) => link.recording.currentPublishedRevision !== null && isRecordingPublished(link.recording)
+  );
+
+  return assembleLearningGuidePageData({
+    id: guide.id,
+    slug: guide.slug,
+    title: guide.title,
+    difficultyLevel: guide.difficultyLevel,
+    contentMarkdown: guide.contentMarkdown,
+    estimatedReadingTimeMinutes: guide.estimatedReadingTimeMinutes,
+    updatedAt: guide.updatedAt,
+    works: activeWorkLinks.map((link) => ({
+      id: link.musicalWork.id,
+      slug: link.musicalWork.slug,
+      title: link.musicalWork.title,
+      composer: { id: link.musicalWork.composer.id, slug: link.musicalWork.composer.slug, name: link.musicalWork.composer.name },
+    })),
+    recordings: publishedRecordingLinks.map((link) => {
+      const revision = link.recording.currentPublishedRevision!;
+      return {
+        id: link.recording.id,
+        slug: link.recording.slug,
+        title: revision.title,
+        performance: revision.performance
+          ? {
+              id: revision.performance.id,
+              slug: revision.performance.slug,
+              performanceDate: revision.performance.performanceDate,
+              programme: revision.performance.programme
+                ? { id: revision.performance.programme.id, slug: revision.performance.programme.slug, title: revision.performance.programme.title }
+                : null,
+              venue: revision.performance.venue
+                ? { id: revision.performance.venue.id, slug: revision.performance.venue.slug, name: revision.performance.venue.name }
+                : null,
+              performers: revision.performance.performers,
+              choirs: revision.performance.choirs,
+              conductors: revision.performance.conductors,
+            }
+          : null,
+      };
+    }),
   });
 }

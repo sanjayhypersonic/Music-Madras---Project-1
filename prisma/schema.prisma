@@ -136,6 +136,19 @@ enum VideoPageStatus {
   PUBLISHED
 }
 
+// Phase 6G-17: same two-state shape as CollectionStatus/VideoPageStatus,
+// for the same reason — a LearningGuide's free-form contentMarkdown body
+// is written progressively in Studio, so "not archived" alone is never a
+// defensible public-visibility signal (unlike a simple canonical entity
+// such as Composer). Archival still uses the existing archivedAt column,
+// orthogonally: archiving/restoring a LearningGuide never changes its
+// status, and publishing/unpublishing never changes archivedAt — mirrors
+// archiveCollection/restoreCollection exactly.
+enum LearningGuideStatus {
+  DRAFT
+  PUBLISHED
+}
+
 // ---------------------------------------------------------------------------
 // Studio identity (minimal — see file header note)
 // ---------------------------------------------------------------------------
@@ -826,15 +839,16 @@ model Occasion {
 // ---------------------------------------------------------------------------
 
 model LearningGuide {
-  id                          String    @id @default(uuid())
-  slug                        String    @unique
+  id                          String              @id @default(uuid())
+  slug                        String              @unique
   title                       String
   difficultyLevel             String?
-  contentMarkdown             String?   @db.Text
+  contentMarkdown             String?             @db.Text
   estimatedReadingTimeMinutes Int?
+  status                      LearningGuideStatus @default(DRAFT)
   archivedAt                  DateTime?
-  createdAt                   DateTime  @default(now())
-  updatedAt                   DateTime  @updatedAt
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
   createdById                 String
   updatedById                 String
 

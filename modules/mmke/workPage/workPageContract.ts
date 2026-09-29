@@ -58,6 +58,13 @@ export interface WorkPageCollection {
   title: string;
 }
 
+/** Phase 6G-17: a published, non-archived LearningGuide discussing this Work — links to the existing /learning/[slug] route. */
+export interface WorkPageLearningGuide {
+  id: string;
+  slug: string;
+  title: string;
+}
+
 export interface WorkPageData {
   id: string;
   slug: string;
@@ -74,4 +81,6 @@ export interface WorkPageData {
   recordings: WorkPageRecording[];
   videos: WorkPageVideo[];
   collections: WorkPageCollection[];
+  /** Phase 6G-17: reverse discovery — never derived from resolveRelatedContent (Work-scoped only). */
+  learningGuides: WorkPageLearningGuide[];
 }

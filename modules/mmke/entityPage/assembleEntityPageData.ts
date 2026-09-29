@@ -3,6 +3,7 @@ import type {
   EntityPageLifespan,
   EntityPageRelatedCollection,
   EntityPageRelatedComposer,
+  EntityPageRelatedLearningGuide,
   EntityPageRelatedParticipantRef,
   EntityPageRelatedParticipants,
   EntityPageRelatedPerformance,
@@ -87,6 +88,8 @@ export interface AssembleEntityPageDataInput {
   recordings: RawRecording[];
   videos: RawVideo[];
   collections: RawCollection[];
+  /** Phase 6G-17: Composer-only today (via its own Works); omitted/undefined defaults to null for every other entity type. */
+  learningGuides?: EntityPageRelatedLearningGuide[] | null;
 }
 
 export function toWork(work: RawWork): EntityPageRelatedWork {
@@ -167,5 +170,6 @@ export function assembleEntityPageData(input: AssembleEntityPageDataInput): Enti
     relatedParticipants: deriveRelatedParticipants(input.performances),
     relatedVideos: input.videos.map(toVideo),
     relatedCollections: input.collections.map(toCollection),
+    relatedLearningGuides: input.learningGuides ?? null,
   };
 }

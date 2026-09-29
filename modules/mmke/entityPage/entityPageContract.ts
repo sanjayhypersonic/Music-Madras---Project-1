@@ -62,6 +62,13 @@ export interface EntityPageRelatedCollection {
   title: string;
 }
 
+/** Phase 6G-17: a published, non-archived LearningGuide surfaced via Composer -> MusicalWork -> LearningGuide — links to /learning/[slug]. Composer-only today; null for every other entity type (never derived via resolveRelatedContent). */
+export interface EntityPageRelatedLearningGuide {
+  id: string;
+  slug: string;
+  title: string;
+}
+
 /** Phase 6G-6: a composer surfaced as related context (e.g. on a Venue page) — links to /composers/[slug], which already exists. */
 export interface EntityPageRelatedComposer {
   id: string;
@@ -145,4 +152,6 @@ export interface EntityPageData {
   // MusicMadras media — publicly discoverable only (never raw sync data).
   relatedVideos: EntityPageRelatedVideo[];
   relatedCollections: EntityPageRelatedCollection[];
+  /** Phase 6G-17: Composer-only today (via its own Works); null for every other entity type. */
+  relatedLearningGuides: EntityPageRelatedLearningGuide[] | null;
 }

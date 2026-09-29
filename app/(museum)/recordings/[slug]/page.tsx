@@ -223,6 +223,18 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
         </EntitySection>
       )}
 
+      {recording.learningGuides.length > 0 && (
+        <EntitySection id="learning" heading="Learning Guides">
+          <ul className="museum-related-list">
+            {recording.learningGuides.map((guide) => (
+              <li key={guide.id}>
+                <Link href={`/learning/${guide.slug}`}>{guide.title}</Link>
+              </li>
+            ))}
+          </ul>
+        </EntitySection>
+      )}
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(buildRecordingJsonLd(recording, SITE_ORIGIN)) }}

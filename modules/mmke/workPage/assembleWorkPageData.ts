@@ -1,4 +1,4 @@
-import type { WorkPageData, WorkPagePerformance, WorkPageVideo, WorkPageCollection } from "./workPageContract";
+import type { WorkPageData, WorkPagePerformance, WorkPageVideo, WorkPageCollection, WorkPageLearningGuide } from "./workPageContract";
 
 // Phase 6G-6 — pure mapping from already-loaded, already-public-filtered
 // relationship data into the WorkPageData contract, mirroring
@@ -41,6 +41,12 @@ interface RawCollection {
   title: string;
 }
 
+interface RawLearningGuide {
+  id: string;
+  slug: string;
+  title: string;
+}
+
 export interface AssembleWorkPageDataInput {
   id: string;
   slug: string;
@@ -56,6 +62,7 @@ export interface AssembleWorkPageDataInput {
   recordings: RawRecording[];
   videos: RawVideo[];
   collections: RawCollection[];
+  learningGuides: RawLearningGuide[];
 }
 
 function toProgramme(programme: RawProgramme) {
@@ -90,6 +97,10 @@ function toCollection(collection: RawCollection): WorkPageCollection {
   return { id: collection.id, slug: collection.slug, title: collection.title };
 }
 
+function toLearningGuide(guide: RawLearningGuide): WorkPageLearningGuide {
+  return { id: guide.id, slug: guide.slug, title: guide.title };
+}
+
 export function assembleWorkPageData(input: AssembleWorkPageDataInput): WorkPageData {
   return {
     id: input.id,
@@ -106,5 +117,6 @@ export function assembleWorkPageData(input: AssembleWorkPageDataInput): WorkPage
     recordings: input.recordings.map(toRecording),
     videos: input.videos.map(toVideo),
     collections: input.collections.map(toCollection),
+    learningGuides: input.learningGuides.map(toLearningGuide),
   };
 }

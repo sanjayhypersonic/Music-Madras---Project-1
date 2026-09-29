@@ -7,6 +7,7 @@ import { listActiveVenues } from "../modules/db/repositories/venueRepository";
 import { listActiveOrganisations } from "../modules/db/repositories/organisationRepository";
 import { listPublishedCollections } from "../modules/db/repositories/collectionRepository";
 import { listPublishedVideoPages } from "../modules/db/repositories/youtubeVideoPageRepository";
+import { listPublicLearningGuides } from "../modules/db/repositories/learningGuideRepository";
 import {
   listPublicPerformanceSitemapEntries,
   listPublicProgrammeSitemapEntries,
@@ -39,6 +40,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     recordings,
     collections,
     videoPages,
+    learningGuides,
   ] = await Promise.all([
     listActiveComposers(),
     listActiveArtists(),
@@ -52,12 +54,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     listPublicRecordingSitemapEntries(),
     listPublishedCollections(),
     listPublishedVideoPages(Number.MAX_SAFE_INTEGER),
+    listPublicLearningGuides(),
   ]);
 
   const staticEntries: MetadataRoute.Sitemap = [
     { url: `${SITE_ORIGIN}/`, lastModified: new Date() },
     { url: `${SITE_ORIGIN}/archive`, lastModified: new Date() },
     { url: `${SITE_ORIGIN}/collections`, lastModified: new Date() },
+    { url: `${SITE_ORIGIN}/learning`, lastModified: new Date() },
   ];
 
   return [
@@ -74,5 +78,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...recordings.map((r) => ({ url: `${SITE_ORIGIN}/recordings/${r.slug}`, lastModified: r.updatedAt })),
     ...collections.map((c) => ({ url: `${SITE_ORIGIN}/collections/${c.slug}`, lastModified: c.updatedAt })),
     ...videoPages.map(({ page }) => ({ url: `${SITE_ORIGIN}/videos/${page.slug}`, lastModified: page.updatedAt })),
+    ...learningGuides.map((g) => ({ url: `${SITE_ORIGIN}/learning/${g.slug}`, lastModified: g.updatedAt })),
   ];
 }

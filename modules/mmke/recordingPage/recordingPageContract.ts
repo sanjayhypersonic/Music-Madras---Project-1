@@ -89,6 +89,13 @@ export interface RecordingPageCollection {
   title: string;
 }
 
+/** Phase 6G-17: a published, non-archived LearningGuide discussing this Recording — links to the existing /learning/[slug] route. */
+export interface RecordingPageLearningGuide {
+  id: string;
+  slug: string;
+  title: string;
+}
+
 export interface RecordingPageData {
   id: string;
   slug: string;
@@ -115,4 +122,6 @@ export interface RecordingPageData {
   videos: RecordingPageVideo[];
   /** Publicly published, non-archived Collections only. */
   collections: RecordingPageCollection[];
+  /** Phase 6G-17: reverse discovery — never derived from resolveRelatedContent (Recording-scoped only). */
+  learningGuides: RecordingPageLearningGuide[];
 }

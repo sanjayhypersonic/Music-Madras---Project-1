@@ -5,6 +5,7 @@ import type {
   RecordingPageProgramme,
   RecordingPageVideo,
   RecordingPageCollection,
+  RecordingPageLearningGuide,
 } from "./recordingPageContract";
 
 // Phase 6G-5B — pure mapping from already-loaded, already-public-filtered
@@ -58,6 +59,12 @@ interface RawCollection {
   title: string;
 }
 
+interface RawLearningGuide {
+  id: string;
+  slug: string;
+  title: string;
+}
+
 export interface AssembleRecordingPageDataInput {
   id: string;
   slug: string;
@@ -74,6 +81,7 @@ export interface AssembleRecordingPageDataInput {
   performance: RawPerformance | null;
   videos: RawVideo[];
   collections: RawCollection[];
+  learningGuides: RawLearningGuide[];
 }
 
 function toWork(work: RawWork) {
@@ -116,6 +124,10 @@ function toCollection(collection: RawCollection): RecordingPageCollection {
   return { id: collection.id, slug: collection.slug, title: collection.title };
 }
 
+function toLearningGuide(guide: RawLearningGuide): RecordingPageLearningGuide {
+  return { id: guide.id, slug: guide.slug, title: guide.title };
+}
+
 function dedupeComposers(works: RawWork[]): RecordingPageComposer[] {
   const seen = new Map<string, RecordingPageComposer>();
   for (const work of works) {
@@ -144,5 +156,6 @@ export function assembleRecordingPageData(input: AssembleRecordingPageDataInput)
     performance: toPerformance(input.performance),
     videos: input.videos.map(toVideo),
     collections: input.collections.map(toCollection),
+    learningGuides: input.learningGuides.map(toLearningGuide),
   };
 }

@@ -9,7 +9,9 @@ import {
   attachWorkToLearningGuide,
   detachRecordingFromLearningGuide,
   detachWorkFromLearningGuide,
+  publishLearningGuide,
   restoreLearningGuide,
+  unpublishLearningGuide,
   updateLearningGuide,
 } from "../../../../../../../modules/db/repositories/learningGuideRepository";
 
@@ -61,6 +63,26 @@ export async function restoreLearningGuideAction(learningGuideId: string) {
   }
 
   await restoreLearningGuide(learningGuideId, session!.user.id);
+  redirect(`/studio/catalogue/learning-guides/${learningGuideId}`);
+}
+
+export async function publishLearningGuideAction(learningGuideId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(learningGuideId, "You do not have permission to publish this learning guide.");
+  }
+
+  await publishLearningGuide(learningGuideId, session!.user.id);
+  redirect(`/studio/catalogue/learning-guides/${learningGuideId}`);
+}
+
+export async function unpublishLearningGuideAction(learningGuideId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(learningGuideId, "You do not have permission to unpublish this learning guide.");
+  }
+
+  await unpublishLearningGuide(learningGuideId, session!.user.id);
   redirect(`/studio/catalogue/learning-guides/${learningGuideId}`);
 }
 

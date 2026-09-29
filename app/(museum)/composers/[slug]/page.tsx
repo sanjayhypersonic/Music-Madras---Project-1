@@ -213,6 +213,18 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
         </EntitySection>
       )}
 
+      {composer.relatedLearningGuides && composer.relatedLearningGuides.length > 0 && (
+        <EntitySection id="learning" heading="Learning Guides">
+          <ul className="museum-related-list">
+            {composer.relatedLearningGuides.map((guide) => (
+              <li key={guide.id}>
+                <Link href={`/learning/${guide.slug}`}>{guide.title}</Link>
+              </li>
+            ))}
+          </ul>
+        </EntitySection>
+      )}
+
       <script
         type="application/ld+json"
         // Minimal, safe structured data (brief §12) — name and canonical

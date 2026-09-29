@@ -12,7 +12,9 @@ import {
   attachWorkAction,
   detachRecordingAction,
   detachWorkAction,
+  publishLearningGuideAction,
   restoreLearningGuideAction,
+  unpublishLearningGuideAction,
   updateLearningGuideAction,
 } from "./actions";
 
@@ -20,6 +22,11 @@ import {
 // the established Composer/Collection detail-page pattern: plain-edit
 // fields, archive/restore, and canonical-entity attach/detach pickers
 // (Work, Recording) using upsert-based no-op-on-duplicate semantics.
+//
+// Phase 6G-17 adds Publish/Unpublish, mirroring Collection's own
+// publish/unpublish exactly — fully orthogonal to Archive/Restore, never
+// implicitly toggled by them. Public visibility is the conjunction of
+// both: status === "PUBLISHED" && archivedAt === null.
 
 function recordingTitle(recording: {
   slug: string;
@@ -64,9 +71,19 @@ export default async function LearningGuideDetailPage({
       {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{guide.archivedAt ? "Archived" : "Active"}</strong>
+        Lifecycle: <strong>{guide.archivedAt ? "Archived" : "Active"}</strong>
         <br />
-        Slug: <code>{guide.slug}</code> (not publicly routed in this phase)
+        Publication: <strong>{guide.status === "PUBLISHED" ? "Published" : "Draft"}</strong>
+        <br />
+        Slug: <code>{guide.slug}</code>
+        {guide.status === "PUBLISHED" && !guide.archivedAt && (
+          <>
+            {" — "}
+            <Link href={`/learning/${guide.slug}`} target="_blank" rel="noopener noreferrer">
+              View public page
+            </Link>
+          </>
+        )}
       </p>
 
       <h2>Edit</h2>
@@ -104,7 +121,16 @@ export default async function LearningGuideDetailPage({
       )}
 
       {canWrite && (
-        <div style={{ marginTop: "1rem" }}>
+        <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+          {guide.status === "PUBLISHED" ? (
+            <form action={unpublishLearningGuideAction.bind(null, guide.id)}>
+              <button type="submit">Unpublish</button>
+            </form>
+          ) : (
+            <form action={publishLearningGuideAction.bind(null, guide.id)}>
+              <button type="submit">Publish</button>
+            </form>
+          )}
           {!guide.archivedAt ? (
             <form action={archiveLearningGuideAction.bind(null, guide.id)}>
               <button type="submit">Archive</button>

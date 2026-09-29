@@ -188,6 +188,18 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         </EntitySection>
       )}
 
+      {work.learningGuides.length > 0 && (
+        <EntitySection id="learning" heading="Learning Guides">
+          <ul className="museum-related-list">
+            {work.learningGuides.map((guide) => (
+              <li key={guide.id}>
+                <Link href={`/learning/${guide.slug}`}>{guide.title}</Link>
+              </li>
+            ))}
+          </ul>
+        </EntitySection>
+      )}
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

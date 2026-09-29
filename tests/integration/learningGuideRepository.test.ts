@@ -12,7 +12,9 @@ import {
   findLearningGuideById,
   findLearningGuideDetailForStudio,
   listLearningGuidesForStudio,
+  publishLearningGuide,
   restoreLearningGuide,
+  unpublishLearningGuide,
   updateLearningGuide,
 } from "../../modules/db/repositories/learningGuideRepository";
 import { createComposer } from "../../modules/db/repositories/composerRepository";
@@ -181,6 +183,52 @@ describe("LearningGuide CRUD against a real database", () => {
     });
     expect(archiveAudit).toHaveLength(1);
     expect(restoreAudit).toHaveLength(1);
+  });
+
+  it("publishes and unpublishes a LearningGuide, audit-logging both", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const guide = await createLearningGuide({ slug: uniqueSlug("publish"), title: uniqueTitle("Publish Guide"), actorId: user.id });
+    learningGuideId = guide.id;
+    expect(guide.status).toBe("DRAFT");
+
+    const published = await publishLearningGuide(guide.id, user.id);
+    expect(published.status).toBe("PUBLISHED");
+
+    const unpublished = await unpublishLearningGuide(guide.id, user.id);
+    expect(unpublished.status).toBe("DRAFT");
+
+    const publishAudit = await prisma.auditLogEntry.findMany({
+      where: { entityType: "LearningGuide", entityId: guide.id, action: "LEARNING_GUIDE_PUBLISHED" },
+    });
+    const unpublishAudit = await prisma.auditLogEntry.findMany({
+      where: { entityType: "LearningGuide", entityId: guide.id, action: "LEARNING_GUIDE_UNPUBLISHED" },
+    });
+    expect(publishAudit).toHaveLength(1);
+    expect(unpublishAudit).toHaveLength(1);
+  });
+
+  it("keeps archive/restore and publish/unpublish fully orthogonal: archiving a published guide never unpublishes it, and restoring it never republishes it", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const guide = await createLearningGuide({ slug: uniqueSlug("orthogonal"), title: uniqueTitle("Orthogonal Guide"), actorId: user.id });
+    learningGuideId = guide.id;
+
+    await publishLearningGuide(guide.id, user.id);
+    const archived = await archiveLearningGuide(guide.id, user.id);
+    expect(archived.status).toBe("PUBLISHED"); // archiving never unpublishes
+    expect(archived.archivedAt).not.toBeNull();
+
+    const restored = await restoreLearningGuide(guide.id, user.id);
+    expect(restored.status).toBe("PUBLISHED"); // restoring never re-publishes anything it didn't already have
+    expect(restored.archivedAt).toBeNull();
+
+    // The reverse: a DRAFT guide that gets archived then restored stays DRAFT.
+    const draftGuide = await createLearningGuide({ slug: uniqueSlug("stays-draft"), title: uniqueTitle("Stays Draft Guide"), actorId: user.id });
+    await archiveLearningGuide(draftGuide.id, user.id);
+    const restoredDraft = await restoreLearningGuide(draftGuide.id, user.id);
+    expect(restoredDraft.status).toBe("DRAFT");
+    await cleanupLearningGuide(draftGuide.id);
   });
 });
 

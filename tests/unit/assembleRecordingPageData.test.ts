@@ -18,6 +18,7 @@ function baseInput(): AssembleRecordingPageDataInput {
     performance: null,
     videos: [],
     collections: [],
+    learningGuides: [],
   };
 }
 

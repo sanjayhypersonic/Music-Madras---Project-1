@@ -21,8 +21,8 @@ export default async function LearningGuidesPage({ searchParams }: { searchParam
     <div>
       <h1>Learning Guides</h1>
       <p>
-        A structured educational resource that can be connected to canonical Musical Works and Recordings. Not yet
-        exposed on the public Museum — this is the Studio editorial foundation only.
+        A structured educational resource that can be connected to canonical Musical Works and Recordings. Publish a
+        guide to make it visible at <Link href="/learning">/learning</Link>.
       </p>
 
       <form method="get" style={{ margin: "1rem 0" }}>
@@ -53,7 +53,8 @@ export default async function LearningGuidesPage({ searchParams }: { searchParam
           <thead>
             <tr>
               <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Title</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Lifecycle</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Publication</th>
               <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Difficulty</th>
               <th style={{ borderBottom: "1px solid #ccc" }}></th>
             </tr>
@@ -63,6 +64,7 @@ export default async function LearningGuidesPage({ searchParams }: { searchParam
               <tr key={guide.id}>
                 <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{guide.title}</td>
                 <td style={{ borderBottom: "1px solid #eee" }}>{guide.archivedAt ? "Archived" : "Active"}</td>
+                <td style={{ borderBottom: "1px solid #eee" }}>{guide.status === "PUBLISHED" ? "Published" : "Draft"}</td>
                 <td style={{ borderBottom: "1px solid #eee" }}>{guide.difficultyLevel ?? "—"}</td>
                 <td style={{ borderBottom: "1px solid #eee" }}>
                   <Link href={`/studio/catalogue/learning-guides/${guide.id}`}>Manage</Link>

@@ -22,6 +22,7 @@ function baseData(overrides: Partial<RecordingPageData> = {}): RecordingPageData
     performance: null,
     videos: [],
     collections: [],
+    learningGuides: [],
     ...overrides,
   };
 }
