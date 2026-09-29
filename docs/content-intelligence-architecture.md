@@ -1,8 +1,11 @@
-# Phase 6H-1 — Content Intelligence Architecture & Inventory
+# Content Intelligence Architecture
 
-Status: **architecture and inventory only. No Content Intelligence code exists yet.**
-This document records what was found in the repository as of this phase and proposes
-a future architecture. Nothing described here as "future" or "proposed" has been built.
+Status: **architecture and contracts only. No Content Intelligence code exists yet.**
+This document records what was found in the repository and proposes a future
+architecture. Nothing described here as "future" or "proposed" has been built.
+
+- §1–§17: **Phase 6H-1** — Architecture & Inventory (commit `fbc75bd`).
+- §18 onward: **Phase 6H-2** — Content Suggestion & Context Contract addendum.
 
 ## 1. Purpose
 
@@ -410,3 +413,385 @@ building a Studio UI for `FieldOwnership`/`SyncConflict` resolution.
   with the AI-origin flag carried only in the audit log?
 - Should Venue/Performance's lack of any prose field be addressed as its own
   narrow schema phase before or independent of Content Intelligence?
+
+---
+
+# Phase 6H-2 — Content Suggestion & Context Contract
+
+Status: **contract definition only. No `ContentSuggestion` model, no context
+assembler, no LLM provider, and no Studio UI exist yet.** This section defines the
+contracts a future implementation must obey. Where it refines a 6H-1 proposal, the
+refinement and its justification are stated explicitly (see §26).
+
+## 18. What is a Content Suggestion?
+
+Not one generic blob. Seven distinct categories were evaluated against the actual
+repository evidence from §3–§4:
+
+| Type | Example | Target |
+|---|---|---|
+| `EDITORIAL_PROSE` | Listening-guide draft for a Recording | an existing editorial field (§3D) |
+| `SEO_METADATA` | Suggested `seoMetaTitle`/`seoMetaDescription` | existing, currently-empty SEO fields on `RecordingRevision`/`YouTubeVideoPage` |
+| `INTERNAL_LINK` | "Link to this Composer and Work" | must resolve only through paths in §3B/§11 — never a new/fuzzy path |
+| `INFORMATION_GAP` | "Performance date unknown" | no field — see §22 |
+| `SOURCE_LEAD` | "This source may add context" | a proposed `Source`, not an attached one |
+| `SEARCH_TERMINOLOGY` | Candidate questions/terms users might search | no canonical target, editorial-review-only |
+| `CANONICAL_RELATIONSHIP_CANDIDATE` | "This video may correspond to Work X" | a candidate FK — never auto-applied |
+
+`CANONICAL_RELATIONSHIP_CANDIDATE` (type G) is architecturally distinct from the
+other six: A–F propose *content* (text, metadata, a lead to evaluate); G proposes a
+*structural change to the archive graph itself*. Decision (answering Step 10): it
+shares the same `ContentSuggestion` shape and review pipeline as the other six — so
+there is exactly one audit trail and one review queue, not two systems — but no
+code path anywhere ever lets accepting a G-type suggestion *itself* create or
+modify a canonical relationship. Acceptance only marks the candidate as
+`ACCEPTED`; a human must separately perform the relationship edit through the
+existing Studio catalogue-write flow (`CATALOGUE_WRITE`), which is audited exactly
+as it already is today, independent of this contract. **G is included in the
+contract shape but excluded from the first implementation's scope** (§27).
+
+## 19. Trust boundary (six states)
+
+| State | Definition | Example |
+|---|---|---|
+| Canonical fact | Lives in a canonical entity table or its FK relationship (§3B) | Composer = X |
+| Editorial factual content | Human-authored prose stating a fact not otherwise modeled as a relationship | Programme.notes: "benefit concert for the flood relief fund" |
+| Editorial interpretation | Human-authored analytical/aesthetic prose, not a fact claim | `educationalAnalysis`: "exemplifies late-Romantic harmonic language" |
+| AI suggestion | Output of Content Intelligence, any type from §18 | "The composer is likely X" |
+| Unverified claim | A Tier 3/4 (§5) mention not yet elevated by editorial review | YouTube description mentions a venue name |
+| Missing information | A flagged, first-class absence (§22), never silently blank | Performance date: not recorded |
+
+An AI suggestion never overwrites, and is never treated as equivalent to, a
+canonical fact. "The composer is likely X" remains a suggestion — visibly
+provisional — until a human reviewer either accepts it (converting it, through
+their own action, into editorial content or a canonical-relationship edit) or
+rejects it, at which point the archive is exactly as it was before the suggestion
+existed.
+
+## 20. Recording Context contract (conceptual — not implemented)
+
+A `RecordingContext` a future assembler could produce for one `RecordingRevision`
+at a time (draft or published — an editor may want CI assistance while still
+drafting, so the assembler is not published-only). Every leaf value below is
+conceptually tagged with the source tier from §5; nothing here is a new database
+field.
+
+- **Identity** — Recording id/slug, `RecordingAggregateStatus`, revision id/number/
+  `revisionStatus`. Tier 1.
+- **Works** — via `RecordingRevisionWork`: work id/title/alternateTitles/
+  catalogueNumber/keySignature/language (Tier 1), each work's Composer id/name/era/
+  bornDate/diedDate (Tier 1) and biography (Tier 2).
+- **Performance** — performance id/date, Programme id/title/notes (Tier 2). **Optional**:
+  a Recording attached only via direct `RecordingRevisionWork` (no Performance in
+  the chain, per §3B) has no Performance section at all — the assembler must not
+  assume one exists.
+- **Participants** — performers/choirs/conductors via the Performance join tables
+  (Tier 1), each with their biography/description field (Tier 2) where populated.
+- **Venue** — name/type/address/city/country (Tier 1), Organisation name/
+  description (Tier 1/2). **Explicitly flagged absent, not null-as-unknown**: Venue
+  has no description field at all (§3D) — the context must mark this as a schema
+  gap, not "no data yet."
+- **Media** — the YouTubeVideo(s) reached via `MediaResource`: title, description
+  (Tier 4, explicitly tagged as unvetted YouTube-authored text, never conflated
+  with Tier 2 editorial prose), publishedAt, durationSeconds, thumbnailUrl,
+  playlist memberships. Hashtags are **not available** (never fetched, §3A) — the
+  context must not claim to have them.
+- **Collections / Learning** — public Collections and LearningGuides linked to this
+  Recording or its Works (Tier 1 relationship + Tier 2 description/excerpt — not
+  the full `contentMarkdown` body, to avoid duplicating an entire document per §21).
+- **Provenance** — `Source`/`Citation`/`RightsInformation` attached to this
+  Recording, its Works, or their Composers (the only eligible entity types, §3C).
+  Tier 3.
+- **Existing editorial content already in the sections above** (description,
+  `educationalListeningGuide`, `educationalAnalysis`, `curatorNote`) is surfaced
+  in place, not duplicated into a separate "editorial" block.
+- **Completeness** — the six dimensions from §7, computed at assembly time, not
+  stored.
+
+**Excluded from context on principle**: any fuzzy-matched candidate relationship,
+any entity type's data the target Recording isn't actually linked to, and any
+prior AI suggestion's content (a regeneration reads canonical/editorial/source
+data again, not a previous AI output, to avoid compounding drift).
+
+## 21. Read-only boundary
+
+The assembler is conceptually **read-only**: it may call only existing `find`/
+`list`/`get` repository functions (the same ones `getPublicRecordingPageData` and
+similar already call), and must never call a `create`/`update`/`archive`/`publish`/
+`setFieldOwnership`/rights-changing function. This mirrors the existing
+Prisma-free `assemble*PageData` boundary (`modules/mmke/**`) — the assembler
+produces a deterministic snapshot; it does not mutate anything it reads.
+
+## 22. Source/evidence contract
+
+Every fact the context contract surfaces is taggable with a minimal provenance
+reference — never a duplicated copy of the source document:
+
+```
+{ sourceType: CANONICAL_MMKE | YOUTUBE_METADATA | APPROVED_EDITORIAL
+             | APPROVED_EXTERNAL_SOURCE,
+  entityType, entityId, field }
+```
+
+`AI_GENERATED` is reserved for suggestion *output*, never an input tag. Storing
+only `(entityType, entityId, field)` — not the value itself — is sufficient because
+the referenced record can always be re-fetched at review time, and it keeps
+evidence lightweight (directly answers Step 6's "minimum provenance
+representation").
+
+## 23. Content Suggestion contract
+
+Four concerns, deliberately not merged into one opaque JSON field:
+
+1. **Content** — `suggestionType` (§18), `targetEntityType`/`targetEntityId`,
+   `targetField` (e.g. `educationalListeningGuide`), `proposedContent`.
+2. **Evidence** — an array of §22 references, plus a `contextFingerprint` (§25).
+3. **Generation metadata** — provider, model, prompt/template version,
+   `generatedAt` (§24).
+4. **Status + review decision** — kept as two distinct concerns (§20/§21 below):
+   the suggestion's current lifecycle position, and the historical record of what
+   a human decided and why.
+
+## 24. Review lifecycle — which model owns which states
+
+The eight states from 6H-1 §8 (`NOT_REQUESTED … REJECTED`) do not all belong to
+one model. Splitting them, mirroring the existing `SyncJobRun` precedent
+(`RUNNING/SUCCEEDED/PARTIAL/FAILED` — a system-side job-attempt record, already
+separate from the content it produces):
+
+- **`ContentGenerationRequest`** (system-side, mirrors `SyncJobRun`): owns
+  `NOT_REQUESTED → GENERATING → SUCCEEDED/FAILED` — did the AI call itself
+  complete.
+- **`ContentSuggestion`** (human-review-side): owns `DRAFT_READY → EDITOR_REVIEW →
+  CHANGES_REQUESTED → APPROVED/REJECTED` — did an editor accept it.
+- **`PUBLISHED` belongs to neither.** Acceptance means a human copies
+  `proposedContent` (or their edited version) into the real editorial field (e.g.
+  `RecordingRevision.description`); from that point, the **existing**
+  Recording/Collection/LearningGuide publish machinery governs publication, exactly
+  as it does today for human-authored content. This directly satisfies 6H-1's own
+  finding that "an AI suggestion should not automatically become an
+  `EditorialContent` record" — publication is never duplicated into a second
+  system.
+
+## 25. Review decision model
+
+`ACCEPT`, `EDIT_AND_ACCEPT` (the reviewer's final text is preserved separately
+from the AI's `proposedContent` — never overwritten, so both remain inspectable),
+`REJECT` (with a reason: `UNSUPPORTED | INCORRECT | DUPLICATE | OTHER`), `REQUEST_REGENERATION`
+(creates a new `ContentGenerationRequest` against the same target — not a mutation
+of the rejected suggestion). "Request more information" is not a separate decision;
+it is naturally expressed as accepting the suggestion's own `INFORMATION_GAP` type
+(§18) or rejecting a suggestion with reason `UNSUPPORTED`. Rejecting a suggestion
+never touches canonical MMKE data — the archive is unchanged either way.
+
+## 26. Canonical relationship suggestions — final decision
+
+Resolved in §18: included in the `ContentSuggestion` contract shape as
+`CANONICAL_RELATIONSHIP_CANDIDATE`, but **excluded from the first implementation**
+(§27) and, structurally, acceptance never triggers a canonical write — only a
+human, using the existing catalogue-write UI, can actually create the relationship.
+No fuzzy matching, no automatic entity creation, ever.
+
+## 27. Information-gap contract
+
+`INFORMATION_GAP` suggestions carry structured content, not prose — the
+"proposed content" *is* the question, never a guessed answer:
+
+```
+{ missingField, whyItMatters, candidateResolutionSource?  // an optional §22
+                                                            // reference — a hint,
+                                                            // never a filled-in
+                                                            // value
+  requestedAction }                                        // confirm / provide / attach
+```
+
+Evidenced gaps from the actual schema: no Composer on a Work, no Performance date,
+no Venue on a Performance, ambiguous performer attribution, no eligible
+Source/Citation, or a video with sparse YouTube metadata and no canonical
+Recording link at all (§3A, both linkage paths optional).
+
+## 28. Recording as the first target — verified, not assumed
+
+Confirmed suitable by re-checking the actual graph (§3B): Recording already
+reaches Work, Composer, Performance, Participants, Venue, Media, Collections, and
+in-scope Provenance, entirely through real FKs, and already has the richest
+existing editorial surface of any entity (`description` +
+`educationalListeningGuide` + `educationalAnalysis`) — proving it's already a
+content-bearing entity type, not a new one. Its Draft/Published `RecordingRevision`
+model also means "generate against a draft, review before publish" requires no new
+state machinery — a draft revision is already the place work-in-progress content
+lives. By contrast, Venue and Performance are confirmed **unsuitable** as a first
+target for the opposite reason: §3D found they have no prose field to hold output
+at all — starting there would require a schema change before any contract could be
+exercised, which this phase explicitly avoids.
+
+## 29. First safe use case (recommended, not implemented)
+
+**Recording listening-guide suggestion**, targeting `RecordingRevision.
+educationalListeningGuide` — not `.description`. Reasoning: `description` is more
+likely to feed the page's primary summary and metadata, so an early misfire there
+has a larger blast radius; `educationalListeningGuide` is already modeled as
+optional, supplementary content, rendered in a clearly separate "Educational
+Content" section, making an AI-assisted draft easy for an editor to spot, evaluate,
+and reject in isolation without touching the recording's core description. It
+satisfies every criterion in the brief: strong canonical context (§28), low risk to
+canonical facts (writes nowhere near a fact field), produces prose rather than a
+relationship mutation, and is easy to review side-by-side with the existing field
+it extends. `description` and `educationalAnalysis` are the natural next
+candidates once this path is validated.
+
+SEO/AEO/GEO suggestions (`SEO_METADATA`) remain a separate, later candidate: they
+would target the existing, currently-empty `seoMetaTitle`/`seoMetaDescription`
+fields only, and must never alter canonical names, dates, attribution, rights, or
+relationships, and must never fabricate search-volume or ranking claims.
+
+## 30. AI generation metadata
+
+Minimum required for reproducibility/auditability (Step 15's actual question):
+`provider`, `model`, `promptVersion`, `contextFingerprint` (§31), `generatedAt`.
+Token/cost/temperature tracking is a nice-to-have, not required by the contract,
+and is deferred. No secrets are ever stored in this metadata — provider
+credentials remain out of scope entirely (§16, unchanged).
+
+## 31. Staleness / versioning
+
+Minimum architecture (not a new subsystem): a `contextFingerprint` — a composite of
+the `updatedAt` timestamps of every entity/field the assembler actually read for
+that generation — computed once at assembly time and stored on the
+`ContentGenerationRequest`. Staleness is then a **computed** comparison at read
+time (re-fetch the same entities' current `updatedAt`, compare) — mirroring the
+existing `EditorialPhase` precedent (6H-1 §8) of computing a derived status rather
+than storing one. This requires exactly one new field, not a new versioning table.
+
+## 32. Auditability
+
+No second audit system. The existing generic `AuditLogEntry` (`action`/
+`entityType`/`entityId`/JSON snapshots, already proven flexible enough by every
+existing repository) is reused as-is with new action strings only:
+`CONTENT_GENERATION_REQUESTED`, `CONTENT_SUGGESTION_CREATED`,
+`CONTENT_SUGGESTION_EDITED`, `CONTENT_SUGGESTION_ACCEPTED`,
+`CONTENT_SUGGESTION_REJECTED`, `CONTENT_SUGGESTION_REGENERATION_REQUESTED`. The
+eventual write into a real field (e.g. `RecordingRevision.description`) is audited
+by the **existing** action for that mutation (e.g. `RECORDING_DRAFT_UPDATED`) —
+never a duplicate record.
+
+## 33. Database decision
+
+**A new model is genuinely required** — re-confirming 6H-1 §15, not merely
+repeating it. `AuditLogEntry` was evaluated as a possible reuse and rejected: it is
+documented as append-only history, has no status field to transition
+(`DRAFT_READY → EDITOR_REVIEW → …`), and is not meant to be queried as "my pending
+review queue" — repurposing it would conflate an audit trail with a work queue.
+No existing editorial prose field can hold AI output without breaking its
+established "never generated" invariant (§3D). **This phase does not apply any
+migration** — the following is a proposal only, to be approved before any future
+implementation phase applies it.
+
+**Proposed minimum: two models, not three** (a `ContentSuggestionRevision` for
+multi-turn edit history is explicitly not part of the minimum — see below).
+
+```
+model ContentGenerationRequest {
+  id                 String   @id @default(uuid())
+  targetEntityType   String            // e.g. "Recording"
+  targetEntityId     String
+  suggestionType     ContentSuggestionType
+  status             ContentGenerationStatus @default(PENDING)  // PENDING|GENERATING|SUCCEEDED|FAILED
+  contextFingerprint String?           // §31 — null until generation completes
+  provider           String?
+  model              String?
+  promptVersion      String?
+  requestedById      String
+  requestedAt        DateTime @default(now())
+  completedAt        DateTime?
+  errorDetails       String?  @db.Text
+  suggestions        ContentSuggestion[]
+  requestedBy        StudioUser @relation(fields: [requestedById], references: [id])
+}
+
+model ContentSuggestion {
+  id                  String   @id @default(uuid())
+  generationRequestId String
+  suggestionType      ContentSuggestionType
+  targetEntityType    String
+  targetEntityId      String
+  targetField         String?           // e.g. "educationalListeningGuide"; null for
+                                         // types with no field target (INFORMATION_GAP,
+                                         // SEARCH_TERMINOLOGY, CANONICAL_RELATIONSHIP_CANDIDATE)
+  proposedContent     String   @db.Text // or structured JSON for INFORMATION_GAP (§27)
+  evidenceRefs        Json              // §22 references, array
+  status              ContentSuggestionStatus @default(DRAFT_READY)
+  reviewedById        String?
+  reviewDecision       ReviewDecision?
+  reviewNote          String?  @db.Text
+  finalContent        String?  @db.Text // populated only for EDIT_AND_ACCEPT
+  reviewedAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  generationRequest   ContentGenerationRequest @relation(fields: [generationRequestId], references: [id])
+  reviewedBy          StudioUser? @relation(fields: [reviewedById], references: [id])
+}
+
+enum ContentSuggestionType {
+  EDITORIAL_PROSE
+  SEO_METADATA
+  INTERNAL_LINK
+  INFORMATION_GAP
+  SOURCE_LEAD
+  SEARCH_TERMINOLOGY
+  CANONICAL_RELATIONSHIP_CANDIDATE
+}
+enum ContentGenerationStatus { PENDING GENERATING SUCCEEDED FAILED }
+enum ContentSuggestionStatus { DRAFT_READY EDITOR_REVIEW CHANGES_REQUESTED APPROVED REJECTED }
+enum ReviewDecision { ACCEPT EDIT_AND_ACCEPT REJECT_UNSUPPORTED REJECT_INCORRECT REJECT_DUPLICATE REJECT_OTHER }
+```
+
+Why two models and not one: `ContentGenerationRequest` tracks the system-side
+generation attempt (mirroring `SyncJobRun`'s separation of "did the job run" from
+the rows it produces); `ContentSuggestion` tracks the human-reviewable artifact.
+These are genuinely different lifecycles with different actors (system vs. human);
+collapsing them would conflate "did the AI call succeed" with "did the editor
+accept it." Why not three: a `ContentSuggestionRevision` history model is not
+needed for the first pilot — a regeneration is simply a new
+`ContentGenerationRequest` + new `ContentSuggestion` row against the same target;
+multi-turn refinement history can be added later without reshaping this contract.
+
+**What this minimum enables**: a persistent, queryable per-role review queue; full
+audit trail (combined with `AuditLogEntry`); staleness detection (§31);
+reproducibility (§30). **What it deliberately does not enable**: auto-publish
+(acceptance is still a separate, existing write into a real field); canonical
+relationship mutation (no FK to "the relationship it would create," only free-text/
+JSON describing the candidate, §26); multi-turn conversational refinement; any
+public-facing exposure (no slug, no public repository function, not
+sitemap-eligible).
+
+## 34. RBAC boundary
+
+No new roles. Two existing `StudioAction` gates suffice: **request generation +
+view suggestions** → `RECORDING_WRITE` (the same permission that already allows
+creating/editing a Recording draft — Contributor and above); **edit/accept/reject
+a suggestion, and perform the resulting field write** → `EDITORIAL_REVIEW` (Editor/
+Reviewer and above — the same permission that already governs moving a Recording
+through its review phases). `AUDIT_VIEW` already covers visibility into what
+happened. Never exposed to public users; no AI draft is ever reachable from any
+public Museum route (§16, unchanged).
+
+## 35. Deferred (this phase)
+
+Everything from 6H-1 §16 remains deferred, plus, specific to this phase: the
+`ContentGenerationRequest`/`ContentSuggestion` migration itself (proposed, not
+applied — awaiting explicit approval); any Studio review UI; the context assembler
+module; any LLM provider or call; `CANONICAL_RELATIONSHIP_CANDIDATE` generation
+(contract-only, §26); multi-turn suggestion revision history.
+
+## 36. Resolving the 6H-1 → 6H-2 contradiction
+
+6H-1 §15 proposed a single `ContentSuggestion` model with fields including
+`publishedById` and a single `status` spanning the full lifecycle. §24/§33 above
+refine this: the lifecycle is split across two models (`ContentGenerationRequest`
+for the system-side attempt, `ContentSuggestion` for the human review), and
+`publishedById` is removed because §24 establishes that publication is never
+tracked by `ContentSuggestion` at all — it is delegated entirely to the existing,
+already-built publish machinery on the real target entity. This refinement is
+grounded in the newly-completed lifecycle analysis (§24) and the `SyncJobRun`
+precedent found in the schema; it supersedes the 6H-1 sketch.
