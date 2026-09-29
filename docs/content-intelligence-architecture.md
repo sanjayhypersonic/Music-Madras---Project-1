@@ -5,7 +5,8 @@ This document records what was found in the repository and proposes a future
 architecture. Nothing described here as "future" or "proposed" has been built.
 
 - §1–§17: **Phase 6H-1** — Architecture & Inventory (commit `fbc75bd`).
-- §18 onward: **Phase 6H-2** — Content Suggestion & Context Contract addendum.
+- §18–§36: **Phase 6H-2** — Content Suggestion & Context Contract addendum.
+- §37 onward: **Phase 6H-3** — Recording Context Assembler, the first real implementation.
 
 ## 1. Purpose
 
@@ -795,3 +796,162 @@ tracked by `ContentSuggestion` at all — it is delegated entirely to the existi
 already-built publish machinery on the real target entity. This refinement is
 grounded in the newly-completed lifecycle analysis (§24) and the `SyncJobRun`
 precedent found in the schema; it supersedes the 6H-1 sketch.
+
+---
+
+# Phase 6H-3 — Recording Context Assembler
+
+Status: **implemented.** This is the first real, deterministic component of
+Content Intelligence — a read-only context-assembly layer. It is not an LLM
+integration, not a `ContentSuggestion` generator, and not an editorial publishing
+system; none of those exist yet. No contradiction with the 6H-2 contract was
+found during implementation — §41 records the two decisions 6H-2 left open that
+this phase had to resolve.
+
+## 37. Module location and dependency direction
+
+Following the ADR §3 boundary (only `modules/db` touches Prisma) and the exact
+precedent `entityRelationshipsRepository.ts` already sets for `assemble*PageData`
+functions:
+
+- **`modules/mmke/contentIntelligence/recordingContextContract.ts`** — pure types
+  only (`RecordingContext` and its nested shapes), Prisma-free.
+- **`modules/mmke/contentIntelligence/assembleRecordingContext.ts`** — a pure
+  function (`assembleRecordingContext`) that shapes already-loaded data into the
+  contract, including all determinism/dedup/gap-derivation logic. No I/O.
+- **`modules/db/repositories/recordingContextRepository.ts`** — the only file in
+  this phase that touches Prisma. Exports `getRecordingContext(recordingId, mode)`,
+  which loads data via existing repository functions
+  (`findPublicVideoPagesByYouTubeVideoIds`, `findPublicCollectionsByIds`,
+  `listPublicLearningGuidesForRecording`, `listSourcesForEntity`,
+  `listRightsForEntity`, `checkRecordingRevisionCompleteness`,
+  `computeRecordingReadiness`) and one fresh, revision-scoped query (needed
+  because the existing `getCanonicalContextForRevision` doesn't load
+  `Venue.organisation` — the same reason `getPublishedRecordingContextBySlug`
+  already runs its own fresh query instead of widening that function).
+
+Dependency direction is one-way: `recordingContextRepository.ts` imports from
+other `modules/db/repositories/*` files; none of them import it back, and no
+canonical repository or public page depends on anything under
+`modules/mmke/contentIntelligence/**`.
+
+## 38. Actual `RecordingContext` shape
+
+Ten top-level sections, all built from real fields confirmed in Phase 6H-1's
+inventory — nothing fabricated: `identity`, `works` (+ deduped `composers`),
+`performance` (nullable — `venue`, `programme`, `performers`/`choirs`/`conductors`),
+`editorial` (the six existing human-authored fields on `RecordingRevision`),
+`media` (YouTube videos attached via `MediaResource`), `collections`,
+`learningGuides`, `provenance` (`sources`/`rights`), and `completeness`. Full
+type definitions are in `recordingContextContract.ts`. Deliberately excluded and
+documented as such in code comments: Venue has no `description` field (an
+explicit schema gap, not a null value); no arranger field exists on
+`MusicalWork`; `channelTitle`/hashtags are never fetched by the sync engine
+(6H-1 §3A) so they cannot appear here.
+
+## 39. Source classification
+
+`RECORDING_CONTEXT_SOURCE_MAP` (a static, exported constant) maps each of the
+ten sections to one of `CANONICAL_MMKE` / `YOUTUBE_METADATA` /
+`APPROVED_EDITORIAL` / `APPROVED_EXTERNAL_SOURCE` — never `AI_GENERATED`, since
+this is an input assembler with no AI-generated content at this stage (brief
+Step 5). A future Content Intelligence consumer cites a specific fact using this
+map plus the entity id already present in that section; no per-field provenance
+wrapper was added, since it would duplicate information already available via
+each section's own `id`.
+
+## 40. Visibility rules
+
+- **Collections and Learning Guides**: reuses the existing public-only functions
+  (`findPublicCollectionsByIds`, `listPublicLearningGuidesForRecording`)
+  unconditionally, in both PUBLISHED and DRAFT mode — no new, less-restrictive
+  query was written for this phase (brief Step 2: reuse, don't duplicate
+  database-access logic).
+- **YouTube media**: title/description/duration/thumbnail are included
+  regardless of whether the video has a public `YouTubeVideoPage` yet (6H-1 §3A:
+  YouTube descriptions are meaningful editorial input independent of the video's
+  own public status). `publicSlug` is a separate, nullable convenience field,
+  populated only via the existing `findPublicVideoPagesByYouTubeVideoIds` gate —
+  never a second competing predicate.
+- **Provenance**: `Source`/`RightsInformation` are aggregated across the
+  Recording itself, its attached Works, and their Composers — the only three
+  entity types `modules/mmke/provenance/provenanceEntityType.ts` supports,
+  unchanged in this phase.
+
+## 41. Revision semantics and the two decisions 6H-2 left open
+
+**Mode (brief Step 13)**: the assembler supports both an explicit `"PUBLISHED"`
+and `"DRAFT"` mode (`RecordingContextMode`), defaulting to `PUBLISHED` — the
+safer choice, since a caller must deliberately opt into seeing in-progress
+content. This was necessary because the first safe use case (6H-2 §29, a
+listening-guide suggestion) is meant to assist an editor while still drafting,
+which the published-only public-page functions cannot serve.
+
+**Result shape (brief Step 17)**: `getRecordingContext` returns a small
+discriminated union — `{ok:true, context}` or `{ok:false, reason}` with
+`reason` one of `NOT_FOUND` / `ARCHIVED` / `NO_DRAFT_REVISION` /
+`NO_PUBLISHED_REVISION` — rather than the public-page convention of collapsing
+every failure into `null`. That convention exists specifically to avoid leaking
+existence information to anonymous public visitors; this is an internal,
+Studio-only service where a future caller genuinely needs to know *why* context
+isn't available. This is a deliberate, documented divergence from the public-page
+convention, not an inconsistency with it.
+
+Neither decision contradicts the 6H-2 contract — both were left open there and
+are resolved here with reasoning grounded in the existing codebase.
+
+## 42. Completeness and information gaps
+
+Reuses `checkRecordingRevisionCompleteness`/`computeRecordingReadiness`
+(`modules/mmke/completeness`) directly and unmodified — no second completeness
+system. `RecordingContext.completeness.report`/`.readiness` are exactly that
+existing report. Additive to it: `hasProvenance` (a boolean, since provenance
+isn't one of that report's categories) and a `gaps` array using exactly the
+`MISSING` / `NOT_APPLICABLE` distinction the brief asked for (Step 8) — `MISSING`
+for an absent-but-supportable relationship (e.g. no Work attached), and
+`NOT_APPLICABLE` for a genuine schema gap (Venue's missing `description` field,
+surfaced only when a Venue actually exists in context — never fabricated as
+"unknown"). No numeric score or "AI readiness" percentage was introduced (brief
+Step 7's explicit prohibition).
+
+## 43. Determinism and data minimization
+
+Every list the assembler returns is explicitly sorted (performers/choirs/
+conductors by name then id; media by `publishedAt` then id; collections and
+learning guides by title then id; composers/sources/rights by id) rather than
+relying on incidental database row order, so identical database state always
+produces identical output — verified by a unit test that calls the assembler
+twice on the same input and asserts equality. No `StudioUser` field
+(`createdById`, `updatedById`, email, password hash, session data) appears
+anywhere in the contract or its assembly — verified by an integration test that
+serializes a real assembled context and asserts the fixture's email, password
+hash, and user id are all absent.
+
+## 44. Test coverage
+
+- `tests/unit/assembleRecordingContext.test.ts` (9 tests, DB-free): sort
+  determinism, repeated-call equality, composer dedup, all five gap types,
+  the `MISSING`/`NOT_APPLICABLE` distinction, no `AI_GENERATED` in the source
+  map, and verbatim YouTube description preservation.
+- `tests/integration/recordingContextRepository.test.ts` (12 tests, real Neon
+  database): `NOT_FOUND`/`ARCHIVED`/`NO_DRAFT_REVISION`/`NO_PUBLISHED_REVISION`
+  lifecycle states; full canonical graph resolution (works, composer,
+  performance, venue, organisation, participants, programme); a
+  direct-work-only recording with no Performance; PUBLISHED vs. DRAFT mode
+  diverging on in-progress edits; YouTube description preserved verbatim with
+  `publicSlug` gated correctly; published-vs-draft Collection visibility;
+  provenance aggregated across Recording/Work/Composer; zero database writes
+  (row counts compared before/after); and no Studio user data leakage.
+- No YouTube API call and no AI/provider call is possible by construction —
+  neither `modules/youtube/adapter` nor any LLM client is imported anywhere in
+  `modules/mmke/contentIntelligence/**` or `recordingContextRepository.ts`.
+
+## 45. Known limitations (deferred, not built here)
+
+Playlist context (brief Step 16) was evaluated and explicitly excluded: no
+existing repository function surfaces "which playlists contain this video," and
+the first safe use case (a listening-guide suggestion) does not need it — adding
+a new query for it was judged unnecessary scope for this phase. Everything from
+6H-1 §16 and 6H-2 §35 remains deferred unchanged: the `ContentGenerationRequest`/
+`ContentSuggestion` migration itself, any Studio UI, any LLM provider or call,
+and `CANONICAL_RELATIONSHIP_CANDIDATE` generation.
