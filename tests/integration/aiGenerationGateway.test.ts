@@ -111,7 +111,7 @@ describe("A. Successful generation", () => {
       expect(result.generationRequest.status).toBe("SUCCEEDED");
       expect(result.generationRequest.contextFingerprint).toBe(expectedFingerprint);
       expect(result.generationRequest.provider).toBe("fake");
-      expect(result.generationRequest.promptVersion).toBe("recording-editorial-v1");
+      expect(result.generationRequest.promptVersion).toBe("recording-editorial-v2");
       expect(result.suggestion.suggestionType).toBe("EDITORIAL_PROSE");
       expect(result.suggestion.status).toBe("DRAFT_READY");
       expect(result.suggestion.targetField).toBe("educationalListeningGuide");

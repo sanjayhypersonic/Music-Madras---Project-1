@@ -1,12 +1,13 @@
 # Content Intelligence Architecture
 
-Status: **the first controlled real AI editorial generation workflow is live**
-in Studio (6H-6), built entirely on the provider-agnostic gateway (6H-5) — an
-authorized editor can generate a Recording editorial suggestion today, review
-it, and approve/reject/request changes through the existing 6H-4 workflow.
-Nothing publishes automatically, nothing runs in bulk, and nothing outside
-this one explicit action exists — no scheduler, no dashboard, no second
-provider.
+Status: **the controlled AI editorial workflow (6H-6) has been hardened
+(6H-7)** against hallucination and source-boundary violations: closed-world
+generation, an explicit four-tier source hierarchy, evidence fabrication
+rejection, and out-of-contract output rejection are all now explicitly
+verified — most were already enforced by the existing 6H-2–6H-6 architecture
+and are documented here as confirmed, not newly built. Nothing publishes
+automatically, nothing runs in bulk, and nothing outside one explicit,
+human-triggered action exists.
 
 - §1–§17: **Phase 6H-1** — Architecture & Inventory (commit `fbc75bd`).
 - §18–§36: **Phase 6H-2** — Content Suggestion & Context Contract addendum.
@@ -14,8 +15,10 @@ provider.
 - §46–§56: **Phase 6H-4** — Content Suggestion Persistence & Editorial
   Foundation (implemented).
 - §57–§72: **Phase 6H-5** — AI/LLM Generation Gateway Foundation (implemented).
-- §73 onward: **Phase 6H-6** — First Controlled AI Editorial Generation
+- §73–§82: **Phase 6H-6** — First Controlled AI Editorial Generation
   (implemented).
+- §83 onward: **Phase 6H-7** — Source-Aware Editorial Intelligence &
+  Generation Hardening (implemented).
 
 ## 1. Purpose
 
@@ -1552,3 +1555,232 @@ of the real editorial field (still a separate, not-yet-built action, per
 regeneration mechanism); any UI indicator beyond the existing suggestion-count
 annotation for "does this Recording already have a suggestion"; a real
 Anthropic credential and live smoke test, whenever one becomes available.
+
+---
+
+# Phase 6H-7 — Source-Aware Editorial Intelligence & Generation Hardening
+
+Status: **implemented, mostly by verification.** This phase's own explicit
+instruction was to inspect before changing, and not redesign what already
+works. Most of the truthfulness/trust-boundary requirements below were
+already enforced by the 6H-2–6H-6 architecture; this phase's real code
+changes are narrow (a strengthened prompt version, a duplicate-generation
+edge case's test coverage, and evidence-fabrication/out-of-contract rejection
+tests) — everything else here is confirmed and documented, not newly built.
+
+## 83. Resolving the "critical 6H-6 verification" — INFORMATION_GAP was correct
+
+The brief asked whether 6H-6's `INFORMATION_GAP` result (from a sparse QA
+fixture with no Performance) indicated an ambiguity in the EDITORIAL_PROSE
+contract. Investigated directly against the actual schema and validator
+(`modules/ai/prompts/recordingEditorial/recordingEditorialPromptV1.ts`,
+`modules/ai/structuredOutput/validateRecordingEditorialOutput.ts`):
+
+- **A.** Yes — `ContentGenerationRequest.suggestionType` is always created as
+  `EDITORIAL_PROSE` for this workflow; that is what is *requested*.
+- **B.** No — the output JSON Schema's `outputType` field has
+  `enum: ["SUGGESTION", "INFORMATION_GAP"]`. There is no schema path for the
+  model to express `SEO_METADATA`, `INTERNAL_LINK`, or any other
+  `ContentSuggestionType` — the structured-output contract itself makes it
+  unreachable, not merely discouraged.
+- **C./D.** `validateRecordingEditorialOutput` throws
+  `RecordingEditorialOutputValidationError` for any `outputType` other than
+  those two literal values — confirmed by an existing test
+  (`tests/unit/validateRecordingEditorialOutput.test.ts`, "rejects an invalid
+  outputType") and reinforced this phase by an end-to-end gateway test
+  (§85) proving an out-of-schema `outputType` is rejected with **zero**
+  `ContentSuggestion` rows created, of any type.
+- **E./F.** Yes, fully intentional: 6H-2 §18/§27 established
+  `INFORMATION_GAP` as the sanctioned "I cannot responsibly say this" outcome
+  for *any* generation attempt, and the v1/v2 system instructions explicitly
+  tell the model it may choose this when context is insufficient — this is
+  the "no invention" policy's designed safety valve, not a competing
+  suggestion type slipping through.
+- **G.** Yes — `FakeAIProvider`'s default `SUCCESS` output is itself an
+  `INFORMATION_GAP`, deliberately modeling "the honest default for a sparse
+  context" rather than a rosy always-succeeds fixture.
+
+**Conclusion: no bug, no ambiguity, no architectural change required.** The
+existing contract already guarantees "REQUESTED: EDITORIAL_PROSE, ALLOWED
+OUTPUT: EDITORIAL_PROSE (as `SUGGESTION`) or the sanctioned `INFORMATION_GAP`
+safety valve, nothing else" — confirmed by inspection and now covered by an
+explicit end-to-end test that was missing before this phase.
+
+## 84. Prompt hardening — `recording-editorial-v2`
+
+A new sibling file, `modules/ai/prompts/recordingEditorial/recordingEditorialPromptV2.ts`
+— v1 is untouched (no real `ContentGenerationRequest` had ever referenced it
+outside disposable test/QA fixtures, but the versioning discipline is
+followed regardless). The gateway
+(`modules/ai/gateway/generateRecordingEditorialSuggestion.ts`) now uses v2.
+The output **schema is identical** (imported directly from v1, not
+duplicated) — only the system instructions are strengthened, adding what v1
+left implicit:
+
+- explicit **closed-world generation**: no pretrained/general knowledge may
+  supply, infer, or correct any fact absent from the supplied context;
+- an explicit, named **four-tier source hierarchy** (`CANONICAL_MMKE` >
+  `YOUTUBE_METADATA` > `APPROVED_EDITORIAL` > `APPROVED_EXTERNAL_SOURCE`),
+  with an explicit instruction never to let `YOUTUBE_METADATA` silently
+  override or get reconciled against `CANONICAL_MMKE`;
+- an explicit rule that **hedging language is not a loophole** ("it is
+  believed," "possibly," "reportedly," etc. do not excuse an unsupported
+  claim);
+- explicit **evidence discipline** (never invent, reuse, or cite an id not
+  supplied) and a restated **"information gap is a good outcome"** framing;
+- explicit style guidance against generic AI filler, unsupported
+  superlatives, and implying research that was not performed.
+
+The prompt still never instructs the model to research the web — this phase
+has no research agent, and none was added.
+
+## 85. EDITORIAL_PROSE / evidence hardening tests (new)
+
+`tests/integration/editorialGenerationHardening.test.ts` (8 tests, real
+database, `FakeAIProvider` exclusively):
+
+- a valid `SUGGESTION` persists as `EDITORIAL_PROSE`, using
+  `recording-editorial-v2`, and is confirmed `DRAFT_READY` — never
+  `APPROVED` — immediately after generation (invariant 4/10);
+- an out-of-schema `outputType` (`"SEO_METADATA"`) is rejected end to end —
+  the request is marked `FAILED`, and **no** `ContentSuggestion` of any type
+  exists afterward;
+- evidence ids belonging to a **different real Recording's** actual
+  composer/work are rejected (not merely fabricated strings — genuine ids
+  that are simply out of scope for the target being generated);
+- a mix of one real and one fabricated evidence id keeps only the real one —
+  the fabricated id is silently dropped, never trusted (invariant 5/6);
+- a Recording with zero attached works and no performance (the sparsest
+  legitimate context) is handled safely, producing `INFORMATION_GAP` with
+  empty evidence — never fabricated completeness;
+- a YouTube description and canonical composer data are confirmed to remain
+  **distinct, unmerged fields** in the assembled context — see §86;
+- stale-context detection is reconfirmed specifically for an
+  `EDITORIAL_PROSE`-type suggestion (6H-4's original test used
+  `INFORMATION_GAP`) — `CURRENT` immediately, `STALE` after a real canonical
+  change, with the suggestion's own content and status untouched (invariant
+  11);
+- canonical `Recording`/`RecordingRevision`/`Composer` rows are confirmed
+  byte-for-byte unchanged across a valid generation, a provider failure, and
+  an evidence-fabrication attempt in the same test (invariants 1/2).
+
+## 86. Source-conflict handling — capability and an honest limitation
+
+The brief asked for source-conflict handling between `YOUTUBE_METADATA` and
+`CANONICAL_MMKE`. Investigated: no mechanism in this codebase — including
+the Phase 6B `FieldOwnership`/`SyncConflict` tables — detects *semantic*
+conflicts between a YouTube description's text and a canonical fact; that
+infrastructure tracks which system may overwrite a specific `YouTubeVideo`
+*column*, not whether the description's prose contradicts, say, the
+canonical composer. Building real semantic conflict detection would require
+exactly the "speculative natural-language fact checker" this phase's brief
+explicitly forbids.
+
+What already exists, and is confirmed sufficient, is **structural
+separation, not detection**: `RecordingContext` never merges `YOUTUBE_METADATA`
+into `CANONICAL_MMKE` fields (§85's dedicated test), and every evidence
+reference on a suggestion carries its own `sourceType` — already rendered on
+the Studio review page (`{ref.sourceType}: {ref.entityType} …`) — so a human
+reviewer can always see whether a specific claim is backed by a canonical
+record or only by the video's own description, and judge accordingly. This
+is the documented, honest limit of automated conflict handling in this
+phase: **the system prevents silent resolution by never resolving at all**,
+and surfaces enough tier information for a human to resolve it instead. No
+UI change was needed — the sourceType display already existed from 6H-4.
+
+## 87. Studio review UI — unchanged
+
+Inspected against the brief's full checklist (target, suggestion type,
+content, generation/review status, context fingerprint, staleness, evidence
+with source tier, information gaps, lifecycle) — every item was already
+rendered by the existing 6H-4/6H-6 detail page. No UI file was modified in
+this phase.
+
+## 88. Provider boundary — unchanged and reconfirmed
+
+No new file imports `@anthropic-ai/sdk`; it remains isolated to
+`modules/ai/providers/anthropic/anthropicProvider.ts` and
+`normalizeAnthropicError.ts`. No second provider, no agent framework, no
+vector database, no RAG was added.
+
+## 89. Security invariants — status
+
+Of the twelve invariants listed in the brief, all were already true by
+construction before this phase and remain true, most now with an explicit
+test added where one was missing:
+
+| # | Invariant | Status |
+|---|---|---|
+| 1–2 | AI cannot create/modify canonical entities during generation | Unchanged; reconfirmed by §85's immutability test |
+| 3 | AI cannot publish | Structurally true — no publish path exists from `ContentSuggestion` |
+| 4 | AI cannot approve its own suggestion | Structurally true — the gateway never calls `approveContentSuggestion`; explicit test added (§85) |
+| 5–6 | AI cannot create or cite unsupplied evidence | Unchanged (6H-5); reconfirmed with a genuine cross-Recording case (§85), not only fabricated strings |
+| 7 | AI cannot silently resolve source conflicts | See §86 — structural separation, not detection |
+| 8 | Pretrained knowledge is not authoritative | Newly explicit in the v2 prompt (§84) — a prompt-level instruction only; see §90's limitation note |
+| 9 | Missing information cannot become invented information | Unchanged (6H-2 §18/§27); reconfirmed as intentional (§83) |
+| 10 | A failed validation cannot become a persisted suggestion | Unchanged (6H-5); reconfirmed for the out-of-contract case specifically (§85) |
+| 11 | Stale context cannot silently become current | Unchanged (6H-4); reconfirmed for `EDITORIAL_PROSE` specifically (§85) |
+| 12 | Provider switching does not change MMKE behavior | Unchanged (6H-5 §57/§76) |
+
+## 90. Known limitation — deterministic validation cannot verify truthfulness
+
+Stated plainly, per the brief's own instruction to document rather than
+pretend: **no code in this system can verify that a real Anthropic model
+actually obeyed the closed-world instruction.** The architectural protection
+is structural, not behavioral — a controlled, source-tagged context; a
+strict output schema; evidence that must resolve to ids actually supplied;
+and mandatory human review before anything is trusted. If a real model
+ignored its instructions and asserted an unsupported fact using an id that
+happens to be genuinely present in the supplied context (i.e., a
+well-evidenced sentence attached to the wrong claim), no automated check in
+this codebase — or any codebase without a real fact-verification system —
+would catch that. This is exactly why human review remains a hard boundary
+(6H-6 §79) rather than a formality, and why this phase did not attempt to
+build a natural-language fact-checker to paper over that limit.
+
+## 91. Real Anthropic smoke test
+
+Not performed — no `ANTHROPIC_API_KEY` value exists anywhere in this
+environment (`.env` inspected directly before QA; only the variable names
+are documented in `.env.example`). Manual QA (§92) used a disposable Studio
+user and Recording with `AI_PROVIDER=fake` temporarily set in the local,
+gitignored `.env` for the duration of the walkthrough only, reverted
+immediately after and never committed — identical discipline to 6H-6.
+
+## 92. Manual QA
+
+Performed live against the real Studio UI: signed in, generated against the
+eligible Recording (result: `INFORMATION_GAP`, the correct, honest outcome
+for a fixture with no Performance — not a test artifact), confirmed the
+generation record shows `provider: fake`, `promptVersion: recording-editorial-v2`
+(proving the v2 switch took effect in the running application, not only in
+tests), moved it through `EDITOR_REVIEW` to `APPROVED` (`ACCEPT`), confirmed
+the canonical Recording's Studio preview still shows only its original title
+and composer, and confirmed the Studio Audit Log shows the complete
+lifecycle. All disposable records (Studio user, Composer, MusicalWork,
+Recording, `ContentGenerationRequest`, `ContentSuggestion`, and every
+associated `AuditLogEntry`) were deleted afterward and verified clean.
+
+## 93. Tests and validation
+
+- `tests/unit/recordingEditorialPromptV2.test.ts` (9 tests) — the v2 prompt
+  is a distinct version, reuses the v1 schema object unchanged, still
+  structurally limits `outputType` to two values, and contains the required
+  guardrail language (closed-world, the four named source tiers, the
+  hedging-language rule, the conflict-non-resolution rule, the
+  information-gap-is-good framing) — and never instructs web research.
+- `tests/integration/editorialGenerationHardening.test.ts` (8 tests) — §85.
+- `tests/integration/aiGenerationGateway.test.ts` — one existing assertion
+  updated to expect `recording-editorial-v2` (the only behavioral-adjacent
+  change to an existing test in this phase; no test was weakened or
+  removed).
+- Full suite after this phase: **406 unit / 380 integration**, all passing,
+  confirmed by a clean run with zero concurrent database activity (the
+  contamination pattern identified during 6H-6 QA was deliberately avoided
+  this time — manual QA was held until the background integration run fully
+  completed). Typecheck, lint, and production build all clean. Database
+  baseline confirmed clean before and after, including QA fixture cleanup.
+- No schema migration — this phase confirmed the existing `ContentSuggestion`/
+  `ContentGenerationRequest`/`evidenceRefs` architecture already supports
+  every hardening requirement; none of the brief's STOP conditions were
+  triggered.
