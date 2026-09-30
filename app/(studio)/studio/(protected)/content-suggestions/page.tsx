@@ -3,7 +3,10 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../modules/auth/authService";
 import { can } from "../../../../../modules/auth/policy";
 import { listContentSuggestionsForStudio } from "../../../../../modules/db/repositories/contentSuggestionRepository";
+import { listRecordingsForStudio } from "../../../../../modules/db/repositories/recordingRepository";
+import { isRecordingPublished } from "../../../../../modules/mmke/catalogue/isRecordingPublished";
 import { formatAuditTimestamp } from "../../../../../modules/audit/auditDisplay";
+import { generateEditorialSuggestionAction } from "./generateAction";
 import type { ContentSuggestionStatus, ContentSuggestionType } from "@prisma/client";
 
 // Phase 6H-4 — the Studio Content Suggestions list, mirroring the existing
@@ -11,6 +14,12 @@ import type { ContentSuggestionStatus, ContentSuggestionType } from "@prisma/cli
 // for viewing (docs/content-intelligence-architecture.md Phase 6H-2 §34:
 // the same permission that already allows creating/editing a Recording
 // draft) — never exposed publicly (no sitemap entry, no Museum route).
+//
+// Phase 6H-6 adds the "Generate an editorial suggestion" section: the
+// first real, explicit trigger into the AI Generation Gateway (6H-5). Only
+// PUBLISHED recordings are offered — the gateway's own default context mode
+// (docs/content-intelligence-architecture.md Phase 6H-6, "prefer the
+// canonical PUBLISHED context").
 
 const STATUS_OPTIONS: ContentSuggestionStatus[] = ["DRAFT_READY", "EDITOR_REVIEW", "CHANGES_REQUESTED", "APPROVED", "REJECTED"];
 const TYPE_OPTIONS: ContentSuggestionType[] = [
@@ -26,6 +35,7 @@ const TYPE_OPTIONS: ContentSuggestionType[] = [
 interface ListSearchParams {
   status?: string;
   suggestionType?: string;
+  error?: string;
 }
 
 function isContentSuggestionStatus(value: string): value is ContentSuggestionStatus {
@@ -34,6 +44,14 @@ function isContentSuggestionStatus(value: string): value is ContentSuggestionSta
 
 function isContentSuggestionType(value: string): value is ContentSuggestionType {
   return (TYPE_OPTIONS as string[]).includes(value);
+}
+
+function recordingLabel(recording: {
+  slug: string;
+  currentPublishedRevision: { title: string | null } | null;
+  currentDraftRevision: { title: string | null } | null;
+}): string {
+  return recording.currentPublishedRevision?.title ?? recording.currentDraftRevision?.title ?? recording.slug;
 }
 
 export default async function ContentSuggestionsPage({ searchParams }: { searchParams: Promise<ListSearchParams> }) {
@@ -47,7 +65,17 @@ export default async function ContentSuggestionsPage({ searchParams }: { searchP
   const status = params.status && isContentSuggestionStatus(params.status) ? params.status : undefined;
   const suggestionType = params.suggestionType && isContentSuggestionType(params.suggestionType) ? params.suggestionType : undefined;
 
-  const suggestions = await listContentSuggestionsForStudio({ status, suggestionType });
+  const [suggestions, allRecordingSuggestions, allRecordings] = await Promise.all([
+    listContentSuggestionsForStudio({ status, suggestionType }),
+    listContentSuggestionsForStudio({ targetEntityType: "RECORDING" }),
+    listRecordingsForStudio(),
+  ]);
+
+  const eligibleRecordings = allRecordings.filter((recording) => isRecordingPublished(recording));
+  const suggestionCountByRecordingId = new Map<string, number>();
+  for (const suggestion of allRecordingSuggestions) {
+    suggestionCountByRecordingId.set(suggestion.targetEntityId, (suggestionCountByRecordingId.get(suggestion.targetEntityId) ?? 0) + 1);
+  }
 
   return (
     <div>
@@ -56,7 +84,33 @@ export default async function ContentSuggestionsPage({ searchParams }: { searchP
         Proposed editorial changes awaiting human review. A suggestion never becomes canonical or public on its own — see{" "}
         <Link href="/studio/audit">the audit log</Link> for the full history of every decision made here.
       </p>
+      {params.error && <p style={{ color: "#b00020" }}>{decodeURIComponent(params.error)}</p>}
 
+      <h2>Generate an editorial suggestion</h2>
+      <p style={{ fontSize: "0.9rem", color: "#666" }}>
+        This produces an AI-generated <strong>draft</strong> requiring editorial review — it is never automatically approved or published, and it
+        never modifies the canonical Recording.
+      </p>
+      {eligibleRecordings.length === 0 ? (
+        <p>No published recordings are eligible for editorial generation yet.</p>
+      ) : (
+        <form action={generateEditorialSuggestionAction} style={{ display: "flex", gap: "0.5rem", maxWidth: "32rem", marginBottom: "1.5rem" }}>
+          <select name="recordingId" required style={{ flex: 1 }}>
+            {eligibleRecordings.map((recording) => {
+              const count = suggestionCountByRecordingId.get(recording.id) ?? 0;
+              return (
+                <option key={recording.id} value={recording.id}>
+                  {recordingLabel(recording)}
+                  {count > 0 ? ` — ${count} existing suggestion${count === 1 ? "" : "s"}` : ""}
+                </option>
+              );
+            })}
+          </select>
+          <button type="submit">Generate editorial suggestion</button>
+        </form>
+      )}
+
+      <h2>All suggestions</h2>
       <form method="get" style={{ margin: "1rem 0", display: "flex", flexWrap: "wrap", gap: "1rem", alignItems: "flex-end" }}>
         <label>
           Status

@@ -74,6 +74,21 @@ async function createPublishedRecordingFixture(): Promise<Fixture> {
  * blocking a later test's createComposer duplicate-name guard.
  */
 async function cleanupFixture(fixture: Fixture) {
+  // AuditLogEntry.entityId has no foreign key to ContentSuggestion/
+  // ContentGenerationRequest (a generic string reference, like every other
+  // audit target) — deleting those rows does NOT cascade-delete their audit
+  // entries, so they must be removed explicitly before the rows themselves,
+  // or they orphan permanently (caught during Phase 6H-6 manual QA).
+  const suggestionIds = (await prisma.contentSuggestion.findMany({ where: { targetEntityId: fixture.recordingId }, select: { id: true } })).map((s) => s.id);
+  const generationRequestIds = (await prisma.contentGenerationRequest.findMany({ where: { targetEntityId: fixture.recordingId }, select: { id: true } })).map(
+    (r) => r.id
+  );
+  if (suggestionIds.length > 0) {
+    await prisma.auditLogEntry.deleteMany({ where: { entityType: "ContentSuggestion", entityId: { in: suggestionIds } } });
+  }
+  if (generationRequestIds.length > 0) {
+    await prisma.auditLogEntry.deleteMany({ where: { entityType: "ContentGenerationRequest", entityId: { in: generationRequestIds } } });
+  }
   await prisma.contentSuggestion.deleteMany({ where: { targetEntityId: fixture.recordingId } });
   await prisma.contentGenerationRequest.deleteMany({ where: { targetEntityId: fixture.recordingId } });
 

@@ -323,6 +323,25 @@ export function findGenerationRequestById(id: string) {
   return prisma.contentGenerationRequest.findUnique({ where: { id }, include: { requestedBy: true } });
 }
 
+/**
+ * Phase 6H-6 — the duplicate-generation guard: is a generation already
+ * in flight for this target? PENDING/GENERATING are the only non-terminal
+ * statuses (modules/publishing's equivalent for ContentGenerationRequest is
+ * simply "not SUCCEEDED and not FAILED" — there is no separate transitions
+ * module for it since it has only one legal path). Used to refuse starting
+ * a second generation while one is active, never to silently overwrite or
+ * cancel it. A request stuck in GENERATING because its server process
+ * crashed mid-call would block further generation for that target until an
+ * operator manually completes it — an accepted, documented limitation
+ * rather than building retry/timeout job infrastructure for it.
+ */
+export function findActiveGenerationRequestForEntity(targetEntityType: string, targetEntityId: string) {
+  return prisma.contentGenerationRequest.findFirst({
+    where: { targetEntityType, targetEntityId, status: { in: ["PENDING", "GENERATING"] } },
+    orderBy: { requestedAt: "desc" },
+  });
+}
+
 export interface ListContentSuggestionsFilters {
   status?: ContentSuggestion["status"];
   suggestionType?: ContentSuggestionType;

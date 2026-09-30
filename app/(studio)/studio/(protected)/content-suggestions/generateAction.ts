@@ -1,32 +1,40 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../modules/auth/authService";
 import { can } from "../../../../../modules/auth/policy";
 import { generateRecordingEditorialSuggestion } from "../../../../../modules/ai/gateway/generateRecordingEditorialSuggestion";
-import type { GenerateRecordingEditorialSuggestionResult } from "../../../../../modules/ai/gateway/generateRecordingEditorialSuggestion";
+import { describeGenerationFailureForEditor } from "../../../../../modules/ai/gateway/describeGenerationFailureForEditor";
 
-// Phase 6H-5 — the minimal, RBAC-gated entry point proving the AI
-// Generation Gateway is authenticated and permission-gated server-side
-// (docs/content-intelligence-architecture.md Phase 6H-2 §34: requesting
-// generation reuses RECORDING_WRITE, the same permission that already lets
-// a Contributor create a Recording draft — no new permission was needed).
-//
-// Deliberately NOT wired to any Studio button or page yet — 6H-5 is gateway
-// foundation, not the editorial generation experience (that is 6H-6's
-// scope). This exists so the "generation must be server-side, authenticated,
-// permission-gated" requirement is real, enforced code, not only a policy
-// table.
+// Phase 6H-6 — the first real, explicit, authenticated entry point into the
+// AI Generation Gateway (6H-5). Bound to the "Generate an editorial
+// suggestion" form on /studio/content-suggestions. Reuses RECORDING_WRITE
+// exactly as 6H-2 §34/6H-5 §67 established — no new permission. The browser
+// never talks to a provider: this function is the entire server boundary,
+// and only ever returns a redirect — success goes straight to the new
+// suggestion's review page; failure goes back to the list with a safe,
+// secret-free message (modules/ai/gateway/describeGenerationFailureForEditor.ts).
 
-export type RequestRecordingEditorialGenerationActionResult =
-  | { authorized: false }
-  | { authorized: true; result: GenerateRecordingEditorialSuggestionResult };
+function errorRedirect(message: string): never {
+  redirect(`/studio/content-suggestions?error=${encodeURIComponent(message)}`);
+}
 
-export async function requestRecordingEditorialGenerationAction(recordingId: string): Promise<RequestRecordingEditorialGenerationActionResult> {
+export async function generateEditorialSuggestionAction(formData: FormData): Promise<void> {
   const session = await getCurrentStudioSession();
   if (!session || !can(session.user.role, "RECORDING_WRITE")) {
-    return { authorized: false };
+    errorRedirect("You do not have permission to request an editorial suggestion.");
   }
 
-  const result = await generateRecordingEditorialSuggestion({ recordingId, requestedById: session.user.id });
-  return { authorized: true, result };
+  const recordingId = String(formData.get("recordingId") ?? "").trim();
+  if (!recordingId) {
+    errorRedirect("Select a Recording to generate an editorial suggestion for.");
+  }
+
+  const result = await generateRecordingEditorialSuggestion({ recordingId, requestedById: session!.user.id });
+
+  if (result.ok) {
+    redirect(`/studio/content-suggestions/${result.suggestion.id}`);
+  }
+
+  errorRedirect(describeGenerationFailureForEditor(result));
 }

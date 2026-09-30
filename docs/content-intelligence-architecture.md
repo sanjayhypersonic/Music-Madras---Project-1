@@ -1,17 +1,20 @@
 # Content Intelligence Architecture
 
-Status: **partially implemented.** A real, provider-agnostic AI generation
-gateway now exists (6H-5) with Anthropic/Claude as its first, replaceable
-provider adapter, but nothing calls it automatically anywhere — no scheduler,
-no bulk job, no Studio button. Nothing described as "future" or "6H-6" below
-has been built.
+Status: **the first controlled real AI editorial generation workflow is live**
+in Studio (6H-6), built entirely on the provider-agnostic gateway (6H-5) — an
+authorized editor can generate a Recording editorial suggestion today, review
+it, and approve/reject/request changes through the existing 6H-4 workflow.
+Nothing publishes automatically, nothing runs in bulk, and nothing outside
+this one explicit action exists — no scheduler, no dashboard, no second
+provider.
 
 - §1–§17: **Phase 6H-1** — Architecture & Inventory (commit `fbc75bd`).
 - §18–§36: **Phase 6H-2** — Content Suggestion & Context Contract addendum.
 - §37–§45: **Phase 6H-3** — Recording Context Assembler (implemented).
 - §46–§56: **Phase 6H-4** — Content Suggestion Persistence & Editorial
   Foundation (implemented).
-- §57 onward: **Phase 6H-5** — AI/LLM Generation Gateway Foundation
+- §57–§72: **Phase 6H-5** — AI/LLM Generation Gateway Foundation (implemented).
+- §73 onward: **Phase 6H-6** — First Controlled AI Editorial Generation
   (implemented).
 
 ## 1. Purpose
@@ -1367,3 +1370,185 @@ prompt-management UI, or model-management UI; public exposure of any
 generated content; GA4/YouTube Analytics/Search Console integration of any
 kind; web search or external source discovery; embeddings, vector search,
 or RAG; autonomous agents; a chatbot.
+
+---
+
+# Phase 6H-6 — First Controlled AI Editorial Generation
+
+Status: **implemented.** The first real, explicit, human-triggered path from a
+canonical Recording to a reviewable AI-generated `ContentSuggestion` now
+exists in Studio, built entirely on the 6H-5 gateway — no new provider logic,
+no new suggestion model, no redesign of anything from 6H-2/6H-3/6H-4/6H-5.
+
+## 73. Workflow and entry point
+
+`/studio/content-suggestions` now has a "Generate an editorial suggestion"
+section: a picker of published Recordings (each optionally annotated with its
+existing suggestion count) and a "Generate editorial suggestion" button.
+Submitting calls `generateEditorialSuggestionAction`
+(`app/(studio)/studio/(protected)/content-suggestions/generateAction.ts`),
+which is the entire server boundary — the browser never talks to a provider.
+On success it redirects straight to the new suggestion's review page
+(reusing the unchanged 6H-4 detail/review UI); on failure it redirects back
+to the list with a safe, secret-free message.
+
+This location was chosen over the Recording draft-editing wizard
+(`/studio/recordings/[id]/**`) deliberately: that entire 11-step workflow
+operates on the *draft* revision, while generation uses the *published*
+context (§75) — mixing the two would have been confusing. Content
+Suggestions is already the natural home for everything AI-suggestion-related.
+
+## 74. No redesign — this phase is the gateway's first caller
+
+`generateEditorialSuggestionAction` calls `generateRecordingEditorialSuggestion`
+(6H-5) with no `provider` override, so it always uses
+`getConfiguredAIProvider()` — exactly the production configuration path.
+Every other piece is reused completely unmodified: `getRecordingContext`
+(6H-3), `computeContextFingerprint` (6H-4), the `ContentGenerationRequest`/
+`ContentSuggestion` lifecycle and repository (6H-4), `validateRecordingEditorialOutput`
+and the `recording-editorial-v1` prompt (6H-5), and the Studio review UI
+(6H-4). The only two additions in this phase are described in §75 and §76.
+
+## 75. Context mode
+
+Uses the gateway's existing `PUBLISHED` default unchanged — the brief's own
+"prefer the canonical PUBLISHED context" instruction was already satisfied by
+6H-5's design, so no code changed here. A Recording with no published
+revision yet is correctly refused with "The Recording does not have enough
+published context to generate an editorial suggestion" (§77).
+
+## 76. Duplicate-generation guard (new in this phase)
+
+6H-5 left duplicate-click behavior undecided. This phase adds
+`findActiveGenerationRequestForEntity` (`modules/db/repositories/contentSuggestionRepository.ts`)
+and a check at the top of the gateway: if a `PENDING` or `GENERATING`
+request already exists for the target, the call is refused with
+`GENERATION_ALREADY_IN_PROGRESS` and **no new `ContentGenerationRequest` row
+is created**. A later, intentional re-generation is still allowed once the
+prior one reaches a terminal state (`SUCCEEDED`/`FAILED`) — verified by an
+integration test that generates twice in succession and confirms two
+independent, separately-identifiable requests exist. A request stuck in
+`GENERATING` because its server process crashed mid-call would block further
+generation for that target until an operator manually intervenes — an
+accepted, documented limitation rather than building retry/timeout job
+infrastructure for a single-process, synchronous gateway.
+
+## 77. Safe, secret-free error messages
+
+`modules/ai/gateway/describeGenerationFailureForEditor.ts` maps every gateway
+failure shape to one of the exact messages the brief specified ("The
+Recording does not have enough published context...", "AI provider
+configuration is unavailable.", "AI generation returned an invalid
+structured response.", or a generic fallback) — never the underlying
+`AIProviderErrorInfo` type/message, never a validation exception's raw text.
+Implementing this required discriminating the gateway's result type on
+`generationRequest === null` rather than on `reason` directly, because the
+generic failure variant's `reason` is a plain `string` (not a literal),
+which would otherwise defeat TypeScript's usual exhaustiveness narrowing —
+a real compile error caught by the production build during this phase, not
+a design choice.
+
+## 78. A bug this phase's own testing caught
+
+While writing `tests/integration/aiGenerationGateway.test.ts` in 6H-5 (and
+re-verified while building this phase's workflow), the gateway's failure
+path was found to return the original, pre-update (`PENDING`)
+`ContentGenerationRequest` object instead of the one
+`completeGenerationRequest` actually updated to `FAILED`. Already fixed in
+6H-5's commit — noted here because this phase's manual QA (§80) is what
+would have surfaced it in the UI (a suggestion list showing "PENDING"
+forever) had it not already been caught by tests.
+
+## 79. RBAC — unchanged, and a genuine finding
+
+Reuses `RECORDING_WRITE` exactly as 6H-2 §34 and 6H-5 §67 established — no
+new permission. Worth recording explicitly: inspecting the actual
+`ROLE_PERMISSIONS` table (`modules/auth/policy.ts`) shows **every** Studio
+role (`CONTRIBUTOR` through `FOUNDER`) already holds `RECORDING_WRITE` — so
+"RBAC denial" for *requesting* generation and "unauthenticated denial"
+collapse into the same single case in this codebase: there is no
+authenticated Studio role that can be logged in yet lack permission to
+request a suggestion. This was verified, not assumed, by inspecting the
+policy table before writing the corresponding test.
+
+## 80. Manual QA — performed live, with a real finding
+
+Performed against the real Studio UI (not just automated tests), using a
+disposable QA fixture (a temporary Studio user and a published Recording,
+both fully deleted afterward) and `AI_PROVIDER=fake` temporarily set in the
+local, gitignored `.env` for the duration of the walkthrough only (reverted
+immediately after; never committed). Verified live: sign-in → Content
+Suggestions list shows the eligible Recording → Generate → the new
+`ContentGenerationRequest`/`ContentSuggestion` appear correctly (this
+Recording had no Performance attached, so the fake provider's default
+`INFORMATION_GAP` output was itself a genuine, correct result, not a test
+artifact) → "Begin review" moves it to `EDITOR_REVIEW` → "Approve" moves it
+to `APPROVED` with decision `ACCEPT` → the Recording's own preview page
+still shows only its original canonical data, completely unchanged → the
+Studio Audit Log shows the full lifecycle (`Content generation requested`
+attributed to the human, `started`/`succeeded` attributed to "System",
+`submitted for review`/`approved` attributed to the human).
+
+**Real finding from this QA pass, not from the automated suite**: cleaning
+up the QA fixture surfaced that `AuditLogEntry.entityId` has no foreign key
+to `ContentGenerationRequest`/`ContentSuggestion` (a generic string
+reference, like every other audit target in this schema) — deleting those
+rows does **not** cascade-delete their audit entries. Every integration test
+fixture cleanup written since 6H-4 (`contentSuggestionRepository.test.ts`,
+`aiGenerationGateway.test.ts`, and this phase's own new test file) had been
+silently leaving orphaned audit rows behind on every run. Found and fixed in
+this phase: all three files' `cleanupFixture` now delete the relevant
+`AuditLogEntry` rows by id *before* deleting the `ContentGenerationRequest`/
+`ContentSuggestion` rows themselves. 316 pre-existing orphaned rows
+accumulated by every prior 6H-4/6H-5 test run (plus 28 more created by an
+in-flight background test run during this phase's own QA session) were
+identified and purged from the shared database as part of this phase's
+database-hygiene step — a real cleanup of accumulated debt, not scope creep,
+since leaving it would have meant every future phase's audit log stayed
+permanently polluted.
+
+**Real Anthropic smoke test: not performed.** No `ANTHROPIC_API_KEY` value
+exists anywhere in this environment (confirmed by inspecting `.env` directly
+before starting QA) — exactly the same situation as 6H-5. The live walkthrough
+above used the deterministic fake provider for the success path; a separate,
+unconfigured real `AnthropicProvider` instance was exercised through the
+identical gateway code in an automated integration test (§58/§76 of 6H-5),
+confirming the `CONFIGURATION`-failure path is safe and correctly wired
+without a real credential.
+
+## 81. Tests
+
+- `tests/unit/describeGenerationFailureForEditor.test.ts` (9 tests) — every
+  message-mapping branch, and confirms no case ever leaks a raw provider
+  message, a secret-shaped string, or a stack-trace fragment.
+- `tests/integration/recordingEditorialGenerationWorkflow.test.ts` (5 tests) —
+  the duplicate/concurrent-generation guard (refused while active, allowed
+  once terminal), freshness turning `STALE` after a real canonical context
+  change with the original suggestion provably untouched, and the Server
+  Action's authentication gate (no session → refused, zero rows created; a
+  session with `RECORDING_WRITE` → succeeds and redirects to the new
+  suggestion), using a mocked `getCurrentStudioSession` and `FakeAIProvider`
+  exclusively.
+- Existing 6H-4/6H-5 test files updated only to fix the audit-cleanup gap
+  found in §80 — no behavioral test changes.
+- Full suite after this phase: **397 unit / 372 integration**, all passing,
+  confirmed by a clean re-run with no concurrent activity (an earlier run
+  overlapped with this phase's own manual QA against the same shared
+  database and produced 5 unrelated, non-reproducing failures in
+  `recordingLifecycle.test.ts`/`studioCollectionCatalogue.test.ts` — both
+  files pass cleanly in isolation and in the final uncontaminated full run,
+  confirming the failures were test-environment contention, not a
+  regression). Typecheck, lint, and production build all clean. Database
+  baseline confirmed clean before and after, including the historical
+  orphaned-audit-row cleanup described in §80.
+
+## 82. What remains after 6H-6
+
+`CANONICAL_RELATIONSHIP_CANDIDATE` generation; a second suggestion type
+(SEO metadata, internal links, etc. — deliberately excluded from this
+phase's narrow scope); turning an `APPROVED` suggestion into an actual edit
+of the real editorial field (still a separate, not-yet-built action, per
+6H-2 §24); a transition out of `CHANGES_REQUESTED` (needs the not-yet-built
+regeneration mechanism); any UI indicator beyond the existing suggestion-count
+annotation for "does this Recording already have a suggestion"; a real
+Anthropic credential and live smoke test, whenever one becomes available.

@@ -5,6 +5,7 @@ import {
   completeGenerationRequest,
   createGenerationRequest,
   createSuggestion,
+  findActiveGenerationRequestForEntity,
   markGenerationRequestGenerating,
 } from "../../db/repositories/contentSuggestionRepository";
 import { computeContextFingerprint } from "../../mmke/contentIntelligence/computeContextFingerprint";
@@ -20,11 +21,13 @@ import type { ContentGenerationRequest, ContentSuggestion } from "@prisma/client
 
 // Phase 6H-5 — the AI Generation Gateway: the one place that wires
 // RecordingContext (6H-3) + ContentGenerationRequest/ContentSuggestion
-// (6H-4) + a provider-neutral AIProvider (this phase) together. This is
-// gateway FOUNDATION, not the 6H-6 editorial workflow — nothing calls this
-// function automatically, there is no bulk/scheduled invocation anywhere,
-// and no Studio UI button triggers it yet (brief: "6H-6 will own the first
-// controlled real generation workflow").
+// (6H-4) + a provider-neutral AIProvider (this phase) together.
+//
+// Phase 6H-6 is this function's first real caller (via
+// app/(studio)/studio/(protected)/content-suggestions/generateAction.ts) and
+// added the duplicate-generation guard below. Nothing still calls this
+// automatically — no scheduler, no bulk job, no YouTube-sync trigger — every
+// invocation is one explicit, authenticated Studio action.
 //
 // Dependency direction (enforced by these imports, not just documented):
 // this file imports FROM modules/db/repositories/** and modules/ai/**, and
@@ -43,6 +46,7 @@ export interface GenerateRecordingEditorialSuggestionInput {
 export type GenerateRecordingEditorialSuggestionResult =
   | { ok: true; generationRequest: ContentGenerationRequest; suggestion: ContentSuggestion }
   | { ok: false; generationRequest: null; reason: "RECORDING_CONTEXT_UNAVAILABLE"; contextReason: Exclude<RecordingContextResult, { ok: true }>["reason"] }
+  | { ok: false; generationRequest: null; reason: "GENERATION_ALREADY_IN_PROGRESS" }
   | { ok: false; generationRequest: ContentGenerationRequest; reason: string };
 
 /**
@@ -62,6 +66,16 @@ export async function generateRecordingEditorialSuggestion(
   const contextResult = await getRecordingContext(input.recordingId, mode);
   if (!contextResult.ok) {
     return { ok: false, generationRequest: null, reason: "RECORDING_CONTEXT_UNAVAILABLE", contextReason: contextResult.reason };
+  }
+
+  // Duplicate-generation guard (brief: "do not create uncontrolled duplicate
+  // suggestions"): refuse a second generation while one is already active
+  // for this target, rather than silently overwriting or racing it. Does
+  // NOT block a later, intentional re-generation once the prior one has
+  // reached a terminal state (SUCCEEDED/FAILED).
+  const activeRequest = await findActiveGenerationRequestForEntity("RECORDING", input.recordingId);
+  if (activeRequest) {
+    return { ok: false, generationRequest: null, reason: "GENERATION_ALREADY_IN_PROGRESS" };
   }
 
   const contextFingerprint = computeContextFingerprint(contextResult.context);
