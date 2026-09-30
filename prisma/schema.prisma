@@ -218,6 +218,14 @@ model StudioUser {
   fieldOwnershipChanges FieldOwnership[] @relation("FieldOwnershipChangedBy")
   syncConflictsResolved SyncConflict[]   @relation("SyncConflictResolvedBy")
 
+  // Phase 6H-4 — Content Suggestion persistence: requesting a generation
+  // attempt and reviewing its resulting suggestion are distinct actorial
+  // events (system-side attempt vs. human review decision, docs/content-intelligence-architecture.md
+  // Phase 6H-2 §24), so they get their own named relations rather than
+  // reusing a generic createdBy/updatedBy pair.
+  contentGenerationRequestsRequested ContentGenerationRequest[] @relation("ContentGenerationRequestedBy")
+  contentSuggestionsReviewed         ContentSuggestion[]        @relation("ContentSuggestionReviewedBy")
+
   @@map("studio_users")
 }
 
@@ -1577,6 +1585,159 @@ model EntityOccasion {
   @@index([entityType, entityId])
   @@index([occasionId])
   @@map("entity_occasions")
+}
+
+// ---------------------------------------------------------------------------
+// Content Suggestion persistence (Phase 6H-4, docs/content-intelligence-architecture.md
+// Phase 6H-2 §33/§37). This is the persistent editorial layer a future
+// Content Intelligence generator will populate — NOT built here. No LLM
+// integration exists anywhere in this codebase; these two tables only give
+// a proposed editorial change somewhere durable to live while a human
+// reviews it.
+//
+// Two models, deliberately not one and not three (6H-2 §33):
+// - ContentGenerationRequest is the system-side attempt record, mirroring
+//   SyncJobRun's own separation of "did the job run" from the rows it
+//   produces (modules/db/repositories/syncJobRunRepository.ts).
+// - ContentSuggestion is the human-reviewable artifact. Collapsing the two
+//   would conflate "did the AI call succeed" with "did the editor accept
+//   it" — genuinely different lifecycles with different actors.
+// A third model (a suggestion revision/edit-history table) is explicitly
+// NOT included — the first pilot needs only one proposal per generation
+// request; `finalContent` below already preserves the distinction between
+// what was generated and what an editor approved instead, without a
+// separate versioning table.
+//
+// `targetEntityType`/`targetEntityId` reuse the exact generic string-pair
+// pattern EntitySource/EntityRights/EntityOccasion already established
+// above — not a new polymorphic framework. The V1-supported set is
+// exactly one value, `"RECORDING"`, enforced at the application layer in
+// modules/mmke/contentIntelligence/contentSuggestionEntityType.ts (never a
+// database enum, so it can grow later without a migration, mirroring
+// provenanceEntityType.ts's convention exactly).
+//
+// PUBLISHED is deliberately NOT a ContentSuggestionStatus value: approval
+// only means a human has accepted the proposal, or their edited version of
+// it, for eventual editorial use — publication remains entirely the job of
+// whatever existing publish mechanism governs the real target field (e.g.
+// Recording's own publishCurrentDraft), never duplicated here.
+enum ContentSuggestionType {
+  EDITORIAL_PROSE
+  SEO_METADATA
+  INTERNAL_LINK
+  INFORMATION_GAP
+  SOURCE_LEAD
+  SEARCH_TERMINOLOGY
+  // A candidate relationship change (e.g. "this video may correspond to
+  // Work X") — never auto-applied. No code path in this phase, or any
+  // future one, may let accepting this suggestion type itself create or
+  // modify an MMKE relationship; only a human using the existing
+  // catalogue-write UI can actually do that.
+  CANONICAL_RELATIONSHIP_CANDIDATE
+}
+
+enum ContentGenerationStatus {
+  PENDING
+  GENERATING
+  SUCCEEDED
+  FAILED
+}
+
+enum ContentSuggestionStatus {
+  DRAFT_READY
+  EDITOR_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum ContentSuggestionReviewDecision {
+  ACCEPT
+  EDIT_AND_ACCEPT
+  REJECT_UNSUPPORTED
+  REJECT_INCORRECT
+  REJECT_DUPLICATE
+  REJECT_OTHER
+}
+
+model ContentGenerationRequest {
+  id               String @id @default(uuid())
+  targetEntityType String
+  targetEntityId   String
+
+  suggestionType ContentSuggestionType
+  status         ContentGenerationStatus @default(PENDING)
+
+  // A deterministic fingerprint of the RecordingContext (Phase 6H-3) this
+  // request was generated against — the minimum mechanism for staleness
+  // detection (6H-2 §31): never a full context snapshot, never a stored
+  // percentage/score.
+  contextFingerprint String?
+
+  // Generation/model metadata (6H-2 §30) — reproducibility/auditability
+  // only. No provider is integrated in this phase; these stay null until
+  // a future phase actually calls one. Never a place for secrets/API keys.
+  provider     String?
+  model        String?
+  promptVersion String?
+
+  requestedById String
+  requestedAt   DateTime  @default(now())
+  completedAt   DateTime?
+  errorDetails  String?   @db.Text
+
+  requestedBy StudioUser          @relation("ContentGenerationRequestedBy", fields: [requestedById], references: [id])
+  suggestions ContentSuggestion[]
+
+  @@index([targetEntityType, targetEntityId])
+  @@map("content_generation_requests")
+}
+
+model ContentSuggestion {
+  id                  String @id @default(uuid())
+  generationRequestId String
+
+  suggestionType   ContentSuggestionType
+  targetEntityType String
+  targetEntityId   String
+  // The specific editorial field this proposal targets once approved,
+  // e.g. "educationalListeningGuide" — null for suggestion types with no
+  // single field target (INFORMATION_GAP, SEARCH_TERMINOLOGY,
+  // CANONICAL_RELATIONSHIP_CANDIDATE).
+  targetField String?
+
+  // The proposal as originally produced — plain text for prose-shaped
+  // types, JSON-serialized text for structured types (e.g.
+  // INFORMATION_GAP's missingField/whyItMatters/candidateResolutionSource/
+  // requestedAction, docs/content-intelligence-architecture.md Phase 6H-2
+  // §27). Immutable after creation — an editor's edit goes in
+  // `finalContent` below, never here (brief: "do not overwrite the
+  // original suggestion when an editor modifies it").
+  proposedContent String @db.Text
+
+  // References only — {sourceType, entityType, entityId, field} (6H-2
+  // §22). Never a duplicated copy of the referenced record.
+  evidenceRefs Json
+
+  status ContentSuggestionStatus @default(DRAFT_READY)
+
+  reviewedById   String?
+  reviewDecision ContentSuggestionReviewDecision?
+  reviewNote     String?                          @db.Text
+  // The editor's own final wording, populated only when reviewDecision is
+  // EDIT_AND_ACCEPT — proposedContent above is never overwritten.
+  finalContent String? @db.Text
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  generationRequest ContentGenerationRequest @relation(fields: [generationRequestId], references: [id], onDelete: Cascade)
+  reviewedBy        StudioUser?              @relation("ContentSuggestionReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([targetEntityType, targetEntityId])
+  @@index([status])
+  @@map("content_suggestions")
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,119 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getCurrentStudioSession } from "../../../../../modules/auth/authService";
+import { can } from "../../../../../modules/auth/policy";
+import { listContentSuggestionsForStudio } from "../../../../../modules/db/repositories/contentSuggestionRepository";
+import { formatAuditTimestamp } from "../../../../../modules/audit/auditDisplay";
+import type { ContentSuggestionStatus, ContentSuggestionType } from "@prisma/client";
+
+// Phase 6H-4 — the Studio Content Suggestions list, mirroring the existing
+// Audit Log page's URL-filter convention (6G-15). RECORDING_WRITE-gated
+// for viewing (docs/content-intelligence-architecture.md Phase 6H-2 §34:
+// the same permission that already allows creating/editing a Recording
+// draft) — never exposed publicly (no sitemap entry, no Museum route).
+
+const STATUS_OPTIONS: ContentSuggestionStatus[] = ["DRAFT_READY", "EDITOR_REVIEW", "CHANGES_REQUESTED", "APPROVED", "REJECTED"];
+const TYPE_OPTIONS: ContentSuggestionType[] = [
+  "EDITORIAL_PROSE",
+  "SEO_METADATA",
+  "INTERNAL_LINK",
+  "INFORMATION_GAP",
+  "SOURCE_LEAD",
+  "SEARCH_TERMINOLOGY",
+  "CANONICAL_RELATIONSHIP_CANDIDATE",
+];
+
+interface ListSearchParams {
+  status?: string;
+  suggestionType?: string;
+}
+
+function isContentSuggestionStatus(value: string): value is ContentSuggestionStatus {
+  return (STATUS_OPTIONS as string[]).includes(value);
+}
+
+function isContentSuggestionType(value: string): value is ContentSuggestionType {
+  return (TYPE_OPTIONS as string[]).includes(value);
+}
+
+export default async function ContentSuggestionsPage({ searchParams }: { searchParams: Promise<ListSearchParams> }) {
+  const session = await getCurrentStudioSession();
+  if (!session) redirect("/studio/signin");
+  if (!can(session.user.role, "RECORDING_WRITE")) {
+    return <p>You do not have permission to view Content Suggestions.</p>;
+  }
+
+  const params = await searchParams;
+  const status = params.status && isContentSuggestionStatus(params.status) ? params.status : undefined;
+  const suggestionType = params.suggestionType && isContentSuggestionType(params.suggestionType) ? params.suggestionType : undefined;
+
+  const suggestions = await listContentSuggestionsForStudio({ status, suggestionType });
+
+  return (
+    <div>
+      <h1>Content Suggestions</h1>
+      <p>
+        Proposed editorial changes awaiting human review. A suggestion never becomes canonical or public on its own — see{" "}
+        <Link href="/studio/audit">the audit log</Link> for the full history of every decision made here.
+      </p>
+
+      <form method="get" style={{ margin: "1rem 0", display: "flex", flexWrap: "wrap", gap: "1rem", alignItems: "flex-end" }}>
+        <label>
+          Status
+          <select name="status" defaultValue={status ?? ""} style={{ display: "block" }}>
+            <option value="">All</option>
+            {STATUS_OPTIONS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Type
+          <select name="suggestionType" defaultValue={suggestionType ?? ""} style={{ display: "block" }}>
+            <option value="">All</option>
+            {TYPE_OPTIONS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit">Filter</button>
+        <Link href="/studio/content-suggestions">Clear</Link>
+      </form>
+
+      {suggestions.length === 0 ? (
+        <p>No Content Suggestions match these filters.</p>
+      ) : (
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Created</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Type</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Target</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Reviewer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {suggestions.map((suggestion) => (
+              <tr key={suggestion.id}>
+                <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{formatAuditTimestamp(suggestion.createdAt)}</td>
+                <td style={{ borderBottom: "1px solid #eee" }}>{suggestion.suggestionType}</td>
+                <td style={{ borderBottom: "1px solid #eee" }}>
+                  {suggestion.targetEntityType}: {suggestion.targetEntityId}
+                </td>
+                <td style={{ borderBottom: "1px solid #eee" }}>
+                  <Link href={`/studio/content-suggestions/${suggestion.id}`}>{suggestion.status}</Link>
+                </td>
+                <td style={{ borderBottom: "1px solid #eee" }}>{suggestion.reviewedBy ? suggestion.reviewedBy.name : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}

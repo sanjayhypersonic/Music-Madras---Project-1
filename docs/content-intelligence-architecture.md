@@ -1,12 +1,16 @@
 # Content Intelligence Architecture
 
-Status: **architecture and contracts only. No Content Intelligence code exists yet.**
-This document records what was found in the repository and proposes a future
-architecture. Nothing described here as "future" or "proposed" has been built.
+Status: **partially implemented.** No LLM, AI provider, or generation logic
+exists anywhere in this codebase. What now exists is the deterministic,
+read-only context assembler (6H-3) and the persistent editorial layer a
+future generator will populate (6H-4). Nothing described as "future" or
+"proposed" below has been built.
 
 - §1–§17: **Phase 6H-1** — Architecture & Inventory (commit `fbc75bd`).
 - §18–§36: **Phase 6H-2** — Content Suggestion & Context Contract addendum.
-- §37 onward: **Phase 6H-3** — Recording Context Assembler, the first real implementation.
+- §37–§45: **Phase 6H-3** — Recording Context Assembler (implemented).
+- §46 onward: **Phase 6H-4** — Content Suggestion Persistence & Editorial
+  Foundation (implemented).
 
 ## 1. Purpose
 
@@ -955,3 +959,175 @@ a new query for it was judged unnecessary scope for this phase. Everything from
 6H-1 §16 and 6H-2 §35 remains deferred unchanged: the `ContentGenerationRequest`/
 `ContentSuggestion` migration itself, any Studio UI, any LLM provider or call,
 and `CANONICAL_RELATIONSHIP_CANDIDATE` generation.
+
+---
+
+# Phase 6H-4 — Content Suggestion Persistence & Editorial Foundation
+
+Status: **implemented.** The `ContentGenerationRequest`/`ContentSuggestion`
+migration proposed in 6H-2 §33 is now applied exactly as specified, with the
+repository/service layer, lifecycle transitions, audit wiring, and a minimal
+RBAC-gated Studio review UI built on top of it. **Still no LLM, AI provider, or
+generation logic of any kind** — every suggestion in this phase's tests is
+constructed directly through the repository, exactly as 6H-2/6H-3 anticipated a
+future generator would.
+
+## 46. Migration applied
+
+`prisma/migrations/20260930060456_phase6h4_content_suggestion_persistence/` —
+purely additive: two tables (`content_generation_requests`,
+`content_suggestions`), four enums (`ContentSuggestionType`,
+`ContentGenerationStatus`, `ContentSuggestionStatus`,
+`ContentSuggestionReviewDecision`), and two Prisma-level `StudioUser`
+back-relations (no new column on `studio_users`). Exactly the schema proposed
+in §33 — no unrelated change, no destructive operation. `targetEntityType`/
+`targetEntityId` reuse the generic string-pair pattern `EntitySource`/
+`EntityRights`/`EntityOccasion` already established; the V1-supported set is
+exactly `["RECORDING"]`, enforced in
+`modules/mmke/contentIntelligence/contentSuggestionEntityType.ts` (an
+application-layer guard, never a database enum — mirrors
+`provenanceEntityType.ts` exactly).
+
+## 47. Module map
+
+- `modules/mmke/contentIntelligence/contentSuggestionEntityType.ts` — V1 scope guard.
+- `modules/mmke/contentIntelligence/contentSuggestionEvidence.ts` — the
+  `{sourceType, entityType, entityId, field}` evidence reference type (6H-2 §22).
+- `modules/mmke/contentIntelligence/computeContextFingerprint.ts` — a pure
+  `sha256` hash of a fully-assembled `RecordingContext` (6H-3). Concretizes
+  6H-2 §31's "composite of relevant state" as a hash of the context's own
+  already-deterministic serialization, rather than separately-fetched
+  `updatedAt` columns — simpler, and requires no change to 6H-3's contract.
+- `modules/publishing/contentSuggestionTransitions.ts` — the pure
+  `ContentSuggestion.status` state machine, mirroring
+  `videoPageTransitions.ts`'s shape exactly.
+- `modules/db/repositories/contentSuggestionRepository.ts` — the only file
+  touching the two new tables: `createGenerationRequest`,
+  `markGenerationRequestGenerating`, `completeGenerationRequest`,
+  `createSuggestion`, `submitSuggestionForReview`, `approveContentSuggestion`,
+  `rejectContentSuggestion`, `requestContentSuggestionChanges`,
+  `checkContentSuggestionFreshness`, and read helpers. Never calls a
+  canonical-entity write function.
+- `app/(studio)/studio/(protected)/content-suggestions/{page.tsx,[id]/page.tsx,[id]/actions.ts}`
+  — the minimal Studio list/detail/review UI, added to the Studio nav gated
+  on `RECORDING_WRITE`.
+
+## 48. Lifecycle — preserved exactly as 6H-2 §24 specified
+
+Two independent state machines, not one:
+
+- **`ContentGenerationRequest.status`** (system-side): `PENDING → GENERATING →
+  SUCCEEDED | FAILED`. `markGenerationRequestGenerating`/
+  `completeGenerationRequest` are audited with `actorId: null` ("System") —
+  no human performs these steps.
+- **`ContentSuggestion.status`** (human-review-side): `DRAFT_READY →
+  EDITOR_REVIEW → {APPROVED | REJECTED | CHANGES_REQUESTED}`.
+  `APPROVED`/`REJECTED`/`CHANGES_REQUESTED` are terminal in this phase — no
+  generator exists yet to act on a `CHANGES_REQUESTED` suggestion; a future
+  regeneration creates a new `ContentGenerationRequest`/`ContentSuggestion`
+  pair, never a mutation of the original (6H-2 §25).
+- **`PUBLISHED` remains absent from `ContentSuggestionStatus`**, exactly as
+  6H-2 §24 required — approval only records a human decision; it never
+  writes to the target entity's real editorial field, which stays a
+  separate, not-yet-built future action.
+
+`createSuggestion` is itself audited with `actorId: null` — the generation
+event has no human actor; the human act this phase audits is the earlier
+`CONTENT_GENERATION_REQUESTED` entry (`requestedById`).
+
+## 49. Content vs. evidence vs. decision — kept distinct in the schema, not just in prose
+
+- **Content**: `proposedContent` — immutable after creation. An editor's own
+  wording goes in the separate `finalContent` column, populated only when
+  `reviewDecision` is `EDIT_AND_ACCEPT`; `proposedContent` is never
+  overwritten (verified by an integration test).
+- **Evidence**: `evidenceRefs` (JSON array of `{sourceType, entityType,
+  entityId, field}`) — references only, never a duplicated copy of the
+  referenced `Source`/`Citation`/`RightsInformation`/MMKE record.
+- **Decision**: `status` + `reviewDecision` (`ACCEPT` | `EDIT_AND_ACCEPT` |
+  `REJECT_UNSUPPORTED` | `REJECT_INCORRECT` | `REJECT_DUPLICATE` |
+  `REJECT_OTHER`) + `reviewedById` + `reviewedAt` + `reviewNote` — four
+  distinct columns, not one opaque blob.
+
+## 50. Staleness detection
+
+`checkContentSuggestionFreshness(suggestionId)` re-assembles the **current**
+`RecordingContext` via the 6H-3 assembler, recomputes its fingerprint, and
+compares it against the fingerprint stored on the originating
+`ContentGenerationRequest` at creation time. Returns `CURRENT` | `STALE` |
+`UNKNOWN` (`UNKNOWN` covers both "no fingerprint was ever recorded" and "the
+target Recording is no longer available," e.g. archived since). Purely
+informative — never mutates the suggestion, never triggers regeneration, no
+background job. Verified end-to-end: a suggestion generated against a
+two-work Recording is `CURRENT`, becomes `STALE` the moment a second work is
+attached and republished, while the suggestion row itself remains completely
+unchanged.
+
+## 51. Auditability
+
+No second audit system. New action strings on the existing `AuditLogEntry`:
+`CONTENT_GENERATION_REQUESTED`, `CONTENT_GENERATION_STARTED`,
+`CONTENT_GENERATION_SUCCEEDED`/`_FAILED`, `CONTENT_SUGGESTION_CREATED`,
+`CONTENT_SUGGESTION_SUBMITTED_FOR_REVIEW`, `CONTENT_SUGGESTION_APPROVED`,
+`CONTENT_SUGGESTION_REJECTED`, `CONTENT_SUGGESTION_CHANGES_REQUESTED`. The
+existing `EntityActivity` component (6G-15) is reused as-is on the suggestion
+detail page — no second activity system.
+
+## 52. RBAC boundary — no new roles or actions
+
+Exactly the two gates 6H-2 §34 specified: **`RECORDING_WRITE`** (view the list
+and detail pages — the same permission that already lets a Contributor create
+a Recording draft) and **`EDITORIAL_REVIEW`** (submit for review,
+approve/reject/request changes — the same permission that already governs
+moving a Recording through its own review phases). No new `StudioAction`
+value, no new role. Enforced server-side in every Server Action, exactly like
+every existing Studio mutation (a hidden button is a courtesy, never the
+actual gate).
+
+## 53. Studio UI — deliberately minimal
+
+A list page (`/studio/content-suggestions`, filterable by status/type,
+mirroring the Audit Log's URL-filter convention) and a detail page
+(`/studio/content-suggestions/[id]`) showing the target, generation metadata,
+context freshness, the original proposal, evidence, and review controls
+(Approve/Reject/Request changes as plain forms → Server Actions). No AI
+chat, no prompt playground, no model selector, no dashboard — exactly what
+Step 9 of the brief asked for and no more. Nothing here is reachable from any
+public Museum route, the sitemap, or `robots.txt`.
+
+## 54. Canonical MMKE immutability — verified, not assumed
+
+An integration test creates a generation request, a suggestion, submits it
+for review, and approves it with an edited `finalContent`, then re-reads the
+target `Recording` and every `RecordingRevision` row and asserts byte-for-byte
+equality with a snapshot taken before any of it happened. A second test
+asserts the same for rejection. Neither `contentSuggestionRepository.ts` nor
+any Server Action in this phase imports a single canonical-entity write
+function.
+
+## 55. Tests and validation
+
+- `tests/unit/contentSuggestionTransitions.test.ts` (4 tests) and
+  `tests/unit/computeContextFingerprint.test.ts` (4 tests) — pure, DB-free.
+- `tests/integration/contentSuggestionRepository.test.ts` (16 tests, real
+  Neon database) — generation-request lifecycle, suggestion creation and
+  entity-type validation, the full review lifecycle (including invalid
+  transitions), `ACCEPT` vs. `EDIT_AND_ACCEPT` content preservation,
+  rejection reasons, `CHANGES_REQUESTED` as a legitimate terminal state,
+  staleness detection (`CURRENT`/`STALE`/`UNKNOWN`), canonical MMKE
+  immutability across the full workflow, the RBAC boundary, and the read
+  helpers' relations.
+- Full suite after this phase: **343 unit / 359 integration**, all passing.
+  Production build clean (all routes, including the two new Studio ones).
+  Lint clean. Database baseline confirmed clean before and after (zero
+  orphaned rows; both new tables empty at rest).
+
+## 56. Deferred (unchanged from 6H-2 §35, plus this phase's own scope limits)
+
+Any LLM provider or call; the actual generator (steps 3–11 of 6H-2's future
+compatibility list); `CANONICAL_RELATIONSHIP_CANDIDATE` generation (the type
+exists in the schema; nothing produces or auto-applies one); a transition out
+of `CHANGES_REQUESTED` (requires the not-yet-built regeneration mechanism); a
+"turn an approved suggestion into an actual edit of the real editorial field"
+action (explicitly named in 6H-2 §24 as a separate future step); multi-turn
+suggestion revision history; any public exposure of a suggestion.

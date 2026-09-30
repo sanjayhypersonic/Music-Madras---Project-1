@@ -31,6 +31,9 @@ export default async function ProtectedStudioLayout({ children }: { children: Re
     { href: "/studio/editorial", label: "Editorial" },
     { href: "/studio/sheet-music", label: "Sheet Music Requests" },
   ];
+  if (can(role, "RECORDING_WRITE")) {
+    navLinks.push({ href: "/studio/content-suggestions", label: "Content Suggestions" });
+  }
   if (canManageUsers(role)) {
     navLinks.push({ href: "/studio/users", label: "Users" });
   }
