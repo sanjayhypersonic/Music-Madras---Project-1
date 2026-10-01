@@ -3,11 +3,15 @@ import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
 import { UnsupportedProvenanceEntityTypeError } from "../../modules/mmke/provenance/provenanceEntityType";
 import {
+  approveSource,
   attachSourceToEntity,
   createSource,
   detachSourceFromEntity,
+  disableSource,
+  listApprovedSourcesForEntity,
   listSources,
   listSourcesForEntity,
+  rejectSource,
   updateSource,
 } from "../../modules/db/repositories/sourceRepository";
 import { createCitation, listCitationsForSource, updateCitation } from "../../modules/db/repositories/citationRepository";
@@ -431,6 +435,136 @@ describe("Provenance attachment (EntitySource / EntityRights) against a real dat
 
     expect(await prisma.entitySource.count({ where: { sourceId: source.id } })).toBe(0);
     expect(await prisma.entityRights.count({ where: { rightsInformationId: rights.id } })).toBe(0);
+  });
+});
+
+describe("Phase 6H-8 — Source approval state against a real database", () => {
+  let sourceId: string | null = null;
+  let userId: string | null = null;
+
+  afterEach(async () => {
+    if (sourceId) {
+      await cleanupSource(sourceId).catch(() => {});
+      sourceId = null;
+    }
+    if (userId) {
+      await prisma.studioUser.deleteMany({ where: { id: userId } });
+      userId = null;
+    }
+  });
+
+  it("defaults every new Source to UNREVIEWED", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const source = await createSource({ title: uniqueName("Default State Source"), actorId: user.id });
+    sourceId = source.id;
+    expect(source.approvalState).toBe("UNREVIEWED");
+    expect(source.approvedById).toBeNull();
+    expect(source.approvedAt).toBeNull();
+  });
+
+  it("approves a Source, recording who/when, and audit-logs the transition", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const source = await createSource({ title: uniqueName("Approvable Source"), actorId: user.id });
+    sourceId = source.id;
+
+    const approved = await approveSource(source.id, user.id);
+    expect(approved.approvalState).toBe("APPROVED");
+    expect(approved.approvedById).toBe(user.id);
+    expect(approved.approvedAt).not.toBeNull();
+
+    const audit = await prisma.auditLogEntry.findMany({ where: { entityType: "Source", entityId: source.id, action: "SOURCE_APPROVED" } });
+    expect(audit).toHaveLength(1);
+  });
+
+  it("rejects a Source and audit-logs the transition", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const source = await createSource({ title: uniqueName("Rejectable Source"), actorId: user.id });
+    sourceId = source.id;
+
+    const rejected = await rejectSource(source.id, user.id);
+    expect(rejected.approvalState).toBe("REJECTED");
+    const audit = await prisma.auditLogEntry.findMany({ where: { entityType: "Source", entityId: source.id, action: "SOURCE_REJECTED" } });
+    expect(audit).toHaveLength(1);
+  });
+
+  it("disables a previously-approved Source and audit-logs the transition", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const source = await createSource({ title: uniqueName("Disablable Source"), actorId: user.id });
+    sourceId = source.id;
+
+    await approveSource(source.id, user.id);
+    const disabled = await disableSource(source.id, user.id);
+    expect(disabled.approvalState).toBe("DISABLED");
+    const audit = await prisma.auditLogEntry.findMany({ where: { entityType: "Source", entityId: source.id, action: "SOURCE_DISABLED" } });
+    expect(audit).toHaveLength(1);
+  });
+
+  it("re-approves a previously REJECTED or DISABLED Source (re-review is not a one-way door)", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const source = await createSource({ title: uniqueName("Reinstatable Source"), actorId: user.id });
+    sourceId = source.id;
+
+    await rejectSource(source.id, user.id);
+    const reApproved = await approveSource(source.id, user.id);
+    expect(reApproved.approvalState).toBe("APPROVED");
+  });
+
+  it("rejects an invalid transition — cannot disable a Source that was never approved", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const source = await createSource({ title: uniqueName("Never Approved Source"), actorId: user.id });
+    sourceId = source.id;
+
+    await expect(disableSource(source.id, user.id)).rejects.toThrow(/cannot be disabled/i);
+  });
+
+  it("never auto-approves on creation, update, or attachment — approval requires an explicit, separate action", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const source = await createSource({ title: uniqueName("Never Auto-Approved"), actorId: user.id });
+    sourceId = source.id;
+    const composer = await createComposer({ slug: uniqueSlug("composer"), name: uniqueName("Never Auto-Approved Composer"), actorId: user.id });
+    try {
+      await updateSource(source.id, { publisher: "Some Publisher", actorId: user.id });
+      await attachSourceToEntity({ entityType: "COMPOSER", entityId: composer.id, sourceId: source.id, actorId: user.id });
+
+      const reloaded = await listSourcesForEntity("COMPOSER", composer.id);
+      expect(reloaded[0].source.approvalState).toBe("UNREVIEWED");
+    } finally {
+      await prisma.entitySource.deleteMany({ where: { entityType: "COMPOSER", entityId: composer.id } });
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: "COMPOSER", entityId: composer.id } });
+      await prisma.composer.delete({ where: { id: composer.id } });
+    }
+  });
+
+  it("listApprovedSourcesForEntity returns only APPROVED sources, while listSourcesForEntity still returns every attached Source regardless of state", async () => {
+    const user = await createTestUser();
+    userId = user.id;
+    const approved = await createSource({ title: uniqueName("Filter Approved"), actorId: user.id });
+    const unreviewed = await createSource({ title: uniqueName("Filter Unreviewed"), actorId: user.id });
+    const composer = await createComposer({ slug: uniqueSlug("composer"), name: uniqueName("Filter Composer"), actorId: user.id });
+    try {
+      await attachSourceToEntity({ entityType: "COMPOSER", entityId: composer.id, sourceId: approved.id, actorId: user.id });
+      await attachSourceToEntity({ entityType: "COMPOSER", entityId: composer.id, sourceId: unreviewed.id, actorId: user.id });
+      await approveSource(approved.id, user.id);
+
+      const approvedOnly = await listApprovedSourcesForEntity("COMPOSER", composer.id);
+      expect(approvedOnly.map((l) => l.sourceId)).toEqual([approved.id]);
+
+      const everyAttached = await listSourcesForEntity("COMPOSER", composer.id);
+      expect(everyAttached.map((l) => l.sourceId).sort()).toEqual([approved.id, unreviewed.id].sort());
+    } finally {
+      await prisma.entitySource.deleteMany({ where: { entityType: "COMPOSER", entityId: composer.id } });
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: "COMPOSER", entityId: composer.id } });
+      await prisma.composer.delete({ where: { id: composer.id } });
+      await cleanupSource(approved.id);
+      await cleanupSource(unreviewed.id);
+    }
   });
 });
 

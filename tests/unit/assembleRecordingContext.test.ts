@@ -159,11 +159,55 @@ describe("assembleRecordingContext — information gaps", () => {
 
   it("reports hasProvenance true once at least one Source or RightsInformation is attached", () => {
     const input = baseInput({
-      sources: [{ entityType: "RECORDING", entityId: "recording-1", source: { id: "source-1", title: "A Source", url: null, publisher: null } }],
+      sources: [{ entityType: "RECORDING", entityId: "recording-1", source: { id: "source-1", title: "A Source", url: null, publisher: null, citations: [] } }],
     });
     const context = assembleRecordingContext(input);
     expect(context.completeness.hasProvenance).toBe(true);
     expect(context.completeness.gaps.map((g) => `${g.field}:${g.state}`)).not.toContain("PROVENANCE:MISSING");
+  });
+});
+
+describe("assembleRecordingContext — Phase 6H-8 source approval + citation evidence", () => {
+  it("marks every assembled source as approvalState APPROVED — the assembler is only ever handed already-approved sources", () => {
+    const input = baseInput({
+      sources: [{ entityType: "RECORDING", entityId: "recording-1", source: { id: "source-1", title: "A Source", url: null, publisher: null, citations: [] } }],
+    });
+    const context = assembleRecordingContext(input);
+    expect(context.provenance.sources[0].approvalState).toBe("APPROVED");
+  });
+
+  it("carries an approved source's citation text into RecordingContext verbatim", () => {
+    const input = baseInput({
+      sources: [
+        {
+          entityType: "RECORDING",
+          entityId: "recording-1",
+          source: {
+            id: "source-1",
+            title: "A Source",
+            url: null,
+            publisher: null,
+            citations: [
+              { id: "citation-2", text: "Second excerpt." },
+              { id: "citation-1", text: "First excerpt." },
+            ],
+          },
+        },
+      ],
+    });
+    const context = assembleRecordingContext(input);
+    expect(context.provenance.sources[0].citations).toEqual([
+      { id: "citation-1", text: "First excerpt." },
+      { id: "citation-2", text: "Second excerpt." },
+    ]);
+  });
+
+  it("represents a source with no citation text yet as an empty array, not a failure", () => {
+    const input = baseInput({
+      sources: [{ entityType: "RECORDING", entityId: "recording-1", source: { id: "source-1", title: "A Source", url: null, publisher: null, citations: [] } }],
+    });
+    const context = assembleRecordingContext(input);
+    expect(context.provenance.sources[0].citations).toEqual([]);
   });
 });
 

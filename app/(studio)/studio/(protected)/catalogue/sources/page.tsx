@@ -51,6 +51,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Prom
               <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Title</th>
               <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Publisher</th>
               <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>URL</th>
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>AI evidence approval</th>
               <th style={{ borderBottom: "1px solid #ccc" }}></th>
             </tr>
           </thead>
@@ -60,6 +61,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Prom
                 <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{source.title ?? "—"}</td>
                 <td style={{ borderBottom: "1px solid #eee" }}>{source.publisher ?? "—"}</td>
                 <td style={{ borderBottom: "1px solid #eee" }}>{source.url ?? "—"}</td>
+                <td style={{ borderBottom: "1px solid #eee" }}>{source.approvalState}</td>
                 <td style={{ borderBottom: "1px solid #eee" }}>
                   <Link href={`/studio/catalogue/sources/${source.id}`}>Manage</Link>
                 </td>

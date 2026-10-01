@@ -1784,3 +1784,316 @@ associated `AuditLogEntry`) were deleted afterward and verified clean.
   `ContentGenerationRequest`/`evidenceRefs` architecture already supports
   every hardening requirement; none of the brief's STOP conditions were
   triggered.
+
+## 94. Phase 6H-8 — Trusted Source Registry & Automated Evidence Retrieval
+
+This phase closes the last manual step in Content Intelligence: until now, an
+editor had to manually copy external evidence into a suggestion's context.
+Phase 6H-8 makes **approved** external evidence flow into `RecordingContext`
+automatically, while leaving every other boundary from 6H-1–6H-7 untouched —
+no web search, no AI-driven source discovery, no AI-decided trust, no
+canonical MMKE mutation from external material.
+
+**The closed-world principle, restated and formalized:**
+
+> Closed-world generation does not mean manually supplied context. It means
+> the model operates within a controlled evidence boundary automatically
+> assembled by Music Madras from approved sources.
+
+Nothing about *what* the model is allowed to reason over changes in this
+phase (still exactly `RecordingContext`, still validated twice). What changes
+is *how completely* that context now reflects already-trusted external
+material — automatically, rather than requiring an editor to paste it in.
+
+## 95. Source trust/approval — schema change (additive, approved before applying)
+
+The existing `Source`/`Citation`/`EntitySource` architecture (6G-13) had no
+way to express "this source is trusted for AI evidence" — every attached
+`Source` was read identically regardless of review status. This is a genuine
+capability gap, not a design flaw in earlier phases: nothing before 6H-8
+needed a trust distinction, because nothing before 6H-8 read `Source` content
+automatically.
+
+Per this project's standing rule (every phase since 6G-17: STOP and report
+before applying a schema change), the migration below was presented to the
+user in full — exact enum values, exact columns, exact default, explicit
+"no backfill" — and explicitly approved before being applied.
+
+```prisma
+enum SourceApprovalState {
+  UNREVIEWED
+  APPROVED
+  REJECTED
+  DISABLED
+}
+
+model Source {
+  // ...existing fields unchanged (title, url, publisher, createdAt)...
+  approvalState      SourceApprovalState @default(UNREVIEWED)
+  approvedById       String?
+  approvedAt         DateTime?
+  lastRetrievedAt    DateTime?
+  contentFingerprint String?
+  approvedBy StudioUser? @relation("SourceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+}
+```
+
+Purely additive: no column dropped, no existing column retyped, no data
+rewritten. Every pre-existing `Source` row received `UNREVIEWED` by the
+migration's own default — confirmed against the live database both before
+and after applying it (migration `20261001055648_source_approval_state`).
+**No Source was backfilled to `APPROVED`.** This means every Source attached
+before this phase shipped became invisible to Content Intelligence the
+moment the migration landed, until an editor explicitly reviews it — the
+safe direction, matching "unreviewed sources must not enter AI context."
+
+`lastRetrievedAt`/`contentFingerprint` exist so a future live-retrieval
+phase can detect that an approved source's content changed, without a
+scheduler or version table. **Deliberately left unpopulated in this phase**
+(see §101) — this phase establishes the columns the brief asked for, not a
+change-detection job.
+
+`RightsInformation`/`EntityRights`/`Citation`/`EntitySource` are completely
+unchanged. Trust is a `Source`-level concept only: a `Citation`'s
+trustworthiness is entirely inherited from its parent `Source`, never
+tracked independently (the brief: "preserve the distinction between
+SOURCE... and CITATION... only Citation material associated with an
+APPROVED Source may enter the AI evidence context").
+
+## 96. Source approval state machine
+
+`modules/publishing/sourceApprovalTransitions.ts` (pure, no Prisma — mirrors
+`contentSuggestionTransitions.ts`'s shape exactly):
+
+```
+UNREVIEWED -> APPROVED | REJECTED
+APPROVED   -> REJECTED | DISABLED
+REJECTED   -> APPROVED
+DISABLED   -> APPROVED
+```
+
+Re-review is never a one-way door: a `REJECTED` or `DISABLED` Source can be
+reconsidered and approved later (circumstances or editorial judgement can
+change). There is no automatic transition anywhere in this table — every
+edge is reached only through `modules/db/repositories/sourceRepository.ts`'s
+`approveSource`/`rejectSource`/`disableSource`, each requiring an
+authenticated Studio actor, each audit-logged (`SOURCE_APPROVED`/
+`SOURCE_REJECTED`/`SOURCE_DISABLED`, the existing generic `AuditLogEntry`,
+no new audit infrastructure), and each gated by the same `CATALOGUE_WRITE`
+permission that already gates editing a Source — approving a source for AI
+evidence is a continuation of the same editorial-trust judgement as editing
+its metadata, not a distinct reviewer role, so no new permission was added.
+
+Creating, updating, or attaching a `Source` never changes its approval
+state — approval requires a separate, explicit action, every time
+(integration-tested explicitly — see §102).
+
+## 97. Two source listings, deliberately kept separate
+
+`modules/db/repositories/sourceRepository.ts` now exposes two functions with
+different audiences:
+
+- `listSourcesForEntity` (unchanged, 6G-13) — every attached Source
+  regardless of approval state. Still used by the Studio composer/work/
+  relationships pages: approval never changes what a human editor can see.
+- `listApprovedSourcesForEntity` (new) — identical query, filtered to
+  `approvalState: "APPROVED"`. The **only** entry point the Recording
+  Context Assembler may use.
+
+Keeping these separate (rather than changing `listSourcesForEntity`'s
+behavior) means every existing Studio page keeps working exactly as before;
+only the AI-facing path is new.
+
+## 98. The Source Retrieval Adapter
+
+The brief's required pipeline:
+
+```
+Source Registry -> Source Retrieval Adapter -> Retrieved Source Material
+  -> Evidence Normalization -> Recording Context -> AI Gateway
+  -> Evidence Validation
+```
+
+`modules/ai/retrieval/sourceRetrievalAdapter.ts` defines the contract —
+source/provider-neutral, Prisma-free, mirroring `modules/ai/provider/aiProvider.ts`'s
+role for AI providers:
+
+```ts
+interface SourceRetrievalAdapter {
+  retrieve(request: { sourceId: string }): Promise<SourceRetrievalResult>;
+}
+```
+
+A result is always one of: success (`citations`, a nullable
+`contentFingerprint`, `retrievedAt`) or a classified failure
+(`SOURCE_NOT_FOUND` | `SOURCE_NOT_APPROVED` | `UNAVAILABLE` | `TIMEOUT` |
+`UNKNOWN`, plus a message and `retrievedAt`) — never a bare throw.
+
+**Exactly one real implementation exists in this phase**:
+`CitationBackedSourceRetrievalAdapter`
+(`modules/ai/retrieval/citationBackedSourceRetrievalAdapter.ts`). It performs
+**no network request** — it reads the `Citation` rows an editor already
+typed in via the existing Studio Source detail page (`listCitationsForSource`,
+unchanged from 6G-13), re-checks the Source's approval state itself as a
+defensive guard against a race with the registry query, and computes a
+sha256 fingerprint over the normalized citation list. This is a deliberately
+honest implementation: it gives a future phase a seam to add a real
+HTTP-fetching adapter without touching the Context Assembler or AI Gateway
+at all, rather than this phase pretending to do live external retrieval it
+was explicitly told not to build.
+
+`FakeSourceRetrievalAdapter` (`modules/ai/retrieval/fakeSourceRetrievalAdapter.ts`)
+is the deterministic test double, mirroring `FakeAIProvider`'s config-driven
+shape (a `mode` selects the outcome; `citations`/`contentFingerprint` let a
+test inject an exact payload). Default mode is `SUCCESS` with no citations —
+the same honest-default philosophy as `FakeAIProvider`'s default
+`INFORMATION_GAP` output.
+
+## 99. Wiring into the Recording Context Assembler
+
+`getRecordingContext` (`modules/db/repositories/recordingContextRepository.ts`)
+now takes an optional third parameter, `sourceRetrievalAdapter`, defaulting
+to the real `CitationBackedSourceRetrievalAdapter` — production code never
+substitutes it; only tests inject `FakeSourceRetrievalAdapter` (exactly the
+same injection pattern `getConfiguredAIProvider` already established for AI
+providers).
+
+Sequence per call: gather `listApprovedSourcesForEntity` results for the
+Recording + its Works + their Composers (unchanged scope, 6H-1 §3C) ->
+retrieve each unique approved source's current citation content through the
+adapter -> merge the retrieved citations back onto each source link ->
+`assembleRecordingContext` shapes the result exactly as before, with each
+`RecordingContextSource` now additionally carrying `approvalState: "APPROVED"`
+(a literal, true by construction — only approved sources are ever handed to
+the assembler) and `citations: RecordingContextCitation[]`.
+
+A retrieval failure (defensive only — the adapter re-checks approval itself,
+so this should not occur in steady state) degrades to "no citation text for
+this source" rather than failing the whole request: the Source's own
+metadata is still included, and a source with no evidence text is simply
+weaker evidence, not a broken generation request. Integration-tested
+explicitly (§102).
+
+`getRecordingContext` remains entirely read-only, exactly as its own
+docstring has always stated: `CitationBackedSourceRetrievalAdapter.retrieve`
+only ever calls `findSourceById`/`listCitationsForSource`, never a write.
+
+## 100. Citation provenance — the evidence trace
+
+Per the brief's explicit requirement, a citation reaching `RecordingContext`
+is never anonymous text. The trace is exactly:
+
+```
+AI statement -> evidenceRef -> Citation -> Source -> approved source
+```
+
+concretely:
+
+```ts
+interface RecordingContextCitation {
+  id: string;
+  text: string | null;
+}
+
+interface RecordingContextSource {
+  id: string; title: string | null; url: string | null; publisher: string | null;
+  approvalState: "APPROVED"; // always — see §99
+  citations: RecordingContextCitation[];
+  attachedTo: { entityType: string; entityId: string };
+}
+```
+
+A `RecordingContextCitation` is always nested inside the `RecordingContextSource`
+that produced it, so a citation's id, source id, source title/url/publisher,
+and approval state are all jointly traceable from one context entry — no
+separate, disconnected "evidence" record was introduced (the brief: "do not
+create a second evidence table if the existing Source + Citation +
+RecordingContext architecture can safely represent this" — it can).
+
+`buildEvidenceIndex` (`modules/ai/structuredOutput/buildEvidenceIndex.ts`)
+now indexes each Citation as its **own** citable evidence unit — distinct
+from its parent Source's own existing entry — so the model can point at a
+specific excerpt (`entityType: "Citation"`) rather than only "this Source
+exists" (`entityType: "Source"`). Both carry `sourceType:
+"APPROVED_EXTERNAL_SOURCE"`, unchanged from the existing four-tier
+hierarchy. Because `context.provenance.sources` can only ever contain
+already-APPROVED sources (§97), every Citation reachable through this index
+is transitively approved too — there is no code path by which an
+UNREVIEWED/REJECTED/DISABLED source's citation text can reach the evidence
+index, the AI gateway, or a persisted `ContentSuggestion.evidenceRefs` entry.
+
+## 101. What this phase deliberately does not do
+
+Per the brief's explicit scope discipline, none of the following were built:
+web/Google/Bing search, AI-driven source discovery or trust decisions,
+autonomous source approval, a retrieval scheduler, bulk external retrieval,
+RAG, embeddings, a vector database, a new AI provider, or automatic
+publication. `YOUTUBE_METADATA` continues to flow through its existing,
+unmodified synchronization pathway — it was never forced through the
+Source/Citation system, and the four-tier hierarchy (`CANONICAL_MMKE` >
+`YOUTUBE_METADATA` > `APPROVED_EDITORIAL` > `APPROVED_EXTERNAL_SOURCE`) is
+unchanged.
+
+Two things are explicitly deferred, by design, not oversight:
+
+- **`lastRetrievedAt`/`contentFingerprint` on `Source` are schema-only in
+  this phase.** No code path writes them yet. A future live-retrieval phase
+  can populate them (e.g. at approval time, or on a scheduled re-check) and
+  compare against a fresh `CitationBackedSourceRetrievalAdapter` (or a real
+  HTTP-backed adapter's) result to detect drift — the data model exists;
+  the job that would use it does not.
+- **No real external HTTP retrieval adapter exists.** The only Source
+  content Content Intelligence can use today is citation text an editor
+  already typed into the Studio. A future phase can add an HTTP-fetching
+  `SourceRetrievalAdapter` implementation behind the same interface with
+  zero change to the Context Assembler, AI Gateway, or evidence validation.
+
+## 102. Tests and validation
+
+- `tests/unit/sourceApprovalTransitions.test.ts` — the approval state
+  machine: every valid/invalid edge, re-review from REJECTED/DISABLED back
+  to APPROVED, no transition is ever a same-state no-op.
+- `tests/unit/fakeSourceRetrievalAdapter.test.ts` — deterministic fake
+  adapter: default honest `SUCCESS` with no citations, injected
+  citations/fingerprint, all four failure modes, `sourceId`/`retrievedAt`
+  always echoed.
+- `tests/integration/citationBackedSourceRetrievalAdapter.test.ts` — the
+  real adapter against the live database: `SOURCE_NOT_FOUND`,
+  `SOURCE_NOT_APPROVED` for UNREVIEWED/REJECTED/DISABLED sources, empty
+  citations + null fingerprint with none on file, real citation text +
+  non-null fingerprint, deterministic fingerprint across repeated calls,
+  a changed fingerprint once citation content changes, and a read-only
+  check (row counts unchanged after retrieval).
+- `tests/integration/provenanceRepository.test.ts` (extended) — new
+  describe block: default `UNREVIEWED`, approve/reject/disable each
+  audit-logged, re-approval after rejection/disable, an invalid transition
+  rejected (disable-without-approve), approval never happens implicitly on
+  create/update/attach, and `listApprovedSourcesForEntity` vs.
+  `listSourcesForEntity` returning different sets from the same attached
+  sources.
+- `tests/integration/recordingContextRepository.test.ts` (extended,
+  section F) — an APPROVED source appears with `approvalState: "APPROVED"`;
+  UNREVIEWED/REJECTED/DISABLED sources are each excluded entirely from the
+  assembled context; an approved source's citation text reaches context via
+  the real adapter; a simulated retrieval failure degrades to empty
+  citations rather than failing the request.
+- `tests/unit/buildEvidenceIndex.test.ts` (extended) — a Citation indexes as
+  its own evidence entity distinct from its Source; an invented citation id
+  is never indexed; a source with no citations adds no extra index entries.
+- `tests/unit/assembleRecordingContext.test.ts` (extended) — every
+  assembled source is marked `approvalState: "APPROVED"`; citation text is
+  carried through verbatim and sorted deterministically by id; no
+  citations yet is represented as `[]`, not a failure.
+- Existing `tests/unit/assembleRecordingContext.test.ts`/
+  `tests/unit/buildEvidenceIndex.test.ts` fixtures updated for the new
+  required `citations`/`approvalState` fields — no existing assertion was
+  weakened, only the fixture shape was extended.
+- Database baseline: 1 pre-existing orphaned test `Source` row (created by
+  an unrelated earlier phase's test, 0 citations, 0 entity links) confirmed
+  present before this phase and left untouched (out of this phase's scope);
+  it is now `UNREVIEWED` like every other pre-existing Source, so it was
+  never AI-eligible even before this phase and remains so now.
+- Migration `20261001055648_source_approval_state` verified additive both
+  by reading the generated SQL (only `CREATE TYPE`/`ADD COLUMN`/
+  `ADD CONSTRAINT`, no `DROP`) and by re-querying the live database
+  immediately after applying it.

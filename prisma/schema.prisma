@@ -226,6 +226,10 @@ model StudioUser {
   contentGenerationRequestsRequested ContentGenerationRequest[] @relation("ContentGenerationRequestedBy")
   contentSuggestionsReviewed         ContentSuggestion[]        @relation("ContentSuggestionReviewedBy")
 
+  // Phase 6H-8 — explicit, authorized Source approval is its own actorial
+  // event (never automatic — see SourceApprovalState above).
+  sourcesApproved Source[] @relation("SourceApprovedBy")
+
   @@map("studio_users")
 }
 
@@ -1468,12 +1472,45 @@ model SheetMusicRequest {
 // itself specifies this one as a genuinely generic/polymorphic case.
 // ---------------------------------------------------------------------------
 
+// Phase 6H-8 — a Source's trust/approval state for automated Content
+// Intelligence evidence retrieval (docs/content-intelligence-architecture.md,
+// Phase 6H-8 section). This is orthogonal to the existing source-tier
+// classification (ContextSourceType's CANONICAL_MMKE/YOUTUBE_METADATA/
+// APPROVED_EDITORIAL/APPROVED_EXTERNAL_SOURCE, defined in
+// modules/mmke/contentIntelligence/recordingContextContract.ts) — that map
+// says which TIER a source belongs to; this enum says whether a given
+// APPROVED_EXTERNAL_SOURCE-tier Source has actually been reviewed and
+// trusted yet. UNREVIEWED is the default for every new (and, after this
+// migration, every pre-existing) Source: nothing becomes AI-eligible
+// automatically.
+enum SourceApprovalState {
+  UNREVIEWED
+  APPROVED
+  REJECTED
+  DISABLED
+}
+
 model Source {
   id        String   @id @default(uuid())
   title     String?
   url       String?
   publisher String?
   createdAt DateTime @default(now())
+
+  // Phase 6H-8 — see SourceApprovalState above. approvedById/approvedAt
+  // record who/when explicitly approved this Source; lastRetrievedAt/
+  // contentFingerprint exist so a retrieval adapter can detect that an
+  // approved source's underlying content changed, without a separate
+  // scheduler or version table (brief: "establish the data model necessary
+  // to record retrievedAt / content fingerprint", deferring the scheduler
+  // itself).
+  approvalState      SourceApprovalState @default(UNREVIEWED)
+  approvedById       String?
+  approvedAt         DateTime?
+  lastRetrievedAt    DateTime?
+  contentFingerprint String?
+
+  approvedBy StudioUser? @relation("SourceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
 
   citations   Citation[]
   entityLinks EntitySource[]

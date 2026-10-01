@@ -2,6 +2,8 @@ import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
 import { isSupportedProvenanceEntityType, UnsupportedProvenanceEntityTypeError } from "../../mmke/provenance/provenanceEntityType";
+import { canApproveSource, canDisableSource, canRejectSource } from "../../publishing/sourceApprovalTransitions";
+import type { SourceApprovalStateValue } from "../../publishing/sourceApprovalTransitions";
 import type { ProvenanceEntityType } from "../../mmke/provenance/provenanceEntityType";
 import type { EntitySource, Source } from "@prisma/client";
 
@@ -109,6 +111,93 @@ export async function updateSource(id: string, input: UpdateSourceInput): Promis
 }
 
 // ---------------------------------------------------------------------------
+// Trust/approval state (Phase 6H-8, docs/content-intelligence-architecture.md
+// Phase 6H-8 section) — see modules/publishing/sourceApprovalTransitions.ts
+// for the state machine itself. These are the ONLY functions that may
+// change Source.approvalState; every transition is an explicit, authorized
+// Studio action (never automatic) and is audited exactly like any other
+// Source mutation.
+// ---------------------------------------------------------------------------
+
+export async function approveSource(id: string, actorId: string): Promise<Source> {
+  const before = await prisma.source.findUnique({ where: { id } });
+  if (!before) {
+    throw new Error(`Source ${id} does not exist.`);
+  }
+  if (!canApproveSource(before.approvalState as SourceApprovalStateValue)) {
+    throw new Error(`Source ${id} cannot be approved from its current approval state (${before.approvalState}).`);
+  }
+
+  const updated = await prisma.source.update({
+    where: { id },
+    data: { approvalState: "APPROVED", approvedById: actorId, approvedAt: new Date() },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "SOURCE_APPROVED",
+    entityType: "Source",
+    entityId: id,
+    beforeSnapshot: { approvalState: before.approvalState },
+    afterSnapshot: { approvalState: updated.approvalState },
+  });
+
+  return updated;
+}
+
+export async function rejectSource(id: string, actorId: string): Promise<Source> {
+  const before = await prisma.source.findUnique({ where: { id } });
+  if (!before) {
+    throw new Error(`Source ${id} does not exist.`);
+  }
+  if (!canRejectSource(before.approvalState as SourceApprovalStateValue)) {
+    throw new Error(`Source ${id} cannot be rejected from its current approval state (${before.approvalState}).`);
+  }
+
+  const updated = await prisma.source.update({
+    where: { id },
+    data: { approvalState: "REJECTED" },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "SOURCE_REJECTED",
+    entityType: "Source",
+    entityId: id,
+    beforeSnapshot: { approvalState: before.approvalState },
+    afterSnapshot: { approvalState: updated.approvalState },
+  });
+
+  return updated;
+}
+
+export async function disableSource(id: string, actorId: string): Promise<Source> {
+  const before = await prisma.source.findUnique({ where: { id } });
+  if (!before) {
+    throw new Error(`Source ${id} does not exist.`);
+  }
+  if (!canDisableSource(before.approvalState as SourceApprovalStateValue)) {
+    throw new Error(`Source ${id} cannot be disabled from its current approval state (${before.approvalState}).`);
+  }
+
+  const updated = await prisma.source.update({
+    where: { id },
+    data: { approvalState: "DISABLED" },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "SOURCE_DISABLED",
+    entityType: "Source",
+    entityId: id,
+    beforeSnapshot: { approvalState: before.approvalState },
+    afterSnapshot: { approvalState: updated.approvalState },
+  });
+
+  return updated;
+}
+
+// ---------------------------------------------------------------------------
 // Attachment (EntitySource) — activates the existing generic polymorphic
 // join, following the same shape EntityOccasion/EntityEducationalContent
 // already established.
@@ -120,6 +209,34 @@ export function listSourcesForEntity(
 ): Promise<(EntitySource & { source: Source })[]> {
   return prisma.entitySource.findMany({
     where: { entityType, entityId },
+    include: { source: true },
+  });
+}
+
+/**
+ * Phase 6H-8 — the ONLY entry point the Recording Context Assembler may use
+ * to read the Source registry for AI evidence
+ * (recordingContextRepository.ts). Identical to listSourcesForEntity above
+ * except filtered to approvalState: "APPROVED" — every other Studio-facing
+ * caller of listSourcesForEntity (composer/work/relationships pages)
+ * continues to see every attached Source regardless of approval state,
+ * since approval only gates what may automatically become AI evidence,
+ * never what a human editor can see in the Studio.
+ *
+ * Deliberately does NOT include Citation content: a Source's Citation text
+ * is "Retrieved Source Material" in the Source Registry -> Source Retrieval
+ * Adapter -> Retrieved Source Material pipeline (see
+ * modules/ai/retrieval/sourceRetrievalAdapter.ts) — the assembler fetches it
+ * through that adapter, not through this registry listing, keeping the two
+ * concerns (which sources are trusted vs. what their current content is)
+ * separate.
+ */
+export function listApprovedSourcesForEntity(
+  entityType: ProvenanceEntityType,
+  entityId: string
+): Promise<(EntitySource & { source: Source })[]> {
+  return prisma.entitySource.findMany({
+    where: { entityType, entityId, source: { approvalState: "APPROVED" } },
     include: { source: true },
   });
 }

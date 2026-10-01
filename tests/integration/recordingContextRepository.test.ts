@@ -19,9 +19,11 @@ import {
 import { attachMediaToRevision } from "../../modules/db/repositories/mediaResourceRepository";
 import { createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { createCollection, addRecordingToCollection, publishCollection } from "../../modules/db/repositories/collectionRepository";
-import { createSource, attachSourceToEntity } from "../../modules/db/repositories/sourceRepository";
+import { approveSource, attachSourceToEntity, createSource, disableSource, rejectSource } from "../../modules/db/repositories/sourceRepository";
+import { createCitation } from "../../modules/db/repositories/citationRepository";
 import { createRightsInformation, attachRightsInformationToEntity } from "../../modules/db/repositories/rightsInformationRepository";
 import { getRecordingContext } from "../../modules/db/repositories/recordingContextRepository";
+import { FakeSourceRetrievalAdapter } from "../../modules/ai/retrieval/fakeSourceRetrievalAdapter";
 
 // Phase 6H-3 — proves the Recording Context Assembler's real-database
 // wiring (getRecordingContext): visibility/mode gates, real provenance
@@ -318,24 +320,120 @@ describe("E. Collections, published-only visibility", () => {
 });
 
 describe("F. Provenance aggregation across Recording, Work, and Composer", () => {
-  it("surfaces a Source attached to the Work and a RightsInformation attached to the Composer", async () => {
+  it("surfaces an APPROVED Source attached to the Work and a RightsInformation attached to the Composer", async () => {
     const fixture = await createPublishedRecordingFixture();
     const source = await createSource({ title: "A Historical Source", actorId: fixture.user.id });
     const rights = await createRightsInformation({ holder: "Test Holder", actorId: fixture.user.id });
     try {
       await attachSourceToEntity({ entityType: "WORK", entityId: fixture.work.id, sourceId: source.id, actorId: fixture.user.id });
       await attachRightsInformationToEntity({ entityType: "COMPOSER", entityId: fixture.composer.id, rightsInformationId: rights.id, actorId: fixture.user.id });
+      await approveSource(source.id, fixture.user.id);
 
       const result = await getRecordingContext(fixture.recordingId);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
       expect(result.context.provenance.sources.map((s) => s.id)).toContain(source.id);
+      expect(result.context.provenance.sources.find((s) => s.id === source.id)?.approvalState).toBe("APPROVED");
       expect(result.context.provenance.rights.map((r) => r.id)).toContain(rights.id);
       expect(result.context.completeness.hasProvenance).toBe(true);
       expect(result.context.completeness.gaps.map((g) => `${g.field}:${g.state}`)).not.toContain("PROVENANCE:MISSING");
     } finally {
       await cleanupFixture(fixture, { sourceId: source.id, rightsId: rights.id });
+    }
+  });
+
+  it("Phase 6H-8 — excludes an UNREVIEWED Source entirely from the assembled context", async () => {
+    const fixture = await createPublishedRecordingFixture();
+    const source = await createSource({ title: "Not Yet Reviewed", actorId: fixture.user.id });
+    try {
+      await attachSourceToEntity({ entityType: "WORK", entityId: fixture.work.id, sourceId: source.id, actorId: fixture.user.id });
+      // Deliberately never approved — default state is UNREVIEWED.
+
+      const result = await getRecordingContext(fixture.recordingId);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.context.provenance.sources.map((s) => s.id)).not.toContain(source.id);
+    } finally {
+      await cleanupFixture(fixture, { sourceId: source.id });
+    }
+  });
+
+  it("Phase 6H-8 — excludes a REJECTED Source from the assembled context", async () => {
+    const fixture = await createPublishedRecordingFixture();
+    const source = await createSource({ title: "Rejected Source", actorId: fixture.user.id });
+    try {
+      await attachSourceToEntity({ entityType: "WORK", entityId: fixture.work.id, sourceId: source.id, actorId: fixture.user.id });
+      await rejectSource(source.id, fixture.user.id);
+
+      const result = await getRecordingContext(fixture.recordingId);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.context.provenance.sources.map((s) => s.id)).not.toContain(source.id);
+    } finally {
+      await cleanupFixture(fixture, { sourceId: source.id });
+    }
+  });
+
+  it("Phase 6H-8 — excludes a DISABLED Source (previously approved, later disabled) from the assembled context", async () => {
+    const fixture = await createPublishedRecordingFixture();
+    const source = await createSource({ title: "Disabled Source", actorId: fixture.user.id });
+    try {
+      await attachSourceToEntity({ entityType: "WORK", entityId: fixture.work.id, sourceId: source.id, actorId: fixture.user.id });
+      await approveSource(source.id, fixture.user.id);
+      await disableSource(source.id, fixture.user.id);
+
+      const result = await getRecordingContext(fixture.recordingId);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.context.provenance.sources.map((s) => s.id)).not.toContain(source.id);
+    } finally {
+      await cleanupFixture(fixture, { sourceId: source.id });
+    }
+  });
+
+  it("Phase 6H-8 — an APPROVED Source's Citation text reaches RecordingContext via the real retrieval adapter", async () => {
+    const fixture = await createPublishedRecordingFixture();
+    const source = await createSource({ title: "Cited Source", actorId: fixture.user.id });
+    let citationId: string | null = null;
+    try {
+      await attachSourceToEntity({ entityType: "WORK", entityId: fixture.work.id, sourceId: source.id, actorId: fixture.user.id });
+      await approveSource(source.id, fixture.user.id);
+      const citation = await createCitation({ text: "A verified excerpt about this work.", sourceId: source.id, actorId: fixture.user.id });
+      citationId = citation.id;
+
+      const result = await getRecordingContext(fixture.recordingId);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const contextSource = result.context.provenance.sources.find((s) => s.id === source.id);
+      expect(contextSource?.citations).toEqual([{ id: citation.id, text: "A verified excerpt about this work." }]);
+    } finally {
+      if (citationId) await prisma.citation.deleteMany({ where: { id: citationId } });
+      await cleanupFixture(fixture, { sourceId: source.id });
+    }
+  });
+
+  it("Phase 6H-8 — a retrieval failure degrades to no citation text rather than failing context assembly", async () => {
+    const fixture = await createPublishedRecordingFixture();
+    const source = await createSource({ title: "Retrieval Will Fail", actorId: fixture.user.id });
+    try {
+      await attachSourceToEntity({ entityType: "WORK", entityId: fixture.work.id, sourceId: source.id, actorId: fixture.user.id });
+      await approveSource(source.id, fixture.user.id);
+
+      const failingAdapter = new FakeSourceRetrievalAdapter({ mode: "UNAVAILABLE" });
+      const result = await getRecordingContext(fixture.recordingId, "PUBLISHED", failingAdapter);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const contextSource = result.context.provenance.sources.find((s) => s.id === source.id);
+      expect(contextSource).toBeDefined();
+      expect(contextSource?.citations).toEqual([]);
+    } finally {
+      await cleanupFixture(fixture, { sourceId: source.id });
     }
   });
 });

@@ -157,11 +157,35 @@ export interface RecordingContextLearningGuide {
   title: string;
 }
 
+/**
+ * Phase 6H-8 — the actual evidence TEXT belonging to an (already-approved)
+ * Source. The AI must never receive anonymous citation text: every
+ * RecordingContextCitation is always nested inside the RecordingContextSource
+ * that produced it, so a citation's id, source id, source title/url/
+ * publisher, and approval state are all jointly traceable from the same
+ * context entry (docs/content-intelligence-architecture.md Phase 6H-8
+ * "citation provenance").
+ */
+export interface RecordingContextCitation {
+  id: string;
+  text: string | null;
+}
+
 export interface RecordingContextSource {
   id: string;
   title: string | null;
   url: string | null;
   publisher: string | null;
+  /**
+   * Always "APPROVED" by construction — the Recording Context Assembler
+   * only ever reads Sources via listApprovedSourcesForEntity (Phase 6H-8),
+   * so an UNREVIEWED/REJECTED/DISABLED Source can never appear here. This
+   * field exists so evidence validation/provenance tracing can state the
+   * fact explicitly rather than relying on an implicit assembler guarantee.
+   */
+  approvalState: "APPROVED";
+  /** This Source's Citation content (Phase 6H-8) — empty when no excerpt text has been entered yet, which is not a failure, just nothing on file. */
+  citations: RecordingContextCitation[];
   /** Composer, Work, or Recording — the only supported provenance entity types (6H-1 §3C). */
   attachedTo: { entityType: string; entityId: string };
 }

@@ -56,6 +56,14 @@ export function buildEvidenceIndex(context: RecordingContext): Map<string, Conte
   }
   for (const source of context.provenance.sources) {
     add(source.id, { sourceType: "APPROVED_EXTERNAL_SOURCE", entityType: "Source", entityId: source.id, field: "provenance" });
+    // Phase 6H-8 — each Citation is its own citable evidence unit, distinct
+    // from its parent Source, so the model can point at a specific excerpt
+    // rather than only "this Source exists." Only ever reachable here
+    // because context.provenance.sources itself only ever contains
+    // already-APPROVED sources (recordingContextRepository.ts).
+    for (const citation of source.citations) {
+      add(citation.id, { sourceType: "APPROVED_EXTERNAL_SOURCE", entityType: "Citation", entityId: citation.id, field: "provenance" });
+    }
   }
   for (const rights of context.provenance.rights) {
     add(rights.id, { sourceType: "APPROVED_EXTERNAL_SOURCE", entityType: "RightsInformation", entityId: rights.id, field: "provenance" });

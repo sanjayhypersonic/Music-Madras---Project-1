@@ -150,7 +150,14 @@ interface RawRevision {
 interface RawEntitySourceLink {
   entityType: string;
   entityId: string;
-  source: { id: string; title: string | null; url: string | null; publisher: string | null };
+  source: {
+    id: string;
+    title: string | null;
+    url: string | null;
+    publisher: string | null;
+    /** Phase 6H-8 — present because the caller only ever supplies already-APPROVED sources (recordingContextRepository.ts's listApprovedSourcesForEntity). */
+    citations: { id: string; text: string | null }[];
+  };
 }
 
 interface RawEntityRightsLink {
@@ -280,6 +287,10 @@ function toSource(link: RawEntitySourceLink): RecordingContextSource {
     title: link.source.title,
     url: link.source.url,
     publisher: link.source.publisher,
+    approvalState: "APPROVED",
+    citations: [...link.source.citations]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((citation) => ({ id: citation.id, text: citation.text })),
     attachedTo: { entityType: link.entityType, entityId: link.entityId },
   };
 }

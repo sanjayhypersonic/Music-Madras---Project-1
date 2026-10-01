@@ -43,7 +43,17 @@ function baseContext(): RecordingContext {
     collections: [{ id: "collection-1", slug: "collection-1", title: "A Collection" }],
     learningGuides: [{ id: "guide-1", slug: "guide-1", title: "A Guide" }],
     provenance: {
-      sources: [{ id: "source-1", title: null, url: null, publisher: null, attachedTo: { entityType: "RECORDING", entityId: "r1" } }],
+      sources: [
+        {
+          id: "source-1",
+          title: null,
+          url: null,
+          publisher: null,
+          approvalState: "APPROVED",
+          citations: [{ id: "citation-1", text: "An excerpt." }],
+          attachedTo: { entityType: "RECORDING", entityId: "r1" },
+        },
+      ],
       rights: [{ id: "rights-1", holder: null, licenseType: null, attachedTo: { entityType: "RECORDING", entityId: "r1" } }],
     },
     completeness: { report: [], readiness: "INCOMPLETE", hasProvenance: true, gaps: [] },
@@ -67,6 +77,7 @@ describe("buildEvidenceIndex", () => {
       "guide-1",
       "source-1",
       "rights-1",
+      "citation-1",
     ]) {
       expect(index.has(id)).toBe(true);
     }
@@ -89,5 +100,33 @@ describe("buildEvidenceIndex", () => {
     expect(() => buildEvidenceIndex(context)).not.toThrow();
     const index = buildEvidenceIndex(context);
     expect(index.has("performance-1")).toBe(false);
+  });
+
+  describe("Phase 6H-8 — Citation-level evidence", () => {
+    it("indexes a Citation as its own evidence entity, distinct from its parent Source", () => {
+      const index = buildEvidenceIndex(baseContext());
+      expect(index.get("citation-1")).toEqual({ sourceType: "APPROVED_EXTERNAL_SOURCE", entityType: "Citation", entityId: "citation-1", field: "provenance" });
+      expect(index.get("source-1")).toEqual({ sourceType: "APPROVED_EXTERNAL_SOURCE", entityType: "Source", entityId: "source-1", field: "provenance" });
+    });
+
+    it("never indexes a Citation that is not present in the supplied context", () => {
+      const index = buildEvidenceIndex(baseContext());
+      expect(index.has("some-invented-citation-id")).toBe(false);
+    });
+
+    it("a Source with no citations still indexes the Source itself but adds no extra Citation entries", () => {
+      const context = {
+        ...baseContext(),
+        provenance: {
+          sources: [{ id: "source-2", title: null, url: null, publisher: null, approvalState: "APPROVED" as const, citations: [], attachedTo: { entityType: "RECORDING", entityId: "r1" } }],
+          rights: [],
+        },
+      };
+      const index = buildEvidenceIndex(context);
+      expect(index.has("source-2")).toBe(true);
+      expect(index.size).toBe(
+        buildEvidenceIndex({ ...baseContext(), provenance: { sources: [], rights: [] } }).size + 1
+      );
+    });
   });
 });

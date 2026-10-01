@@ -6,8 +6,10 @@ import type { RecordingContext, RecordingContextMode } from "../../mmke/contentI
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
 import { findPublicCollectionsByIds } from "./collectionRepository";
 import { listPublicLearningGuidesForRecording } from "./learningGuideRepository";
-import { listSourcesForEntity } from "./sourceRepository";
+import { listApprovedSourcesForEntity } from "./sourceRepository";
 import { listRightsForEntity } from "./rightsInformationRepository";
+import { CitationBackedSourceRetrievalAdapter } from "../../ai/retrieval/citationBackedSourceRetrievalAdapter";
+import type { SourceRetrievalAdapter } from "../../ai/retrieval/sourceRetrievalAdapter";
 
 // Phase 6H-3 — Recording Context Assembler (docs/content-intelligence-architecture.md,
 // Phase 6H-3 section). This is the architectural seam between Music
@@ -32,6 +34,12 @@ export type RecordingContextResult =
   | { ok: false; reason: "NO_DRAFT_REVISION" }
   | { ok: false; reason: "NO_PUBLISHED_REVISION" };
 
+// Phase 6H-8 — the default, real Source Retrieval Adapter. A caller (tests
+// only — never Studio/gateway code) may inject a different adapter, e.g.
+// FakeSourceRetrievalAdapter, exactly as getConfiguredAIProvider's
+// singleton is never substituted in production code either.
+const defaultSourceRetrievalAdapter: SourceRetrievalAdapter = new CitationBackedSourceRetrievalAdapter();
+
 /**
  * The Recording Context Assembler's entry point. Keyed by the canonical
  * Recording id (an internal Studio-facing service — never a public slug
@@ -48,7 +56,8 @@ export type RecordingContextResult =
  */
 export async function getRecordingContext(
   recordingId: string,
-  mode: RecordingContextMode = "PUBLISHED"
+  mode: RecordingContextMode = "PUBLISHED",
+  sourceRetrievalAdapter: SourceRetrievalAdapter = defaultSourceRetrievalAdapter
 ): Promise<RecordingContextResult> {
   const recording = await prisma.recording.findUnique({
     where: { id: recordingId },
@@ -123,18 +132,43 @@ export async function getRecordingContext(
   // Provenance: Recording + each attached Work + each Work's Composer —
   // the only three entity types Source/RightsInformation support
   // (modules/mmke/provenance/provenanceEntityType.ts, unchanged, not
-  // widened in this phase).
+  // widened in this phase). Sources are read via listApprovedSourcesForEntity
+  // (Phase 6H-8) — an UNREVIEWED/REJECTED/DISABLED Source, and its Citation
+  // content, must never reach the AI gateway; RightsInformation has no
+  // approval concept and is unaffected.
   const composerIds = dedupeById(revision.works.map((link) => link.musicalWork.composer)).map((c) => c.id);
   const workIds = revision.works.map((link) => link.musicalWorkId);
 
   const [recordingSources, workSources, composerSources, recordingRights, workRights, composerRights] = await Promise.all([
-    listSourcesForEntity("RECORDING", recordingId),
-    Promise.all(workIds.map((id) => listSourcesForEntity("WORK", id))).then((lists) => lists.flat()),
-    Promise.all(composerIds.map((id) => listSourcesForEntity("COMPOSER", id))).then((lists) => lists.flat()),
+    listApprovedSourcesForEntity("RECORDING", recordingId),
+    Promise.all(workIds.map((id) => listApprovedSourcesForEntity("WORK", id))).then((lists) => lists.flat()),
+    Promise.all(composerIds.map((id) => listApprovedSourcesForEntity("COMPOSER", id))).then((lists) => lists.flat()),
     listRightsForEntity("RECORDING", recordingId),
     Promise.all(workIds.map((id) => listRightsForEntity("WORK", id))).then((lists) => lists.flat()),
     Promise.all(composerIds.map((id) => listRightsForEntity("COMPOSER", id))).then((lists) => lists.flat()),
   ]);
+
+  // Phase 6H-8 — Evidence Normalization: fetch each APPROVED source's
+  // current Citation content through the Source Retrieval Adapter (never a
+  // direct Prisma read for this part — see sourceRetrievalAdapter.ts). A
+  // retrieval failure (defensive only; the adapter re-checks approval
+  // itself) degrades to "no citation text for this source" rather than
+  // failing the whole context — the Source's own metadata is still
+  // included, and a source with no evidence text is simply weaker evidence,
+  // not a broken request.
+  const allApprovedSourceLinks = [...recordingSources, ...workSources, ...composerSources];
+  const uniqueApprovedSourceIds = Array.from(new Set(allApprovedSourceLinks.map((link) => link.sourceId)));
+  const retrievalResults = await Promise.all(
+    uniqueApprovedSourceIds.map((sourceId) => sourceRetrievalAdapter.retrieve({ sourceId }))
+  );
+  const citationsBySourceId = new Map<string, { id: string; text: string | null }[]>();
+  for (const result of retrievalResults) {
+    if (result.ok) {
+      citationsBySourceId.set(result.sourceId, result.citations);
+    }
+  }
+  const withRetrievedCitations = <T extends { source: { id: string } }>(links: T[]) =>
+    links.map((link) => ({ ...link, source: { ...link.source, citations: citationsBySourceId.get(link.source.id) ?? [] } }));
 
   const participantCount =
     (revision.performance?.performers.length ?? 0) +
@@ -163,7 +197,7 @@ export async function getRecordingContext(
     publicSlugByVideoId,
     collections,
     learningGuides,
-    sources: [...recordingSources, ...workSources, ...composerSources],
+    sources: withRetrievedCitations(allApprovedSourceLinks),
     rights: [...recordingRights, ...workRights, ...composerRights],
     completenessReport,
     readiness: computeRecordingReadiness(completenessReport),

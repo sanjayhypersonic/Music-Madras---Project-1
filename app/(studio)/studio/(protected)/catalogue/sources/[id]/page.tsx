@@ -3,8 +3,16 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findSourceById } from "../../../../../../../modules/db/repositories/sourceRepository";
+import { canApproveSource, canDisableSource, canRejectSource } from "../../../../../../../modules/publishing/sourceApprovalTransitions";
 import { listCitationsForSource } from "../../../../../../../modules/db/repositories/citationRepository";
-import { addCitationAction, updateCitationAction, updateSourceAction } from "./actions";
+import {
+  addCitationAction,
+  approveSourceAction,
+  disableSourceAction,
+  rejectSourceAction,
+  updateCitationAction,
+  updateSourceAction,
+} from "./actions";
 
 // Phase 6G-13 — the Source editorial management view. Citations are
 // managed here, as children of their Source (the existing schema's only
@@ -39,6 +47,39 @@ export default async function SourceDetailPage({
       </p>
       <h1>{source.title ?? source.url ?? "Untitled Source"}</h1>
       {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+
+      <h2>AI evidence approval</h2>
+      <p>
+        Current state: <strong>{source.approvalState}</strong>
+        {source.approvalState === "APPROVED" && source.approvedAt && (
+          <> — approved {source.approvedAt.toLocaleDateString()}</>
+        )}
+      </p>
+      <p>
+        Only an <strong>APPROVED</strong> Source&apos;s Citations may automatically enter Content Intelligence&apos;s evidence
+        context. This never changes what Studio editors can see here — only what Content Intelligence may use.
+      </p>
+      {canWrite ? (
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          {canApproveSource(source.approvalState) && (
+            <form action={approveSourceAction.bind(null, source.id)}>
+              <button type="submit">Approve</button>
+            </form>
+          )}
+          {canRejectSource(source.approvalState) && (
+            <form action={rejectSourceAction.bind(null, source.id)}>
+              <button type="submit">Reject</button>
+            </form>
+          )}
+          {canDisableSource(source.approvalState) && (
+            <form action={disableSourceAction.bind(null, source.id)}>
+              <button type="submit">Disable</button>
+            </form>
+          )}
+        </div>
+      ) : (
+        <p>You do not have permission to change this source&apos;s approval state.</p>
+      )}
 
       <h2>Edit</h2>
       {canWrite ? (
