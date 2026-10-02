@@ -1,4 +1,5 @@
 import { buildEvidenceIndex } from "./buildEvidenceIndex";
+import { RECORDING_EDITORIAL_TARGET_FIELDS, type RecordingEditorialTargetField } from "../../mmke/contentIntelligence/recordingEditorialTargetFields";
 import type { RecordingContext } from "../../mmke/contentIntelligence/recordingContextContract";
 import type { ContentSuggestionEvidenceRef } from "../../mmke/contentIntelligence/contentSuggestionEvidence";
 
@@ -9,8 +10,11 @@ import type { ContentSuggestionEvidenceRef } from "../../mmke/contentIntelligenc
 // throws RecordingEditorialOutputValidationError, and the caller (the
 // gateway) treats that as a failed generation, never a partial success.
 
-const ALLOWED_TARGET_FIELDS = ["description", "educationalListeningGuide", "educationalAnalysis", "seoMetaTitle", "seoMetaDescription"] as const;
-export type RecordingEditorialTargetField = (typeof ALLOWED_TARGET_FIELDS)[number];
+// The whitelist now lives in one shared module (Phase 6I-2) so the apply-time
+// gate uses exactly the list this validator enforces. Re-exported for any
+// existing importer of the type from here.
+const ALLOWED_TARGET_FIELDS = RECORDING_EDITORIAL_TARGET_FIELDS;
+export type { RecordingEditorialTargetField };
 
 const MAX_PROPOSED_CONTENT_LENGTH = 4000;
 const MAX_GAP_FIELD_LENGTH = 500;

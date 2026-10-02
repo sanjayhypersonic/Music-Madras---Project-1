@@ -142,9 +142,11 @@ export async function updateDraftRevisionContent(
       | "educationalListeningGuide"
       | "educationalAnalysis"
     >
-  >
+  >,
+  /** Phase 6I-2 — optional caller-owned transaction (see createDraftRecording). Omitted by every existing caller. */
+  client: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<RecordingRevision> {
-  const recording = await prisma.recording.findUnique({
+  const recording = await client.recording.findUnique({
     where: { id: recordingId },
     include: { currentDraftRevision: true },
   });
@@ -157,7 +159,7 @@ export async function updateDraftRevisionContent(
     throw new ConcurrentEditError(recordingId);
   }
 
-  const updated = await prisma.recordingRevision.update({
+  const updated = await client.recordingRevision.update({
     where: { id: recording.currentDraftRevision.id },
     data: { ...patch, updatedById: actorId },
   });
@@ -169,12 +171,31 @@ export async function updateDraftRevisionContent(
  * Edit-after-publish (ADR §5.3, third bullet): forks a new DRAFT revision
  * as a copy of the currently published one, without altering what the
  * public Museum serves until the new draft is itself published.
+ *
+ * Phase 6I-2 — two corrections so that is actually true:
+ * - The draft now carries forward the published revision's Works
+ *   (RecordingRevisionWork) and MediaResources (including the PRIMARY_VIDEO's
+ *   youtubeVideoId link). Previously only the revision's own columns were
+ *   copied, so an edit-after-publish silently lost both and the draft could
+ *   not pass the completeness gate (Works and Media are REQUIRED) until an
+ *   editor re-attached them by hand. Rights links are shared, not duplicated.
+ * - A Recording that is PUBLISHED stays PUBLISHED while its new draft is
+ *   open, so the public page keeps serving the published revision (the public
+ *   gate, isRecordingPublished, requires status PUBLISHED; the old
+ *   unconditional IN_REVIEW took the live page offline for the whole edit).
+ *   A Recording in any other status (e.g. DRAFT after unpublish/restore)
+ *   still lands in IN_REVIEW exactly as before — forking never makes a
+ *   non-public Recording public.
+ *
+ * `client` is optional: omitted by every pre-existing caller, supplied by
+ * apply-approved-suggestion so the fork, the edit, and the audit are atomic.
  */
 export async function forkDraftFromPublished(
   recordingId: string,
-  actorId: string
+  actorId: string,
+  client?: Prisma.TransactionClient
 ): Promise<RecordingRevision> {
-  return prisma.$transaction(async (tx) => {
+  const run = async (tx: Prisma.TransactionClient): Promise<RecordingRevision> => {
     const recording = await tx.recording.findUnique({
       where: { id: recordingId },
       include: { currentPublishedRevision: true },
@@ -226,9 +247,42 @@ export async function forkDraftFromPublished(
       },
     });
 
+    // Carry the published revision's relationships forward (Phase 6I-2).
+    const publishedWorks = await tx.recordingRevisionWork.findMany({ where: { revisionId: published.id } });
+    if (publishedWorks.length > 0) {
+      await tx.recordingRevisionWork.createMany({
+        data: publishedWorks.map((link) => ({
+          revisionId: draft.id,
+          musicalWorkId: link.musicalWorkId,
+          order: link.order,
+          catalogueNumberOverride: link.catalogueNumberOverride,
+        })),
+      });
+    }
+
+    const publishedMedia = await tx.mediaResource.findMany({ where: { recordingRevisionId: published.id } });
+    if (publishedMedia.length > 0) {
+      await tx.mediaResource.createMany({
+        data: publishedMedia.map((media) => ({
+          recordingRevisionId: draft.id,
+          provider: media.provider,
+          role: media.role,
+          url: media.url,
+          providerResourceId: media.providerResourceId,
+          youtubeVideoId: media.youtubeVideoId,
+          rightsInformationId: media.rightsInformationId,
+        })),
+      });
+    }
+
     await tx.recording.update({
       where: { id: recordingId },
-      data: { currentDraftRevisionId: draft.id, status: "IN_REVIEW" },
+      data: {
+        currentDraftRevisionId: draft.id,
+        // A live Recording stays live while its new draft is edited; anything
+        // else keeps the pre-existing "pending update" status.
+        status: recording.status === "PUBLISHED" ? "PUBLISHED" : "IN_REVIEW",
+      },
     });
 
     await writeAuditLog(
@@ -238,13 +292,19 @@ export async function forkDraftFromPublished(
         entityType: "Recording",
         entityId: recordingId,
         beforeSnapshot: { publishedRevisionId: published.id },
-        afterSnapshot: { newDraftRevisionId: draft.id },
+        afterSnapshot: {
+          newDraftRevisionId: draft.id,
+          copiedWorkCount: publishedWorks.length,
+          copiedMediaCount: publishedMedia.length,
+        },
       },
       tx
     );
 
     return draft;
-  });
+  };
+
+  return client ? run(client) : prisma.$transaction(run, { timeout: 30000, maxWait: 10000 });
 }
 
 /**

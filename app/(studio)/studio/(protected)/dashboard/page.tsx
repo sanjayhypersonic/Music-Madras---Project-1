@@ -15,7 +15,9 @@ export default async function StudioDashboardPage() {
     listRecentAuditLogEntries(10),
   ]);
 
-  const needingAttention = recordings.filter((r) => r.status === "DRAFT" || r.status === "IN_REVIEW");
+  // A live (PUBLISHED) Recording with an open draft is a pending update and
+  // still needs attention — since Phase 6I-2 it stays PUBLISHED while edited.
+  const needingAttention = recordings.filter((r) => r.status === "DRAFT" || r.status === "IN_REVIEW" || r.currentDraftRevisionId !== null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>

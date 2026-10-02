@@ -9,7 +9,9 @@ import {
 import { findRecordingById } from "../../../../../../modules/db/repositories/recordingRepository";
 import { formatAuditTimestamp } from "../../../../../../modules/audit/auditDisplay";
 import EntityActivity from "../../../../../../components/studio/EntityActivity";
-import { approveAction, rejectAction, requestChangesAction, submitForReviewAction } from "./actions";
+import { applyToRecordingDraftAction, approveAction, rejectAction, requestChangesAction, submitForReviewAction } from "./actions";
+import { findContentSuggestionApplication, getApplicableTargetField } from "../../../../../../modules/db/repositories/contentSuggestionApplicationRepository";
+import { describeApplyRefusalForEditor } from "../../../../../../modules/mmke/contentIntelligence/applyContentSuggestionRefusal";
 import type { ContentSuggestionEvidenceRef } from "../../../../../../modules/mmke/contentIntelligence/contentSuggestionEvidence";
 
 // Phase 6H-4 — the Content Suggestion detail/review view. Deliberately
@@ -60,6 +62,9 @@ export default async function ContentSuggestionDetailPage({
   ]);
 
   const canReview = can(session.user.role, "EDITORIAL_REVIEW");
+  const canApply = can(session.user.role, "RECORDING_WRITE");
+  const applicableField = getApplicableTargetField(suggestion);
+  const application = suggestion.status === "APPROVED" ? await findContentSuggestionApplication(suggestion.id) : null;
   const evidenceRefs = (suggestion.evidenceRefs as unknown as ContentSuggestionEvidenceRef[] | null) ?? [];
 
   return (
@@ -192,9 +197,54 @@ export default async function ContentSuggestionDetailPage({
             </>
           )}
           {suggestion.status === "APPROVED" && (
-            <p style={{ color: "#666" }}>
-              Approved content is not yet published anywhere — turning an approved suggestion into a public edit is a future, separate action.
-            </p>
+            <section style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid #ccc" }}>
+              <h3>Apply to Recording draft</h3>
+              {application ? (
+                <p>
+                  Applied to the Recording&apos;s draft revision on {formatAuditTimestamp(application.appliedAt)}
+                  {application.actorName ? ` by ${application.actorName}` : ""}
+                  {application.forkedDraft ? " (a draft was created from the published revision)" : ""}. It has not been published — review and publish the
+                  draft through the normal Recording workflow.
+                  {targetRecording && (
+                    <>
+                      {" "}
+                      <Link href={`/studio/recordings/${targetRecording.id}/review`}>Review the draft →</Link>
+                    </>
+                  )}
+                </p>
+              ) : !applicableField ? (
+                <p style={{ color: "#666" }}>This suggestion does not target an editorial field that can be applied to a Recording.</p>
+              ) : freshness !== "CURRENT" ? (
+                <p style={{ color: "#b00020" }}>
+                  {freshness === "STALE"
+                    ? describeApplyRefusalForEditor("CONTENT_SUGGESTION_STALE")
+                    : describeApplyRefusalForEditor("FRESHNESS_UNKNOWN")}
+                </p>
+              ) : !targetRecording ? (
+                <p style={{ color: "#666" }}>The target Recording could not be found.</p>
+              ) : !canApply ? (
+                <p style={{ color: "#666" }}>You do not have permission to edit this Recording&apos;s draft.</p>
+              ) : (
+                <>
+                  <p>
+                    This will apply the approved editorial content to the Recording&apos;s draft revision. It will not publish the Recording.
+                    <br />
+                    Field: <code>{applicableField}</code> — the {suggestion.finalContent !== null ? "editor's final content" : "original proposal"} replaces the
+                    draft&apos;s current value for this field only.
+                    {!targetRecording.currentDraftRevisionId && (
+                      <>
+                        <br />
+                        The Recording has no open draft, so one will be created from its published revision (Works and media carried forward; the public page
+                        stays live).
+                      </>
+                    )}
+                  </p>
+                  <form action={applyToRecordingDraftAction.bind(null, suggestion.id)}>
+                    <button type="submit">Apply to Recording Draft</button>
+                  </form>
+                </>
+              )}
+            </section>
           )}
         </div>
       )}

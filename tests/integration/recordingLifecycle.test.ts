@@ -127,7 +127,11 @@ describe("B. forkDraftFromPublished against a real database", () => {
     expect(forked.title).toBe("Original Title"); // copied content
 
     const afterFork = await prisma.recording.findUnique({ where: { id: draft.id }, include: { currentDraftRevision: true, currentPublishedRevision: true } });
-    expect(afterFork?.status).toBe("IN_REVIEW");
+    // Phase 6I-2: forking a PUBLISHED recording keeps it PUBLISHED (its public
+    // page must stay live while the draft is edited); this was IN_REVIEW
+    // before, which took the live page offline. Non-PUBLISHED recordings
+    // still land in IN_REVIEW — see the dedicated test below.
+    expect(afterFork?.status).toBe("PUBLISHED");
     expect(afterFork?.currentDraftRevisionId).toBe(forked.id);
 
     // The published revision remains unchanged.
@@ -291,16 +295,17 @@ describe("Publication lifecycle (unpublish/archive/restore) and predicate consis
   }
 
   /**
-   * forkDraftFromPublished (unchanged by this phase, out of scope to
-   * modify) only copies the published revision's title/description/
-   * performance/SEO/educational fields — never its RecordingRevisionWork
-   * rows. A caller that wants the fork to remain related to the same
-   * canonical Work must re-attach it explicitly, exactly as a Studio
-   * editor using the Works wizard step after forking would.
+   * Phase 6I-2: forkDraftFromPublished now carries the published revision's
+   * RecordingRevisionWork rows (and MediaResources) forward, so the fork is
+   * already related to the same canonical Work and no explicit re-attach is
+   * needed (attaching again would correctly throw "already attached"). The
+   * helper keeps its name so the scenarios below read unchanged; the
+   * `workId` argument is retained only to assert the Work survived the fork.
    */
   async function forkAndReattachWork(recordingId: string, workId: string, actorId: string) {
     const forked = await forkDraftFromPublished(recordingId, actorId);
-    await attachWorkToRevision(forked.id, workId, actorId);
+    const links = await prisma.recordingRevisionWork.findMany({ where: { revisionId: forked.id } });
+    expect(links.map((l) => l.musicalWorkId)).toContain(workId);
     return forked;
   }
 
@@ -421,10 +426,9 @@ describe("Publication lifecycle (unpublish/archive/restore) and predicate consis
     // Republished: both say public again — forking from the
     // still-preserved published revision, since restore leaves no open
     // draft (this is the exact "future editor can fork and republish"
-    // path restoreRecording's own comment describes). The work is
-    // re-attached to the new draft (see forkAndReattachWork) since
-    // forking never copies RecordingRevisionWork rows forward — a
-    // separate, pre-existing behavior this phase does not change.
+    // path restoreRecording's own comment describes). Since Phase 6I-2
+    // the fork carries the Work forward itself (asserted inside
+    // forkAndReattachWork).
     await forkAndReattachWork(recording.id, work.id, user.id);
     await publishCurrentDraft(recording.id, user.id);
     expect(await agree()).toBe(true);

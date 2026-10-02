@@ -22,6 +22,7 @@ export default async function EditorialPage() {
         hasPublishedRevision: recording.currentPublishedRevisionId !== null,
         draftReadiness: completeness?.readiness ?? null,
         draftHasAnyContent: completeness?.report.some((item) => item.status === "COMPLETE") ?? false,
+        hasOpenDraft: recording.currentDraftRevisionId !== null,
       });
       return { recording, phase };
     })

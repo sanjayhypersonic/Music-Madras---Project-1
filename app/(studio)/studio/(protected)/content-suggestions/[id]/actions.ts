@@ -10,6 +10,8 @@ import {
   submitSuggestionForReview,
   type RejectSuggestionReason,
 } from "../../../../../../modules/db/repositories/contentSuggestionRepository";
+import { applyApprovedContentSuggestion } from "../../../../../../modules/db/repositories/contentSuggestionApplicationRepository";
+import { describeApplyRefusalForEditor } from "../../../../../../modules/mmke/contentIntelligence/applyContentSuggestionRefusal";
 
 // Phase 6H-4 — review actions for one ContentSuggestion. Every mutation is
 // gated by EDITORIAL_REVIEW (docs/content-intelligence-architecture.md
@@ -42,6 +44,31 @@ export async function approveAction(suggestionId: string, formData: FormData) {
   const reviewNote = String(formData.get("reviewNote") ?? "").trim() || null;
 
   await approveContentSuggestion(suggestionId, session!.user.id, { finalContent, reviewNote });
+  redirect(`/studio/content-suggestions/${suggestionId}`);
+}
+
+// Phase 6I-2 — applying an APPROVED suggestion edits a Recording draft, so it
+// is gated by RECORDING_WRITE (the permission that already governs editing a
+// Recording draft revision), NOT by EDITORIAL_REVIEW: approving wording and
+// changing a Recording are separate concerns in this RBAC model. Never
+// automatic on approval, never publishes, never calls an AI provider.
+export async function applyToRecordingDraftAction(suggestionId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "RECORDING_WRITE")) {
+    errorRedirect(suggestionId, "You do not have permission to edit this Recording's draft.");
+  }
+
+  let result: Awaited<ReturnType<typeof applyApprovedContentSuggestion>>;
+  try {
+    result = await applyApprovedContentSuggestion({ suggestionId, actorId: session!.user.id });
+  } catch {
+    errorRedirect(suggestionId, "The suggestion could not be applied. Nothing was changed. Please try again.");
+  }
+
+  if (!result.ok) {
+    errorRedirect(suggestionId, describeApplyRefusalForEditor(result.reason));
+  }
+
   redirect(`/studio/content-suggestions/${suggestionId}`);
 }
 

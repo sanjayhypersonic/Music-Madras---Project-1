@@ -42,6 +42,7 @@ export default async function RecordingWorkflowLayout({
     hasPublishedRevision: recording.currentPublishedRevisionId !== null,
     draftReadiness: recording.currentDraftRevisionId ? completeness?.readiness ?? null : null,
     draftHasAnyContent: completeness?.report.some((item) => item.status === "COMPLETE") ?? false,
+    hasOpenDraft: recording.currentDraftRevisionId !== null,
   });
 
   const title = recording.currentDraftRevision?.title ?? recording.currentPublishedRevision?.title ?? recording.slug;

@@ -2528,3 +2528,90 @@ only). Observed while tracing the next phase's path, and not changed here:
 description, performance link, SEO, educational fields) — not its linked
 Works or MediaResources — which the "apply an approved suggestion to a draft
 revision" phase will need to account for.
+
+
+## 117. Phase 6I-2 - Applying an approved ContentSuggestion to a Recording draft
+
+**Boundary.** An APPROVED ContentSuggestion can now be applied, by an explicit
+Studio action ("Apply to Recording Draft"), to the Recording's DRAFT revision:
+`targetField` receives `finalContent ?? proposedContent`. Nothing is published.
+Approval means "a human accepted this wording"; application is a second,
+deliberate act by someone allowed to edit the Recording. This is the only code
+path that writes AI-originated text into a Recording
+(`applyApprovedContentSuggestion`, `modules/db/repositories/contentSuggestionApplicationRepository.ts`).
+It never calls an AI provider, never retrieves sources, never regenerates, and
+never touches canonical MMKE entities.
+
+**Whitelist.** Only `description`, `educationalListeningGuide`,
+`educationalAnalysis`, `seoMetaTitle`, `seoMetaDescription`
+(`recordingEditorialTargetFields.ts`). The generation-time validator and the
+apply gate import the same constant, so they cannot drift (unit-tested). Only
+EDITORIAL_PROSE suggestions targeting a RECORDING with a whitelisted field are
+applicable; exactly one column is written per application.
+
+**Staleness gate.** Applying is refused with `CONTENT_SUGGESTION_STALE` when
+`checkContentSuggestionFreshness` is not CURRENT (`FRESHNESS_UNKNOWN` when the
+fingerprint cannot be compared). The refusal is audited
+(`CONTENT_SUGGESTION_APPLY_REFUSED`, reason in the snapshot) and changes
+nothing: the suggestion keeps its review state and is never regenerated or
+discarded. Freshness is evaluated against the PUBLISHED context, exactly as at
+review time. Consequence worth knowing: because editorial fields are part of the
+context, publishing applied prose makes every OTHER approved suggestion for that
+Recording stale; the editor regenerates rather than applying outdated text.
+
+**Draft handling and the fork fix.** If the Recording has an open draft, that
+draft is edited. If not, a draft is created through the existing lifecycle
+(`forkDraftFromPublished`). Previously the fork copied only the revision's own
+columns; it now also copies `RecordingRevisionWork` rows (work, order,
+catalogue-number override) and `MediaResource` rows (provider, role, url,
+provider resource id, `youtubeVideoId`, rights link), with the copied counts
+recorded in the fork audit snapshot. On user decision, a fork of a PUBLISHED
+Recording now keeps it PUBLISHED (previously it moved to IN_REVIEW and took the
+public page offline); non-published Recordings still move to IN_REVIEW. The
+editorial phase derivation gained an optional `hasOpenDraft` so a PUBLISHED
+Recording with an open draft reads as UPDATED in the Studio.
+
+**Atomicity, idempotency, concurrency.** Fork + edit + both audit entries commit
+in one transaction (timeout 30s) holding
+`pg_advisory_xact_lock(hashtext('recording-edit:<recordingId>'))`, with the
+APPROVED status and "already applied" re-checked inside the lock. Duplicate or
+concurrent application is therefore impossible; this was verified by mutation
+(without the lock, concurrent applies collide on the revision-number unique
+constraint).
+
+**Applied state is derived, not stored.** No schema change or migration was
+needed or made. "Applied" is the presence of an append-only
+`CONTENT_SUGGESTION_APPLIED` audit entry (entity ContentSuggestion; snapshot:
+recording, revision, field, content source, whether a draft was forked, context
+fingerprint). A matching `RECORDING_DRAFT_CONTENT_APPLIED` entry on the
+Recording records before/after of the field. If applied state ever has to be
+filtered or listed at scale (an operations queue), an explicit `appliedAt`
+column is the natural addition.
+
+**Permissions.** The Server Action requires an authenticated session and the
+existing `RECORDING_WRITE`; no new permission. Review remains `EDITORIAL_REVIEW`,
+publishing `RECORDING_PUBLISH`.
+
+**Tests.** `contentSuggestionApplication.test.ts` (34), `recordingForkPreservation.test.ts`
+(7), `contentSuggestionApplicationRules.test.ts` (9), plus 2 in
+`editorialPhase.test.ts`. Three existing tests were updated, not weakened:
+`recordingLifecycle` (a fork of a published Recording now stays PUBLISHED; the
+re-attach helper only asserts the Work survived) and `publicRecordingPage`
+(removed the manual re-attach of the Work after fork, which the fork now does).
+
+**Live QA (disposable data, fully cleaned up).** Recording created from a real
+synced video, published, suggestion generated with the fake provider, reviewed,
+approved and applied from the Studio UI: a draft was forked with the Work and the
+YouTube PRIMARY_VIDEO carried over; the published revision and the public page
+were unchanged until the normal publish, after which the public page showed the
+applied text and the video still resolved to the Recording. A suggestion made
+stale afterwards showed the stale message with no Apply button and stayed
+APPROVED; an applied suggestion showed its Applied state with no button.
+
+**Known limitations.** Applied state is audit-derived (above). Forking or editing
+a draft bumps `Recording.updatedAt`, which the sitemap uses as `lastmod` even
+though public content is unchanged (verified; cosmetic). The freshness check runs
+just before, not inside, the apply transaction (a very small window). Rollback
+atomicity holds by construction (single transaction) and was not fault-injected.
+The "forkDraftFromPublished does not copy Works/Media" limitation noted in 116 is
+resolved here.

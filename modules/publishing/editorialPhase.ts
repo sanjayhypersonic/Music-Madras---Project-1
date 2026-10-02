@@ -32,6 +32,14 @@ export interface EditorialPhaseInput {
   draftReadiness: RecordingReadiness | null;
   /** Whether the open draft has at least a title or a linked work — distinguishes a bare-new draft from one actively being enriched. */
   draftHasAnyContent: boolean;
+  /**
+   * Phase 6I-2 — whether the Recording currently has an open draft revision.
+   * Optional (defaults to false) so existing callers/tests are unaffected.
+   * Needed because a PUBLISHED Recording can now legitimately have an open
+   * draft: forkDraftFromPublished keeps a live Recording PUBLISHED so its
+   * public page is not taken offline while it is being edited.
+   */
+  hasOpenDraft?: boolean;
 }
 
 export function computeEditorialPhase(input: EditorialPhaseInput): EditorialPhase {
@@ -40,17 +48,17 @@ export function computeEditorialPhase(input: EditorialPhaseInput): EditorialPhas
   }
 
   if (input.aggregateStatus === "PUBLISHED") {
-    // publishCurrentDraft always clears currentDraftRevisionId, so a
-    // PUBLISHED aggregate status never has an open draft — see
-    // recordingRepository.publishCurrentDraft.
-    return "PUBLISHED";
+    // publishCurrentDraft clears currentDraftRevisionId, so a freshly
+    // published Recording has no open draft. Since Phase 6I-2 a PUBLISHED
+    // Recording that gains a new draft (forkDraftFromPublished) STAYS
+    // PUBLISHED so its public page remains live — that is a pending update.
+    return input.hasOpenDraft ? "UPDATED" : "PUBLISHED";
   }
 
   if (input.aggregateStatus === "IN_REVIEW" && input.hasPublishedRevision) {
-    // forkDraftFromPublished sets status back to IN_REVIEW the moment a
-    // published recording gains a new open draft — the public Museum is
-    // still serving the published revision unchanged, so this is a
-    // distinct phase from a recording that has never been published.
+    // A Recording that is not currently PUBLISHED (e.g. unpublished or
+    // restored, then forked) still lands in IN_REVIEW with a published
+    // revision on record — also a pending update, though not publicly live.
     return "UPDATED";
   }
 

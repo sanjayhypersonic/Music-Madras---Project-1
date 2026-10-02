@@ -192,8 +192,9 @@ describe("A. Public route/data safety — getPublicRecordingPageData", () => {
       expect(first?.title).toBe("Test Recording");
 
       // Fork + edit + republish: the page must show the NEW title, never the stale one.
+      // Phase 6I-2: the fork carries the Work forward itself; re-attaching it
+      // by hand (the old workaround) now correctly throws "already attached".
       const forked = await forkDraftFromPublished(fixture.recordingId, fixture.user.id);
-      await attachWorkToRevision(forked.id, fixture.work.id, fixture.user.id);
       await updateDraftRevisionContent(fixture.recordingId, forked.updatedAt, fixture.user.id, { title: "Updated Recording Title" });
       await publishCurrentDraft(fixture.recordingId, fixture.user.id);
 

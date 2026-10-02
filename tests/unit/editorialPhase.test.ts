@@ -78,4 +78,24 @@ describe("computeEditorialPhase", () => {
       })
     ).toBe("PUBLISHED");
   });
+
+  // Phase 6I-2: forkDraftFromPublished now keeps a live Recording PUBLISHED
+  // while its new draft is open, so PUBLISHED + an open draft is a pending update.
+  it("a PUBLISHED recording that has an open draft is UPDATED (it stays live while being edited)", () => {
+    expect(
+      computeEditorialPhase({
+        aggregateStatus: "PUBLISHED",
+        hasPublishedRevision: true,
+        draftReadiness: "PUBLISHABLE",
+        draftHasAnyContent: true,
+        hasOpenDraft: true,
+      })
+    ).toBe("UPDATED");
+  });
+
+  it("hasOpenDraft defaults to false, so existing callers that omit it still get PUBLISHED", () => {
+    expect(
+      computeEditorialPhase({ aggregateStatus: "PUBLISHED", hasPublishedRevision: true, draftReadiness: null, draftHasAnyContent: false })
+    ).toBe("PUBLISHED");
+  });
 });
