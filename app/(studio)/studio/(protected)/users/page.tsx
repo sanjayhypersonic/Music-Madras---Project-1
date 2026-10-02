@@ -2,10 +2,15 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../modules/auth/authService";
 import { canManageUsers } from "../../../../../modules/auth/policy";
 import { listStudioUsers } from "../../../../../modules/db/repositories/studioUserAdminRepository";
+import { assignableRoles, roleRank } from "../../../../../modules/auth/userManagementRules";
+import { ConfirmSubmitButton } from "../../../../../components/studio/ConfirmSubmitButton";
 import { inviteUserAction, disableUserAction, reactivateUserAction, changeRoleAction } from "./actions";
-import type { StudioRoleName } from "../../../../../modules/auth/types";
 
-const ROLES: StudioRoleName[] = ["FOUNDER", "SUPER_ADMINISTRATOR", "ADMINISTRATOR", "EDITOR", "REVIEWER", "CONTRIBUTOR"];
+// Phase 6J-1: the controls shown here mirror the server rules in
+// modules/auth/userManagementRules.ts (a courtesy only — the repositories
+// enforce them): you can only manage users ranked below you, only hand out roles
+// below your own, never touch yourself or the Founder, and a user who has not
+// accepted their invitation is re-invited rather than "reactivated".
 
 export default async function UsersPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await getCurrentStudioSession();
@@ -16,6 +21,8 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   const { error } = await searchParams;
 
   const users = await listStudioUsers();
+  const actorRole = session.user.role;
+  const grantable = assignableRoles(actorRole);
 
   return (
     <div>
@@ -33,67 +40,87 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           </tr>
         </thead>
         <tbody>
-          {users.map((user) => (
-            <tr key={user.id}>
-              <td>{user.name}</td>
-              <td>{user.email}</td>
-              <td>
-                <form action={changeRoleAction.bind(null, user.id)} style={{ display: "flex", gap: "0.5rem" }}>
-                  <select name="role" defaultValue={user.role}>
-                    {ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="submit">Save</button>
-                </form>
-              </td>
-              <td>{user.status}</td>
-              <td>
-                {user.status === "DISABLED" ? (
-                  <form action={reactivateUserAction.bind(null, user.id)}>
-                    <button type="submit">Reactivate</button>
-                  </form>
-                ) : (
-                  user.id !== session.user.id && (
-                    <form action={disableUserAction.bind(null, user.id)}>
-                      <button type="submit">Disable</button>
+          {users.map((user) => {
+            const isSelf = user.id === session.user.id;
+            const manageable = !isSelf && user.role !== "FOUNDER" && roleRank(user.role) < roleRank(actorRole);
+            return (
+              <tr key={user.id}>
+                <td>{user.name}</td>
+                <td>{user.email}</td>
+                <td>
+                  {manageable ? (
+                    <form action={changeRoleAction.bind(null, user.id)} style={{ display: "flex", gap: "0.5rem" }}>
+                      <select name="role" defaultValue={user.role} aria-label={`Role for ${user.name}`}>
+                        {Array.from(new Set([...grantable, user.role])).map((role) => (
+                          <option key={role} value={role} disabled={!grantable.includes(role)}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                      <ConfirmSubmitButton confirmMessage={`Change ${user.name}'s role? Their permissions change immediately.`} pendingLabel="Saving…">
+                        Save
+                      </ConfirmSubmitButton>
                     </form>
-                  )
-                )}
-              </td>
-            </tr>
-          ))}
+                  ) : (
+                    user.role
+                  )}
+                </td>
+                <td>{user.status}</td>
+                <td>
+                  {!manageable ? (
+                    <span style={{ color: "#666" }}>{isSelf ? "This is you" : user.role === "FOUNDER" ? "Protected" : "—"}</span>
+                  ) : user.status === "DISABLED" ? (
+                    <form action={reactivateUserAction.bind(null, user.id)}>
+                      <ConfirmSubmitButton confirmMessage={`Reactivate ${user.name}? They will be able to sign in again.`} pendingLabel="Reactivating…">
+                        Reactivate
+                      </ConfirmSubmitButton>
+                    </form>
+                  ) : user.status === "INVITED" ? (
+                    <span style={{ color: "#666" }}>Invitation pending</span>
+                  ) : (
+                    <form action={disableUserAction.bind(null, user.id)}>
+                      <ConfirmSubmitButton
+                        confirmMessage={`Disable ${user.name}? They will be signed out immediately and cannot sign in until reactivated.`}
+                        pendingLabel="Disabling…"
+                      >
+                        Disable
+                      </ConfirmSubmitButton>
+                    </form>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
       <h2>Invite a user</h2>
-      <form action={inviteUserAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
-        <label>
-          Name
-          <input name="name" required style={{ display: "block", width: "100%" }} />
-        </label>
-        <label>
-          Email
-          <input name="email" type="email" required style={{ display: "block", width: "100%" }} />
-        </label>
-        <label>
-          Role
-          <select name="role" required style={{ display: "block", width: "100%" }}>
-            {ROLES.map((role) => (
-              <option key={role} value={role}>
-                {role}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit">Send invitation</button>
-      </form>
-      <p>
-        No real email delivery is configured in this environment — the invitation link is logged to the server
-        console (see modules/auth/email/emailProvider.ts).
-      </p>
+      {grantable.length === 0 ? (
+        <p>Your role cannot invite new users.</p>
+      ) : (
+        <form action={inviteUserAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
+          <label>
+            Name
+            <input name="name" required style={{ display: "block", width: "100%" }} />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" required style={{ display: "block", width: "100%" }} />
+          </label>
+          <label>
+            Role
+            <select name="role" required style={{ display: "block", width: "100%" }}>
+              {grantable.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </label>
+          <ConfirmSubmitButton pendingLabel="Sending…">Send invitation</ConfirmSubmitButton>
+        </form>
+      )}
+      <p>The invitation is sent by email. The link works once and expires after 72 hours.</p>
     </div>
   );
 }

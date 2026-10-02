@@ -90,9 +90,13 @@ export async function updateEditorialFieldsAction(videoId: string, pageId: strin
   redirect(`/studio/catalogue/videos/${videoId}`);
 }
 
+// Phase 6J-1: publishing/unpublishing a catalogue page, and approving or revoking
+// public exposure of an unlisted video, change what visitors see, so they need
+// RECORDING_PUBLISH (see the note on publishCollectionAction) — drafting and
+// editing a page stays CATALOGUE_WRITE.
 export async function publishVideoPageAction(videoId: string, pageId: string) {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
     errorRedirect(videoId, "You do not have permission to publish this catalogue page.");
   }
 
@@ -107,7 +111,7 @@ export async function publishVideoPageAction(videoId: string, pageId: string) {
 
 export async function unpublishVideoPageAction(videoId: string, pageId: string) {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
     errorRedirect(videoId, "You do not have permission to unpublish this catalogue page.");
   }
 
@@ -142,7 +146,7 @@ export async function unarchiveVideoPageAction(videoId: string, pageId: string) 
 
 export async function approveUnlistedPublicationAction(videoId: string, pageId: string) {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
     errorRedirect(videoId, "You do not have permission to approve this catalogue page for public Museum exposure.");
   }
 
@@ -157,7 +161,7 @@ export async function approveUnlistedPublicationAction(videoId: string, pageId: 
 
 export async function revokeUnlistedApprovalAction(videoId: string, pageId: string) {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
     errorRedirect(videoId, "You do not have permission to revoke this catalogue page's public Museum approval.");
   }
 

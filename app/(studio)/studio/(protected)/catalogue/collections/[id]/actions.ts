@@ -42,9 +42,13 @@ export async function updateCollectionAction(collectionId: string, formData: For
   redirect(`/studio/catalogue/collections/${collectionId}`);
 }
 
+// Phase 6J-1: making a Collection public (or taking it down) needs the same
+// RECORDING_PUBLISH permission as publishing a Recording — one rule for "who
+// may change what visitors see" — instead of the broader CATALOGUE_WRITE that
+// lets an Editor edit catalogue records. No new permission was needed.
 export async function publishCollectionAction(collectionId: string) {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
     errorRedirect(collectionId, "You do not have permission to publish this collection.");
   }
 
@@ -54,7 +58,7 @@ export async function publishCollectionAction(collectionId: string) {
 
 export async function unpublishCollectionAction(collectionId: string) {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
     errorRedirect(collectionId, "You do not have permission to unpublish this collection.");
   }
 

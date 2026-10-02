@@ -1,18 +1,27 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getCurrentStudioSession } from "../../../../../modules/auth/authService";
+import { can } from "../../../../../modules/auth/policy";
 import { listRecordingsForStudio } from "../../../../../modules/db/repositories/recordingRepository";
 import { countSheetMusicRequestsByStatus } from "../../../../../modules/db/repositories/sheetMusicRequestRepository";
 import { listRecentAuditLogEntries } from "../../../../../modules/audit/listAuditLog";
 
 // Every number here comes from a real query — brief §4: "Do not invent
-// metrics... Do not show fake analytics numbers." YouTube sync and GA4
-// are Phase 3 provider adapters with no live configuration anywhere in
-// this codebase, so this dashboard says so plainly instead of omitting
-// them or inventing placeholder numbers.
+// metrics... Do not show fake analytics numbers."
+//
+// Phase 6J-1: the recent-activity excerpt is audit data, so it follows the same
+// AUDIT_VIEW permission as the full Audit Log page — it is not queried at all
+// for a role without it — and the page checks the session itself rather than
+// relying only on the layout (layouts do not re-run on client navigation).
 export default async function StudioDashboardPage() {
+  const session = await getCurrentStudioSession();
+  if (!session) redirect("/studio/signin");
+  const canViewAudit = can(session.user.role, "AUDIT_VIEW");
+
   const [recordings, newSheetMusicRequests, recentAuditEntries] = await Promise.all([
     listRecordingsForStudio(),
     countSheetMusicRequestsByStatus("NEW"),
-    listRecentAuditLogEntries(10),
+    canViewAudit ? listRecentAuditLogEntries(10) : Promise.resolve([]),
   ]);
 
   // A live (PUBLISHED) Recording with an open draft is a pending update and
@@ -54,7 +63,9 @@ export default async function StudioDashboardPage() {
 
       <section>
         <h2>Recent activity</h2>
-        {recentAuditEntries.length === 0 ? (
+        {!canViewAudit ? (
+          <p>Recent activity is visible to Administrators and above.</p>
+        ) : recentAuditEntries.length === 0 ? (
           <p>No audit log entries yet.</p>
         ) : (
           <ul>
@@ -66,14 +77,19 @@ export default async function StudioDashboardPage() {
             ))}
           </ul>
         )}
-        <p>
-          <Link href="/studio/audit">View full audit log →</Link>
-        </p>
+        {canViewAudit && (
+          <p>
+            <Link href="/studio/audit">View full audit log →</Link>
+          </p>
+        )}
       </section>
 
       <section>
-        <h2>YouTube sync &amp; analytics</h2>
-        <p>Not yet configured — no YouTube or GA4 credentials exist in this environment (Phase 3).</p>
+        <h2>YouTube</h2>
+        <p>
+          Browse the synchronised channel and start a Recording from any video in the{" "}
+          <Link href="/studio/catalogue/videos">YouTube Video Catalogue</Link>.
+        </p>
       </section>
     </div>
   );

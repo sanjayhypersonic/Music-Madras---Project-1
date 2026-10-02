@@ -26,6 +26,7 @@ export default async function ProtectedStudioLayout({ children }: { children: Re
 
   const navLinks: Array<{ href: string; label: string }> = [
     { href: "/studio/dashboard", label: "Dashboard" },
+    { href: "/studio/catalogue/videos", label: "YouTube Videos" },
     { href: "/studio/recordings", label: "Recordings" },
     { href: "/studio/catalogue", label: "Catalogue" },
     { href: "/studio/editorial", label: "Editorial" },
@@ -44,7 +45,7 @@ export default async function ProtectedStudioLayout({ children }: { children: Re
 
   return (
     <div style={{ display: "flex", gap: "2rem" }}>
-      <nav style={{ minWidth: "12rem", flexShrink: 0 }}>
+      <nav aria-label="Studio" style={{ minWidth: "12rem", flexShrink: 0 }}>
         <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {navLinks.map((link) => (
             <li key={link.href}>

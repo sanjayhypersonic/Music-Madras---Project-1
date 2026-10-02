@@ -7,6 +7,7 @@ import { listRecordingsForStudio } from "../../../../../../../modules/db/reposit
 import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { listMusicalWorksByComposer } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { listActiveOccasions, listOccasionsForEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
+import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
 import {
   addRecordingAction,
   addWorkAction,
@@ -57,6 +58,7 @@ export default async function CollectionDetailPage({
   }
 
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
+  const canPublish = can(session.user.role, "RECORDING_PUBLISH");
   const allRecordings = await listRecordingsForStudio();
   // Only non-archived Recordings are normally offered for adding — an
   // already-linked Recording keeps displaying regardless of its current
@@ -114,22 +116,30 @@ export default async function CollectionDetailPage({
 
       {canWrite && (
         <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
-          {collection.status === "DRAFT" ? (
-            <form action={publishCollectionAction.bind(null, collection.id)}>
-              <button type="submit">Publish</button>
-            </form>
-          ) : (
-            <form action={unpublishCollectionAction.bind(null, collection.id)}>
-              <button type="submit">Unpublish</button>
-            </form>
-          )}
+          {/* Publishing changes what visitors see, so it needs RECORDING_PUBLISH (the action re-checks). */}
+          {canPublish &&
+            (collection.status === "DRAFT" ? (
+              <form action={publishCollectionAction.bind(null, collection.id)}>
+                <ConfirmSubmitButton confirmMessage="Publish this collection? It will appear on the public Museum." pendingLabel="Publishing…">
+                  Publish
+                </ConfirmSubmitButton>
+              </form>
+            ) : (
+              <form action={unpublishCollectionAction.bind(null, collection.id)}>
+                <ConfirmSubmitButton confirmMessage="Unpublish this collection? It will disappear from the public Museum." pendingLabel="Unpublishing…">
+                  Unpublish
+                </ConfirmSubmitButton>
+              </form>
+            ))}
           {!collection.archivedAt ? (
             <form action={archiveCollectionAction.bind(null, collection.id)}>
-              <button type="submit">Archive</button>
+              <ConfirmSubmitButton confirmMessage="Archive this collection? It will be removed from the public Museum." pendingLabel="Archiving…">
+                Archive
+              </ConfirmSubmitButton>
             </form>
           ) : (
             <form action={restoreCollectionAction.bind(null, collection.id)}>
-              <button type="submit">Restore</button>
+              <ConfirmSubmitButton pendingLabel="Restoring…">Restore</ConfirmSubmitButton>
             </form>
           )}
         </div>

@@ -66,9 +66,11 @@ export async function restoreLearningGuideAction(learningGuideId: string) {
   redirect(`/studio/catalogue/learning-guides/${learningGuideId}`);
 }
 
+// Phase 6J-1: publishing/unpublishing a Learning Guide needs RECORDING_PUBLISH (see
+// the note on publishCollectionAction) — editing it stays CATALOGUE_WRITE.
 export async function publishLearningGuideAction(learningGuideId: string) {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
     errorRedirect(learningGuideId, "You do not have permission to publish this learning guide.");
   }
 
@@ -78,7 +80,7 @@ export async function publishLearningGuideAction(learningGuideId: string) {
 
 export async function unpublishLearningGuideAction(learningGuideId: string) {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
     errorRedirect(learningGuideId, "You do not have permission to unpublish this learning guide.");
   }
 

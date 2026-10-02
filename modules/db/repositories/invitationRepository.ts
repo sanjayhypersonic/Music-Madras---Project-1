@@ -1,6 +1,7 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { generateRawToken, hashToken } from "../../auth/tokens";
+import { checkInvite, describeUserManagementRefusal } from "../../auth/userManagementRules";
 import type { StudioRoleName } from "../../auth/types";
 import type { Invitation, StudioUser } from "@prisma/client";
 
@@ -34,6 +35,19 @@ export async function createInvitation(
   name: string
 ): Promise<CreateInvitationResult> {
   return prisma.$transaction(async (tx) => {
+    // Phase 6J-1: the inviter must be an active account, may only hand out a role
+    // below their own, and nobody can invite a FOUNDER (userManagementRules.ts).
+    // This also covers re-inviting an INVITED user with a different role, which
+    // used to be a way to raise someone's role without any check.
+    const inviter = await tx.studioUser.findUnique({ where: { id: invitedById } });
+    if (!inviter) {
+      throw new InvitationError("The inviting account does not exist.");
+    }
+    const refusal = checkInvite({ role: inviter.role as StudioRoleName, status: inviter.status }, role);
+    if (refusal) {
+      throw new InvitationError(describeUserManagementRefusal(refusal));
+    }
+
     let studioUser = await tx.studioUser.findUnique({ where: { email } });
 
     if (studioUser && studioUser.status !== "INVITED") {

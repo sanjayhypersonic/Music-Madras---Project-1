@@ -2,7 +2,9 @@ import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
 import { findStudioUserByEmail } from "../db/repositories/studioAuthRepository";
 import { createStudioSession } from "../db/repositories/studioAuthRepository";
-import { verifyPassword } from "./passwordHashing";
+import { hashPassword, verifyPassword } from "./passwordHashing";
+import { SIGN_IN_LOCKED_MESSAGE, isSignInLockedOut } from "./authRateLimit";
+import { countRecentSignInFailures, recordSignInFailure, recordSignInSuccess } from "../db/repositories/authAttemptRepository";
 import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS, SESSION_MAX_AGE_SECONDS } from "./sessionCookie";
 
 // Verifies Studio credentials and creates a database-backed session
@@ -43,23 +45,38 @@ const GENERIC_FAILURE: CredentialsSignInResult = {
   error: "Incorrect email or password.",
 };
 
+// Phase 6J-1: an argon2 hash of a random value, verified against whenever there is no
+// real hash to check, so "no such account" costs the same time as "wrong password".
+let dummyHash: Promise<string> | null = null;
+function getDummyHash(): Promise<string> {
+  dummyHash ??= hashPassword(randomUUID());
+  return dummyHash;
+}
+
 export async function signInWithStudioCredentials(
   email: string,
   password: string
 ): Promise<CredentialsSignInResult> {
+  // Phase 6J-1: brute-force protection (modules/auth/authRateLimit.ts). Keyed by
+  // the email hash, so it behaves identically whether or not the account exists.
+  if (isSignInLockedOut(await countRecentSignInFailures(email))) {
+    return { success: false, error: SIGN_IN_LOCKED_MESSAGE };
+  }
+
   // Deliberately the same generic failure for "no such user," "no
   // password set yet," "account not ACTIVE," and "wrong password" —
   // never reveal which case it was (matches the previous authorize()
-  // in modules/auth/authConfig.ts before this change).
+  // in modules/auth/authConfig.ts before this change). The password is
+  // verified in EVERY case (against a dummy hash when there is no usable
+  // account), so the response time does not reveal which case it was either.
   const user = await findStudioUserByEmail(email);
-  if (!user || user.status !== "ACTIVE" || !user.passwordHash) {
+  const usable = user !== null && user.status === "ACTIVE" && user.passwordHash !== null;
+  const passwordMatches = await verifyPassword(usable ? user.passwordHash! : await getDummyHash(), password);
+  if (!usable || !passwordMatches) {
+    await recordSignInFailure(email);
     return GENERIC_FAILURE;
   }
-
-  const passwordMatches = await verifyPassword(user.passwordHash, password);
-  if (!passwordMatches) {
-    return GENERIC_FAILURE;
-  }
+  await recordSignInSuccess(email, user.id);
 
   // crypto.randomUUID() matches Auth.js's own default
   // generateSessionToken (@auth/core's lib/init.ts) — the same

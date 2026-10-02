@@ -6,6 +6,7 @@ import { findLearningGuideDetailForStudio } from "../../../../../../../modules/d
 import { listMusicalWorksForStudio } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { listRecordingsForStudio } from "../../../../../../../modules/db/repositories/recordingRepository";
 import EntityActivity from "../../../../../../../components/studio/EntityActivity";
+import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
 import {
   archiveLearningGuideAction,
   attachRecordingAction,
@@ -55,6 +56,7 @@ export default async function LearningGuideDetailPage({
   }
 
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
+  const canPublish = can(session.user.role, "RECORDING_PUBLISH");
 
   const [allWorks, allRecordings] = await Promise.all([listMusicalWorksForStudio(), listRecordingsForStudio()]);
   const attachedWorkIds = new Set(guide.workLinks.map((link) => link.musicalWorkId));
@@ -122,22 +124,30 @@ export default async function LearningGuideDetailPage({
 
       {canWrite && (
         <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
-          {guide.status === "PUBLISHED" ? (
-            <form action={unpublishLearningGuideAction.bind(null, guide.id)}>
-              <button type="submit">Unpublish</button>
-            </form>
-          ) : (
-            <form action={publishLearningGuideAction.bind(null, guide.id)}>
-              <button type="submit">Publish</button>
-            </form>
-          )}
+          {/* Publishing changes what visitors see, so it needs RECORDING_PUBLISH (the action re-checks). */}
+          {canPublish &&
+            (guide.status === "PUBLISHED" ? (
+              <form action={unpublishLearningGuideAction.bind(null, guide.id)}>
+                <ConfirmSubmitButton confirmMessage="Unpublish this learning guide? It will disappear from the public Museum." pendingLabel="Unpublishing…">
+                  Unpublish
+                </ConfirmSubmitButton>
+              </form>
+            ) : (
+              <form action={publishLearningGuideAction.bind(null, guide.id)}>
+                <ConfirmSubmitButton confirmMessage="Publish this learning guide? It will appear on the public Museum." pendingLabel="Publishing…">
+                  Publish
+                </ConfirmSubmitButton>
+              </form>
+            ))}
           {!guide.archivedAt ? (
             <form action={archiveLearningGuideAction.bind(null, guide.id)}>
-              <button type="submit">Archive</button>
+              <ConfirmSubmitButton confirmMessage="Archive this learning guide? It will be removed from the public Museum." pendingLabel="Archiving…">
+                Archive
+              </ConfirmSubmitButton>
             </form>
           ) : (
             <form action={restoreLearningGuideAction.bind(null, guide.id)}>
-              <button type="submit">Restore</button>
+              <ConfirmSubmitButton pendingLabel="Restoring…">Restore</ConfirmSubmitButton>
             </form>
           )}
         </div>
