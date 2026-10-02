@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
+import { publishRecordingFor, type PublishedContentHandle } from "./helpers/publishedContent";
 import { can } from "../../modules/auth/policy";
 import { DuplicateEntityError } from "../../modules/mmke/duplicate-detection/detectDuplicateName";
 import { SlugConflictError } from "../../modules/mmke/slug/SlugConflictError";
@@ -323,8 +324,14 @@ describe("Integration with the 6G-4A/6G-4B public entity-page layer", () => {
   let composerId: string | null = null;
   let workId: string | null = null;
   let userId: string | null = null;
+  let published: PublishedContentHandle | null = null;
 
   afterEach(async () => {
+    // The published Recording references the Work (RESTRICT), so it is removed first.
+    if (published) {
+      await published.cleanup().catch(() => {});
+      published = null;
+    }
     if (workId) {
       await cleanupWork(workId).catch(() => {});
       workId = null;
@@ -352,6 +359,10 @@ describe("Integration with the 6G-4A/6G-4B public entity-page layer", () => {
     const work = await createMusicalWork({ slug: uniqueSlug("public-work"), title: "Public Test Work", composerId: composer.id, actorId: user.id });
     workId = work.id;
 
+    // Public discovery is eligibility-based (Phase 6J-1): the Composer is public once a published Recording reaches it.
+    expect(await getComposerEntityPageData(composer.slug)).toBeNull();
+    published = await publishRecordingFor({ actorId: user.id, workIds: [work.id] });
+
     const publicData = await getComposerEntityPageData(composer.slug);
     expect(publicData).not.toBeNull();
     expect(publicData!.name).toBe(composer.name);
@@ -367,6 +378,9 @@ describe("Integration with the 6G-4A/6G-4B public entity-page layer", () => {
     userId = user.id;
     const composer = await createComposer({ slug: uniqueSlug("archive-public-composer"), name: uniqueName("Archive Public Composer"), actorId: user.id });
     composerId = composer.id;
+    const work = await createMusicalWork({ slug: uniqueSlug("archive-public-work"), title: "Archive Public Work", composerId: composer.id, actorId: user.id });
+    workId = work.id;
+    published = await publishRecordingFor({ actorId: user.id, workIds: [work.id] });
 
     expect(await getComposerEntityPageData(composer.slug)).not.toBeNull();
 

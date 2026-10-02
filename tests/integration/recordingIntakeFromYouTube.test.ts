@@ -461,7 +461,7 @@ describe("I. Server Action: createRecordingFromVideoAction", () => {
     const second = await runAction(video.id);
 
     expect(second).toContain(`/studio/catalogue/videos/${video.id}`);
-    expect(decodeURIComponent(second)).toContain("already linked to a MusicMadras Recording");
+    expect(decodeURIComponent(second)).toContain("already linked to a Music Madras Recording");
     expect(await prisma.mediaResource.count({ where: { youtubeVideoId: video.id } })).toBe(1);
   }, T);
 });

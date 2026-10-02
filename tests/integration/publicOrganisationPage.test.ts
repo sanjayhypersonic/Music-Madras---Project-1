@@ -237,7 +237,7 @@ describe("Organisation full canonical graph: venue -> performance -> recording -
     }
     if (recordingId) {
       const revisions = await prisma.recordingRevision.findMany({ where: { recordingId }, select: { id: true } });
-      await prisma.auditLogEntry.deleteMany({ where: { entityType: "Recording", entityId: recordingId } });
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: { in: ["Recording", "RECORDING"] }, entityId: recordingId } }); // RECORDING = source/rights attach entries
       if (revisions.length > 0) {
         await prisma.auditLogEntry.deleteMany({ where: { entityType: "RecordingRevision", entityId: { in: revisions.map((r) => r.id) } } });
       }
@@ -250,7 +250,7 @@ describe("Organisation full canonical graph: venue -> performance -> recording -
       // required, Restrict venueId/programmeId FKs all block deleting
       // those rows until this Performance (and its cascaded join rows)
       // is gone first.
-      await prisma.auditLogEntry.deleteMany({ where: { entityType: "Performance", entityId: performanceId } });
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: { in: ["Performance", "PERFORMANCE"] }, entityId: performanceId } }); // PERFORMANCE = occasion attach entry
       await prisma.performance.delete({ where: { id: performanceId } }).catch(() => {});
       performanceId = null;
     }

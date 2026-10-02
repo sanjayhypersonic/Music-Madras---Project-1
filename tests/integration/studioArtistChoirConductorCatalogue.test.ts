@@ -1,6 +1,7 @@
-ï»¿import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
+import { publishRecordingFor } from "./helpers/publishedContent";
 import { can } from "../../modules/auth/policy";
 import { DuplicateEntityError } from "../../modules/mmke/duplicate-detection/detectDuplicateName";
 import {
@@ -363,8 +364,14 @@ describe("Performance relationship preservation through archive/restore (brief Ã
   let artistId: string | null = null;
   let choirId: string | null = null;
   let conductorId: string | null = null;
+  let cleanupPublished: (() => Promise<void>) | null = null;
 
   afterEach(async () => {
+    // The published Recording references the Performance and Work (RESTRICT), so it goes first.
+    if (cleanupPublished) {
+      await cleanupPublished().catch(() => {});
+      cleanupPublished = null;
+    }
     if (performanceId) {
       await prisma.auditLogEntry.deleteMany({ where: { entityType: "Performance", entityId: performanceId } });
       await prisma.performance.delete({ where: { id: performanceId } }).catch(() => {});
@@ -435,6 +442,9 @@ describe("Performance relationship preservation through archive/restore (brief Ã
     await addPerformerToPerformance(performance.id, artist.id, "Soloist", user.id);
     await addChoirToPerformance(performance.id, choir.id, user.id);
     await addConductorToPerformance(performance.id, conductor.id, user.id);
+
+    // Public discovery is eligibility-based (Phase 6J-1): the Performance resolves for its participants only while a published Recording reaches it.
+    cleanupPublished = (await publishRecordingFor({ actorId: user.id, performanceId: performance.id, workIds: [work.id] })).cleanup;
 
     await archiveArtist(artist.id, user.id);
     await archiveChoir(choir.id, user.id);
