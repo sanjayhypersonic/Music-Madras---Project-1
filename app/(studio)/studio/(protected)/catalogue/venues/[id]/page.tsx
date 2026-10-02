@@ -155,7 +155,7 @@ export default async function VenueDetailPage({
       )}
 
       <p>
-        <strong>Public MusicMadras Videos ({related.videos.length})</strong>
+        <strong>Public Music Madras Videos ({related.videos.length})</strong>
       </p>
       {related.videos.length > 0 ? (
         <ul>

@@ -1,3 +1,4 @@
+import { getSiteOrigin } from "../../modules/config/siteOrigin";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import Image from "next/image";
@@ -15,7 +16,7 @@ import { trackPublicPageView } from "../../modules/analytics/trackPublicPageView
 // no client-side data fetching, only ThemeToggle (already client) is
 // interactive.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 const RECENT_RECORDINGS_LIMIT = 6;
 
 // Plain dynamic SSR, matching /videos/[slug] (no generateStaticParams, no
@@ -71,8 +72,8 @@ export default async function MuseumHomePage() {
       <section id="archive" className="museum-section" aria-labelledby="archive-heading">
         <h2 id="archive-heading">Explore the Archive</h2>
         <p className="museum-section__intro">
-          Music Madras is built around a knowledge base connecting the people, works and places behind every
-          performance. Explore any category below, or search the full archive.
+          Music Madras connects the people, works and places behind every performance. Explore any category
+          below, or search the full archive.
         </p>
         <ul className="museum-category-grid">
           {ARCHIVE_CATEGORIES.map((category) => (
@@ -94,8 +95,7 @@ export default async function MuseumHomePage() {
       <section id="discover" className="museum-section" aria-labelledby="discover-heading">
         <h2 id="discover-heading">Discover Music Madras</h2>
         <p className="museum-section__intro">
-          Every recording shown here has been published to the public archive under Music Madras&rsquo;s editorial
-          visibility rules — never raw, unreviewed synchronization data.
+          Every recording shown here has been published to the Music Madras archive.
         </p>
         {recentRecordings.length > 0 ? (
           <ul className="museum-recording-grid">

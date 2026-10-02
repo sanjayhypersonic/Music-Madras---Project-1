@@ -1,3 +1,4 @@
+import { getSiteOrigin } from "../../modules/config/siteOrigin";
 import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
@@ -42,7 +43,7 @@ import type { ObservabilityState } from "@prisma/client";
 // Real DB, disposable test-prefixed fixtures only.
 
 const TEST_TAG = "phase6g14";
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 function uniqueSlug(base: string): string {
   return `${TEST_TAG}-${base}-${randomUUID().slice(0, 8)}`;

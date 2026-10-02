@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import { notFound } from "next/navigation";
@@ -18,7 +20,7 @@ import { createEntityViewEvent } from "../../../../modules/analytics/events/fact
 // via getPublicWorkPageData — no Prisma import here, matching every other
 // public entity page's pattern exactly.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 function formatPerformanceDate(date: Date | null): string | null {
   return date ? date.toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -164,12 +166,12 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
         )}
       </EntitySection>
 
-      <p className="museum-group-heading">MusicMadras Media</p>
+      <p className="museum-group-heading">Music Madras Media</p>
 
       <EntitySection
         id="discover"
-        heading="MusicMadras Videos"
-        intro="Recordings published to the public archive under Music Madras's editorial visibility rules — never raw, unreviewed synchronization data."
+        heading="Music Madras Videos"
+        intro="Recordings from the Music Madras archive."
       >
         {work.videos.length > 0 ? (
           <ul className="museum-recording-grid">
@@ -213,7 +215,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "MusicComposition",
             name: work.title,

@@ -42,7 +42,7 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
       )}
 
       {organisations.length === 0 ? (
-        <p>{q ? `No organisations match "${q}".` : "No organisations have been added to the MusicMadras archive yet."}</p>
+        <p>{q ? `No organisations match "${q}".` : "No organisations have been added to the Music Madras archive yet."}</p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>

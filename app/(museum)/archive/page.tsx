@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import Link from "next/link";
@@ -50,7 +52,7 @@ import { EntityEmptyState } from "../../../components/museum/entity/EntityEmptyS
 // the exact same public-visibility rules every other public page already
 // uses (archivedAt-null, isRecordingPublished). No Prisma import here.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 const TYPE_LABELS = ARCHIVE_TYPE_LABELS;
 
@@ -373,7 +375,7 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
   const { type, invalid } = normalizeArchiveType(rawType);
   const requestedPage = parseArchivePage(rawPage);
 
-  const heading = query ? `Search results for "${query}"` : "Explore the MusicMadras Archive";
+  const heading = query ? `Search results for "${query}"` : "Explore the Music Madras Archive";
 
   after(() => trackPublicPageView({ path: "/archive" }));
 
@@ -385,9 +387,9 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
         <p className="museum-eyebrow">Archive</p>
         <h1>{heading}</h1>
         <p className="museum-entity-header__description">
-          Search the MusicMadras collection of composers, musical works, programmes, performances, artists,
+          Search the Music Madras archive of composers, musical works, programmes, performances, artists,
           choirs, conductors, recordings, the venues that hosted them, and the organisations that operate
-          them — every result is drawn directly from the canonical archive, never from raw synchronization data.
+          them.
         </p>
       </header>
 
@@ -411,7 +413,7 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "CollectionPage",
             name: "Music Madras Archive",

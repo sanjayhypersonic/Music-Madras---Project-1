@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import { notFound } from "next/navigation";
@@ -34,7 +36,7 @@ function formatDuration(totalSeconds: number): string {
   return parts.map((part, index) => (index === 0 ? String(part) : String(part).padStart(2, "0"))).join(":");
 }
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -131,7 +133,7 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
 
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(videoJsonLd) }}
       />
     </article>
   );

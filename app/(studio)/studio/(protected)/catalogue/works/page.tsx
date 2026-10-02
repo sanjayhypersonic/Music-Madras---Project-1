@@ -42,7 +42,7 @@ export default async function MusicalWorksPage({ searchParams }: { searchParams:
       )}
 
       {works.length === 0 ? (
-        <p>{q ? `No musical works match "${q}".` : "No musical works have been added to the MusicMadras archive yet."}</p>
+        <p>{q ? `No musical works match "${q}".` : "No musical works have been added to the Music Madras archive yet."}</p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>

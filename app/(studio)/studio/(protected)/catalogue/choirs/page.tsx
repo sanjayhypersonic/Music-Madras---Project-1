@@ -40,7 +40,7 @@ export default async function ChoirsPage({ searchParams }: { searchParams: Promi
       )}
 
       {choirs.length === 0 ? (
-        <p>{q ? `No choirs match "${q}".` : "No choirs have been added to the MusicMadras archive yet."}</p>
+        <p>{q ? `No choirs match "${q}".` : "No choirs have been added to the Music Madras archive yet."}</p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>

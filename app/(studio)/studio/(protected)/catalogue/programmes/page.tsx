@@ -46,7 +46,7 @@ export default async function ProgrammesPage({ searchParams }: { searchParams: P
       )}
 
       {programmes.length === 0 ? (
-        <p>{q ? `No programmes match "${q}".` : "No programmes have been added to the MusicMadras archive yet."}</p>
+        <p>{q ? `No programmes match "${q}".` : "No programmes have been added to the Music Madras archive yet."}</p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>

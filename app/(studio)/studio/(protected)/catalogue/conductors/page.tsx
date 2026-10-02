@@ -40,7 +40,7 @@ export default async function ConductorsPage({ searchParams }: { searchParams: P
       )}
 
       {conductors.length === 0 ? (
-        <p>{q ? `No conductors match "${q}".` : "No conductors have been added to the MusicMadras archive yet."}</p>
+        <p>{q ? `No conductors match "${q}".` : "No conductors have been added to the Music Madras archive yet."}</p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>

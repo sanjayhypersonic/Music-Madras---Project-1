@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { buildSecurityHeaders } from "./modules/config/securityHeaders";
 
 const nextConfig: NextConfig = {
   images: {
@@ -7,6 +8,11 @@ const nextConfig: NextConfig = {
     // YouTube's own thumbnail CDN host, the same one already stored in
     // YouTubeVideo.thumbnailUrl by the sync engine.
     remotePatterns: [{ protocol: "https", hostname: "i.ytimg.com" }],
+  },
+  // Phase 6J-1 — baseline security headers (modules/config/securityHeaders.ts,
+  // which also documents why there is no script-restricting CSP yet).
+  async headers() {
+    return buildSecurityHeaders();
   },
 };
 

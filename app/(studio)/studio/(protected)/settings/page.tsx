@@ -24,7 +24,7 @@ export default async function SettingsPage() {
 
       <section>
         <h2>API connections</h2>
-        <p>No YouTube or Google Analytics credentials are configured in this environment (Phase 3 provider adapters).</p>
+        <p>YouTube, analytics, email and AI connections are configured by the site operator in the deployment settings; nothing here is editable.</p>
       </section>
     </div>
   );

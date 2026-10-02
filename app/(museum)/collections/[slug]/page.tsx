@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import { notFound } from "next/navigation";
@@ -13,7 +15,7 @@ import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPa
 import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
 // Phase 6G-10 — the public /collections/[slug] page, completing the
-// public Museum layer for the MusicMadras Collection entity. Built from
+// public Museum layer for the Music Madras Collection entity. Built from
 // getPublicCollectionPageData's own Collection-rooted traversal (Collection
 // -> CollectionRecording/CollectionWork), never resolveRelatedContent
 // (which is Performance-rooted and has no entry point for a Collection as
@@ -22,7 +24,7 @@ import { createEntityViewEvent } from "../../../../modules/analytics/events/fact
 // is surfaced per-Recording, where it genuinely exists, rather than as
 // invented top-level Collection relationships.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 function formatPerformanceDate(date: Date | null): string | null {
   return date ? date.toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -160,12 +162,12 @@ export default async function CollectionPage({ params }: { params: Promise<{ slu
         </EntitySection>
       )}
 
-      <p className="museum-group-heading">MusicMadras Media</p>
+      <p className="museum-group-heading">Music Madras Media</p>
 
       <EntitySection
         id="discover"
-        heading="MusicMadras Videos"
-        intro="Recordings published to the public archive under Music Madras's editorial visibility rules — never raw, unreviewed synchronization data."
+        heading="Music Madras Videos"
+        intro="Recordings from the Music Madras archive."
       >
         {collection.videos.length > 0 ? (
           <ul className="museum-recording-grid">
@@ -183,7 +185,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ slu
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "MusicPlaylist",
             name: collection.title,

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { getSiteOrigin } from "../modules/config/siteOrigin";
 import { listPublishedCollections } from "../modules/db/repositories/collectionRepository";
 import { listPublishedVideoPages } from "../modules/db/repositories/youtubeVideoPageRepository";
 import { listPublicLearningGuides } from "../modules/db/repositories/learningGuideRepository";
@@ -24,9 +25,15 @@ import {
 // content, and /archive query-string states are never included — the
 // canonical bare entity URL is the only one ever listed.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+// Phase 6J-1: rendered per request (never frozen at build time), so newly published
+// content appears in the sitemap without a redeploy and a draft/archived/unpublished
+// entity disappears from it as soon as it stops being public. The origin is the
+// dedicated PUBLIC_SITE_URL (modules/config/siteOrigin.ts), which fails loudly in
+// production when missing instead of emitting localhost URLs.
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const SITE_ORIGIN = getSiteOrigin();
   const [
     composers,
     artists,

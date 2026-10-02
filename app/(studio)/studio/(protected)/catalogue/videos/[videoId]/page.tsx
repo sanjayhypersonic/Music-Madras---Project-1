@@ -114,7 +114,7 @@ export default async function YouTubeVideoManagePage({
         </p>
         {linkedRecording ? (
           <p>
-            This YouTube video is linked to MusicMadras Recording{" "}
+            This YouTube video is linked to Music Madras Recording{" "}
             <Link href={`/studio/recordings/${linkedRecording.recordingId}/media`}>{linkedRecording.title ?? linkedRecording.slug}</Link> (
             {linkedRecording.status}).
           </p>

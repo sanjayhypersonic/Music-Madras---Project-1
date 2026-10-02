@@ -47,7 +47,7 @@ export default async function ComposersPage({ searchParams }: { searchParams: Pr
         <p>
           {q
             ? `No composers match "${q}".`
-            : "No composers have been added to the MusicMadras archive yet."}
+            : "No composers have been added to the Music Madras archive yet."}
         </p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>

@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import Link from "next/link";
@@ -17,7 +19,7 @@ import { trackPublicPageView } from "../../../modules/analytics/trackPublicPageV
 // rendered, using listPublicCollectionsPage — the same published+
 // non-archived predicate every other public Collection read already uses.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 interface CollectionsIndexSearchParams {
   page?: string;
@@ -35,7 +37,7 @@ function buildCollectionsHref(page: number): string {
 export async function generateMetadata(): Promise<Metadata> {
   const title = "Collections — Music Madras";
   const description =
-    "Browse curated MusicMadras Collections of recordings and musical works from the Music Madras archive of Chennai's Western Classical Music heritage.";
+    "Browse curated Music Madras Collections of recordings and musical works from the Music Madras archive of Chennai's Western Classical Music heritage.";
 
   return {
     metadataBase: new URL(SITE_ORIGIN),
@@ -64,10 +66,10 @@ export default async function CollectionsIndexPage({
 
       <header className="museum-entity-header">
         <p className="museum-eyebrow">Collections</p>
-        <h1>MusicMadras Collections</h1>
+        <h1>Music Madras Collections</h1>
         <p className="museum-entity-header__description">
-          Curated groupings of recordings and musical works from the Music Madras archive — every Collection is
-          assembled editorially in Studio, never inferred from YouTube playlists or metadata.
+          Curated groupings of recordings and musical works from the Music Madras archive, assembled by our
+          editors.
         </p>
       </header>
 
@@ -123,7 +125,7 @@ export default async function CollectionsIndexPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "CollectionPage",
             name: "Music Madras Collections",

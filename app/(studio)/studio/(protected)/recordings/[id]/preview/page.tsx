@@ -39,7 +39,7 @@ export default async function PreviewStepPage({ params }: { params: Promise<{ id
       }}
     >
       <p style={{ fontFamily: "system-ui, sans-serif", fontSize: "0.8rem", color: "#888" }}>
-        Studio preview — not the live public site. Music Madras&apos;s public Museum has not been built yet (ADR §3).
+        Studio preview — a working view of this revision, not the live public page. The published page can look different.
       </p>
       <h1>{context.revision.title ?? "Untitled recording"}</h1>
       {context.composers.length > 0 && <p>{context.composers.map((c) => c.name).join(", ")}</p>}

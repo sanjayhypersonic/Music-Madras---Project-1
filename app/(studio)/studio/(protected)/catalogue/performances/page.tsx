@@ -43,7 +43,7 @@ export default async function PerformancesPage({ searchParams }: { searchParams:
       )}
 
       {performances.length === 0 ? (
-        <p>{q ? `No performances match "${q}".` : "No performances have been added to the MusicMadras archive yet."}</p>
+        <p>{q ? `No performances match "${q}".` : "No performances have been added to the Music Madras archive yet."}</p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>

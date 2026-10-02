@@ -63,7 +63,7 @@ export async function createRecordingFromVideoAction(videoId: string) {
   if (!result.ok) {
     switch (result.reason) {
       case "ALREADY_LINKED":
-        errorRedirect(videoId, "This YouTube video is already linked to a MusicMadras Recording.");
+        errorRedirect(videoId, "This YouTube video is already linked to a Music Madras Recording.");
       case "VIDEO_NOT_AVAILABLE":
         errorRedirect(videoId, "This YouTube video is not currently available in the synchronized catalogue, so a Recording cannot be created from it.");
       default:

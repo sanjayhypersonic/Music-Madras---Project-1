@@ -39,6 +39,18 @@
   --mm-accent-on: #ffffff; /* text placed on top of a solid accent fill */
   --mm-gradient-accent: linear-gradient(135deg, var(--mm-accent-deep), var(--mm-accent-secondary));
 
+  /* Role tokens (Phase 6J-1). The brand colours stay exactly as above; these say which
+     of them may carry TEXT or an indicator, so contrast is a property of the role, not
+     of whichever accent a rule happened to pick. Bright/Deep Magenta and Purple are fills
+     (white text on them passes) — on the near-black they are NOT legible as text (2.0-2.9:1).
+       --mm-link / --mm-text-accent   links and small accent text   >= 4.5:1 on bg and surfaces
+       --mm-link-hover                hover/focus colour of a link   >= 4.5:1
+       --mm-border-strong             a border that marks state      >= 3:1 (non-text) */
+  --mm-link: #c9b8e8; /* 9.35:1 on --mm-bg */
+  --mm-link-hover: #ece3fa;
+  --mm-text-accent: #c9b8e8;
+  --mm-border-strong: #c9b8e8;
+
   /* Typography */
   --mm-font-serif: var(--mm-font-serif), "Georgia", serif;
   --mm-font-sans: var(--mm-font-sans), -apple-system, "Segoe UI", sans-serif;
@@ -62,8 +74,14 @@
   --mm-accent: #c2185b;
   --mm-accent-deep: #95135a;
   --mm-accent-secondary: #6a3ba8;
-  --mm-accent-tertiary: #8f7ac4; /* deepened from the pale brand lavender for legible contrast on a light surface */
+  --mm-accent-tertiary: #8f7ac4; /* deepened from the pale brand lavender for legible contrast on a light surface (borders/rings only — see the role tokens for text) */
   --mm-accent-on: #ffffff;
+
+  /* Phase 6J-1 role tokens, light theme: brand Purple / Deep Magenta, both >= 7:1 on the light surfaces. */
+  --mm-link: #6a3ba8;
+  --mm-link-hover: #95135a;
+  --mm-text-accent: #6a3ba8;
+  --mm-border-strong: #6a3ba8;
 
   color-scheme: light;
 }
@@ -107,17 +125,26 @@
 }
 
 .museum-root a {
-  color: var(--mm-accent-tertiary);
+  color: var(--mm-link);
   text-decoration: none;
   transition: color var(--mm-transition);
 }
 
 .museum-root a:hover {
-  color: var(--mm-accent);
+  color: var(--mm-link-hover);
+}
+
+/* A link inside running text must not be told apart from the text by colour alone
+   (WCAG 1.4.1): underline it. Buttons and card/list links, which are not part of a sentence, are not. */
+.museum-root p a:not(.museum-button),
+.museum-root .museum-prose a:not(.museum-button) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
 }
 
 .museum-root :focus-visible {
-  outline: 2px solid var(--mm-accent-tertiary);
+  outline: 2px solid var(--mm-link);
   outline-offset: 3px;
   border-radius: 2px;
 }
@@ -183,7 +210,7 @@
 }
 
 .museum-nav a:hover {
-  color: var(--mm-accent-tertiary);
+  color: var(--mm-link-hover);
 }
 
 /* ---------------------------------------------------------------------
@@ -211,7 +238,7 @@
    above (both target a <p>). `.museum-root .x` beats that unambiguously —
    see the same fix applied to `.museum-button` further down. */
 .museum-root .museum-eyebrow {
-  color: var(--mm-accent-tertiary);
+  color: var(--mm-text-accent);
 }
 
 .museum-card {
@@ -263,7 +290,7 @@
   font-style: italic;
   font-size: 1.1rem;
   color: var(--mm-text);
-  border-left: 3px solid var(--mm-accent);
+  border-left: 3px solid var(--mm-border-strong);
   padding-left: 1rem;
   margin: 1.5rem 0;
 }
@@ -404,7 +431,7 @@
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--mm-accent-tertiary);
+  color: var(--mm-text-accent);
 }
 
 .museum-recording-card {
@@ -507,7 +534,7 @@
 }
 
 .museum-breadcrumbs a:hover {
-  color: var(--mm-accent-tertiary);
+  color: var(--mm-link-hover);
 }
 
 .museum-breadcrumbs [aria-current="page"] {
@@ -565,7 +592,7 @@
 }
 
 .museum-root .museum-group-heading {
-  color: var(--mm-accent-tertiary);
+  color: var(--mm-text-accent);
 }
 
 @media (max-width: 40rem) {
@@ -665,9 +692,14 @@
 }
 
 .museum-root .museum-filter-pills a.museum-filter-pill--active {
-  border-color: var(--mm-accent);
+  border-color: var(--mm-border-strong);
   color: var(--mm-text);
   background: var(--mm-surface-raised);
+  /* The active filter is not marked by colour alone. */
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.3em;
 }
 
 .museum-pagination {
@@ -682,4 +714,143 @@
 
 .museum-root .museum-pagination__status {
   color: var(--mm-text-muted);
+}
+
+
+/* ---------------------------------------------------------------------
+   Phase 6J-1 — mobile navigation, footer links, and the not-found / error
+   states. Same tokens and spacing language as the rest of the Museum; no new
+   visual system.
+--------------------------------------------------------------------- */
+
+.museum-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The menu button is only for narrow screens (the desktop nav is hidden there). */
+.museum-mobile-nav-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  border: 1px solid var(--mm-border);
+  background: var(--mm-surface);
+  color: var(--mm-text);
+  cursor: pointer;
+}
+
+.museum-mobile-nav-button:hover {
+  border-color: var(--mm-border-strong);
+}
+
+.museum-mobile-nav {
+  display: none;
+}
+
+@media (max-width: 40rem) {
+  .museum-mobile-nav-button {
+    display: inline-flex;
+  }
+
+  .museum-mobile-nav[data-open="true"] {
+    display: block;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    padding: 0.5rem 1rem 1rem;
+    background: var(--mm-bg);
+    border-bottom: 1px solid var(--mm-border);
+    box-shadow: 0 12px 24px var(--mm-shadow);
+  }
+
+  .museum-mobile-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .museum-root .museum-mobile-nav a {
+    display: block;
+    padding: 0.85rem 0.25rem;
+    border-bottom: 1px solid var(--mm-border);
+    font-family: var(--mm-font-sans);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--mm-text);
+  }
+
+  .museum-root .museum-mobile-nav a:hover,
+  .museum-root .museum-mobile-nav a[aria-current="page"] {
+    color: var(--mm-link-hover);
+  }
+}
+
+.museum-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.museum-root .museum-footer a {
+  color: var(--mm-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.museum-footer p {
+  margin: 0;
+  color: var(--mm-text-muted);
+}
+
+.museum-state {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 5rem 1.5rem 6rem;
+  text-align: center;
+}
+
+.museum-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/* Respect a visitor's reduced-motion setting: no hover lifts. */
+@media (prefers-reduced-motion: reduce) {
+  .museum-theme-toggle:hover,
+  .museum-button:hover,
+  .museum-root a.museum-button:hover,
+  .museum-category-card:hover,
+  .museum-recording-card:hover {
+    transform: none;
+  }
+}
+/* Secondary (outline) button used by the not-found / error states, and button-element support. */
+button.museum-button {
+  cursor: pointer;
+  font-family: var(--mm-font-sans);
+}
+
+.museum-root a.museum-button.museum-button--secondary,
+.museum-root .museum-button.museum-button--secondary {
+  background: transparent;
+  border: 1px solid var(--mm-border-strong);
+  color: var(--mm-link);
+}
+
+.museum-root a.museum-button.museum-button--secondary:hover,
+.museum-root .museum-button.museum-button--secondary:hover {
+  color: var(--mm-link-hover);
 }

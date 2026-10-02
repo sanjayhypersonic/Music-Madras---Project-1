@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import { notFound } from "next/navigation";
@@ -13,7 +15,7 @@ import { RecordingCard } from "../../../../components/museum/RecordingCard";
 import { trackPublicPageView } from "../../../../modules/analytics/trackPublicPageView";
 import { createEntityViewEvent } from "../../../../modules/analytics/events/factories";
 
-// Phase 6G-5B — the first public page for a canonical MusicMadras
+// Phase 6G-5B — the first public page for a canonical Music Madras
 // Recording (as opposed to a raw YouTube resource — see
 // app/(museum)/videos/[slug]/page.tsx, which represents a YouTubeVideoPage
 // instead). ARCHIVE AT THE FOUNDATION, DISCOVERY AT THE SURFACE: this
@@ -25,7 +27,7 @@ import { createEntityViewEvent } from "../../../../modules/analytics/events/fact
 // authoritative predicate from Phase 6G-5A) — this file never re-checks
 // or duplicates that logic.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 function formatPerformanceDate(date: Date | null): string | null {
   return date ? date.toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -95,8 +97,8 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
 
       <EntitySection
         id="videos"
-        heading="MusicMadras Videos"
-        intro="Recordings published to the public archive under Music Madras's editorial visibility rules — never raw, unreviewed synchronization data."
+        heading="Music Madras Videos"
+        intro="Recordings from the Music Madras archive."
       >
         {recording.videos.length > 0 ? (
           <ul className="museum-recording-grid">
@@ -247,7 +249,7 @@ export default async function RecordingPage({ params }: { params: Promise<{ slug
 
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildRecordingJsonLd(recording, SITE_ORIGIN)) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(buildRecordingJsonLd(recording, SITE_ORIGIN)) }}
       />
     </article>
   );

@@ -42,7 +42,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
       )}
 
       {artists.length === 0 ? (
-        <p>{q ? `No artists match "${q}".` : "No artists have been added to the MusicMadras archive yet."}</p>
+        <p>{q ? `No artists match "${q}".` : "No artists have been added to the Music Madras archive yet."}</p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>

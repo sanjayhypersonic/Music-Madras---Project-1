@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import { notFound } from "next/navigation";
@@ -21,7 +23,7 @@ import { createEntityViewEvent } from "../../../../modules/analytics/events/fact
 // Conductors, and Collections all now have their own public routes, so
 // this page links to all of them directly.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 function formatLifespan(lifespan: EntityPageLifespan | null): string | null {
   if (!lifespan) return null;
@@ -189,12 +191,12 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
         </EntitySection>
       )}
 
-      <p className="museum-group-heading">MusicMadras Media</p>
+      <p className="museum-group-heading">Music Madras Media</p>
 
       <EntitySection
         id="discover"
-        heading="MusicMadras Videos"
-        intro="Recordings published to the public archive under Music Madras's editorial visibility rules — never raw, unreviewed synchronization data."
+        heading="Music Madras Videos"
+        intro="Recordings from the Music Madras archive."
       >
         {composer.relatedVideos.length > 0 ? (
           <ul className="museum-recording-grid">
@@ -243,7 +245,7 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
         // Person.birthDate requires, and mapping free text into that field
         // would produce invalid/misleading structured data.
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "Person",
             name: composer.name,

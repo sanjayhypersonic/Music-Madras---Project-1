@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+import { getSiteOrigin } from "../modules/config/siteOrigin";
 
 // Phase 6G-11 — site-wide favicon/OpenGraph fallback using the existing
 // official logo asset (no new branding asset created). Applies everywhere
@@ -12,9 +11,12 @@ const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
 // already uses) so the relative image path resolves to a real production
 // URL instead of silently defaulting to localhost.
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE_ORIGIN),
-  title: "Music Madras — Production Foundation",
-  description: "Production application foundation, including the Studio content-management app. Not the public Museum site.",
+  metadataBase: new URL(getSiteOrigin()),
+  // Phase 6J-1: the default for any page that sets no title of its own is simply the brand
+  // (the old "Production Foundation" text leaked into every Studio tab and into link previews).
+  // Museum pages set their own; Studio sets its own in app/(studio)/studio/layout.tsx.
+  title: "Music Madras",
+  description: "Music Madras is a digital archive of Western Classical music in Chennai — its composers, performers, choirs, conductors, venues and recordings.",
   icons: {
     icon: "/music-madras-logo.webp",
   },

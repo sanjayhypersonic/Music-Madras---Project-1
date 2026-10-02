@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import Link from "next/link";
@@ -15,7 +17,7 @@ import { trackPublicPageView } from "../../../modules/analytics/trackPublicPageV
 // — the same status === "PUBLISHED" && archivedAt === null predicate
 // every other public LearningGuide read already uses.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 interface LearningIndexSearchParams {
   page?: string;
@@ -58,10 +60,10 @@ export default async function LearningIndexPage({ searchParams }: { searchParams
 
       <header className="museum-entity-header">
         <p className="museum-eyebrow">Learning</p>
-        <h1>MusicMadras Learning Guides</h1>
+        <h1>Music Madras Learning Guides</h1>
         <p className="museum-entity-header__description">
-          Structured educational guides connecting Musical Works and Recordings in the archive — every guide is
-          written editorially in Studio, never generated automatically.
+          Structured educational guides connecting Musical Works and Recordings in the archive, written by our
+          editors.
         </p>
       </header>
 
@@ -118,7 +120,7 @@ export default async function LearningIndexPage({ searchParams }: { searchParams
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "CollectionPage",
             name: "Music Madras Learning Guides",

@@ -1,3 +1,5 @@
+import { getSiteOrigin } from "../../../../modules/config/siteOrigin";
+import { serializeJsonLd } from "../../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import { notFound } from "next/navigation";
@@ -22,7 +24,7 @@ import { createEntityViewEvent } from "../../../../modules/analytics/events/fact
 // Renders only the guide's own stored contentMarkdown — never rewritten,
 // summarized, or supplemented.
 
-const SITE_ORIGIN = process.env.AUTH_URL ?? "http://localhost:3000";
+const SITE_ORIGIN = getSiteOrigin();
 
 function formatPerformanceDate(date: Date | null): string | null {
   return date ? date.toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -186,7 +188,7 @@ export default async function LearningGuidePage({ params }: { params: Promise<{ 
         )}
       </EntitySection>
 
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
     </article>
   );
 }

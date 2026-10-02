@@ -48,7 +48,7 @@ export default async function OccasionsPage({ searchParams }: { searchParams: Pr
       )}
 
       {occasions.length === 0 ? (
-        <p>{q ? `No occasions match "${q}".` : "No occasions have been added to the MusicMadras archive yet."}</p>
+        <p>{q ? `No occasions match "${q}".` : "No occasions have been added to the Music Madras archive yet."}</p>
       ) : (
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
