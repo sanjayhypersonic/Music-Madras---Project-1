@@ -61,7 +61,7 @@ interface Fixture {
 async function createPublishedRecordingFixture(): Promise<Fixture> {
   const user = await createTestUser();
   const organisation = await createOrganisation({ slug: uniqueSlug("organisation"), name: `Test Organisation ${randomUUID().slice(0, 8)}`, actorId: user.id });
-  const composer = await createComposer({ slug: uniqueSlug("composer"), name: "Test Composer", actorId: user.id });
+  const composer = await createComposer({ slug: uniqueSlug("composer"), name: `Test Composer ${randomUUID().slice(0, 8)}`, actorId: user.id });
   const work = await createMusicalWork({ slug: uniqueSlug("work"), title: "Test Work", composerId: composer.id, actorId: user.id });
   const programme = await createProgramme({ slug: uniqueSlug("programme"), title: "Test Programme", actorId: user.id });
   await addProgrammeItem({ programmeId: programme.id, musicalWorkId: work.id, movement: "I. Allegro", actorId: user.id });
@@ -196,7 +196,7 @@ describe("B. Canonical relationship surfacing", () => {
 
   it("reports performance = null and a PERFORMANCE gap for a recording with only a direct work attachment", async () => {
     const user = await createTestUser();
-    const composer = await createComposer({ slug: uniqueSlug("composer"), name: "Test Composer", actorId: user.id });
+    const composer = await createComposer({ slug: uniqueSlug("composer"), name: `Test Composer ${randomUUID().slice(0, 8)}`, actorId: user.id });
     const work = await createMusicalWork({ slug: uniqueSlug("work"), title: "Test Work", composerId: composer.id, actorId: user.id });
     const draft = await createDraftRecording({ slug: uniqueSlug("recording"), actorId: user.id, title: "No Performance Recording" });
     await attachWorkToRevision(draft.currentDraftRevision!.id, work.id, user.id);

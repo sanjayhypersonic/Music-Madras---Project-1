@@ -5,11 +5,13 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { findSourceById } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { canApproveSource, canDisableSource, canRejectSource } from "../../../../../../../modules/publishing/sourceApprovalTransitions";
 import { listCitationsForSource } from "../../../../../../../modules/db/repositories/citationRepository";
+import { isWikipediaSourceUrl } from "../../../../../../../modules/ai/retrieval/wikipedia/extractWikipediaPageTitle";
 import {
   addCitationAction,
   approveSourceAction,
   disableSourceAction,
   rejectSourceAction,
+  retrieveSourceAction,
   updateCitationAction,
   updateSourceAction,
 } from "./actions";
@@ -79,6 +81,27 @@ export default async function SourceDetailPage({
         </div>
       ) : (
         <p>You do not have permission to change this source&apos;s approval state.</p>
+      )}
+
+      {isWikipediaSourceUrl(source.url) && (
+        <>
+          <h2>External retrieval (Wikipedia)</h2>
+          <p>
+            Last retrieved: <strong>{source.lastRetrievedAt ? source.lastRetrievedAt.toLocaleString() : "Never"}</strong>
+          </p>
+          <p>
+            Content fingerprint: <code>{source.contentFingerprint ? source.contentFingerprint.slice(0, 12) : "—"}</code>
+          </p>
+          <p>
+            Retrieves the current Wikipedia summary for this source&apos;s registered page and stores it as this
+            source&apos;s Citation. Only possible while this source is APPROVED.
+          </p>
+          {canWrite && source.approvalState === "APPROVED" && (
+            <form action={retrieveSourceAction.bind(null, source.id)}>
+              <button type="submit">Retrieve now</button>
+            </form>
+          )}
+        </>
       )}
 
       <h2>Edit</h2>

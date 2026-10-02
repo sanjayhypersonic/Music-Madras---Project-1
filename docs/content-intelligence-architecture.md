@@ -2097,3 +2097,343 @@ Two things are explicitly deferred, by design, not oversight:
   by reading the generated SQL (only `CREATE TYPE`/`ADD COLUMN`/
   `ADD CONSTRAINT`, no `DROP`) and by re-querying the live database
   immediately after applying it.
+
+## 103. Phase 6H-9 — Controlled External Source Retrieval & Provenance
+
+Phase 6H-8 built the trust/approval model and the retrieval adapter
+*contract*, but its only implementation
+(`CitationBackedSourceRetrievalAdapter`) read Citation rows an editor had
+already typed in by hand — no external content was ever actually fetched.
+Phase 6H-9 implements the first REAL external retrieval: a controlled,
+single-provider adapter for the Wikimedia REST Summary API.
+
+**No schema migration was required.** The existing `Source.url` column
+(6G-13) already identifies the registered page; `approvalState`,
+`lastRetrievedAt`, and `contentFingerprint` (6H-8) already exist to gate and
+track it. This phase is pure application code on top of the 6H-8 schema.
+
+Formalized, restated as the brief required:
+
+> Music Madras retrieves external evidence; AI does not browse for truth.
+
+> Source approval means the source is permitted to contribute evidence; it
+> does not certify every statement on that source as fact.
+
+## 104. Why Wikipedia, and why this is not "web research"
+
+Before writing any code, the chosen approach was presented to the user for
+confirmation, exactly like every schema-migration decision in this project:
+Wikipedia's public REST Summary API
+(`https://en.wikipedia.org/api/rest_v1/page/summary/{title}`) was selected
+because it satisfies every criterion the brief required without guessing at
+a real institutional relationship Music Madras does not have:
+
+- a clearly identifiable owner (Wikimedia Foundation);
+- a stable, officially documented, versioned endpoint;
+- a deterministic retrieval mechanism — one GET per already-known title,
+  never a search;
+- a clear content boundary (one page's summary, not the full article, not
+  a crawl of linked pages);
+- a source identity persistable with the existing `Source.url` column, with
+  no new field;
+- no autonomous discovery step of any kind;
+- deterministic testability (a fake HTTP-client boundary, §108);
+- a reasonable basis for explicit, human approval (a Wikipedia page about a
+  composer or work is ordinary, widely-used supplementary reference
+  material for a music archive, subject to the same human-review gate as
+  every other suggestion before anything becomes canonical).
+
+This is deliberately **not** a generalized Wikipedia integration: there is
+no search method anywhere in this phase's code, no "find the page for this
+composer" step, and no AI involvement in choosing which page to register.
+An editor registers one specific, already-known Wikipedia URL as a `Source`
+— exactly the same manual act as registering any other external reference
+in 6G-13 — and only after that may Music Madras retrieve it.
+
+## 105. Source registration — no new field
+
+A Wikipedia-backed Source is registered exactly like any other Source
+(6G-13, unchanged):
+
+```
+Source
+  title:     "George Frideric Handel — Wikipedia"
+  url:       "https://en.wikipedia.org/wiki/George_Frideric_Handel"
+  publisher: (optional)
+```
+
+`modules/ai/retrieval/wikipedia/extractWikipediaPageTitle.ts` derives the
+page title deterministically from `url` with a strict pattern —
+`^https://en\.wikipedia\.org/wiki/([^/?#]+)$` — rejecting any other
+language subdomain, any `/w/index.php?title=`-style URL, and any URL with a
+query string or fragment. A Source whose `url` does not match is correctly
+classified `UNSUPPORTED_PROVIDER`, never guessed at or partially retrieved.
+No AI, and no caller of the adapter, ever supplies a URL or title directly
+— it is always re-derived from the already-registered, already-approved
+Source row.
+
+## 106. The Wikipedia REST Adapter — isolation and the two-layer design
+
+```
+Source Retrieval Adapter (interface, 6H-8, unchanged in shape)
+        |
+WikipediaSourceRetrievalAdapter (modules/ai/retrieval/wikipedia/)
+        |
+WikipediaRestClient (RealWikipediaRestClient | FakeWikipediaRestClient)
+```
+
+`modules/ai/retrieval/wikipedia/wikipediaRestClient.ts` is the ONLY file
+that knows the Wikimedia REST response shape — mirroring how
+`anthropicProvider.ts` is the only file that imports the Anthropic SDK.
+`WikipediaSourceRetrievalAdapter` (in the same directory) owns the
+Music-Madras-specific logic: approval gating, title derivation, fingerprint
+computation, change detection, and persistence. Nothing outside this
+directory needs to know the Wikipedia response shape exists.
+
+Unlike the 6H-8 `CitationBackedSourceRetrievalAdapter` (strictly
+read-only), `WikipediaSourceRetrievalAdapter` performs real writes — it is
+the first adapter that genuinely needs to. Every write is attributed to a
+real, authenticated Studio actor: `SourceRetrievalRequest` gained an
+optional `actorId` field (the only interface change this phase made to the
+6H-8 contract), and the adapter fails closed with `MISSING_ACTOR` — no
+network call, no write — if one is not supplied. This is deliberately
+stricter than the base interface requires, because the base interface is
+still shared with the read-only 6H-8 adapter and every existing
+`getRecordingContext` call site, none of which supply or need an actor.
+
+## 107. Approval is a hard gate, enforced in code, not only in the UI
+
+`WikipediaSourceRetrievalAdapter.retrieve()` checks `Source.approvalState`
+itself, directly against the database, before any network call —
+independent of whatever UI gate exists. `UNREVIEWED`, `REJECTED`, and
+`DISABLED` are all rejected identically (`SOURCE_NOT_APPROVED`), and this
+is integration-tested by asserting the injected fake HTTP client's call
+counter stays at zero for each of those three states — proving the network
+boundary is never reached, not merely that the final result looks like a
+failure. A directly-invoked adapter call with an arbitrary Source id that
+does not exist, or exists but is not approved, cannot be coaxed into
+retrieving anything; there is no code path that reaches
+`WikipediaRestClient.fetchSummary` without first loading the Source row and
+confirming `approvalState === "APPROVED"`.
+
+## 108. Deterministic testing — the fake HTTP-client boundary
+
+`modules/ai/retrieval/wikipedia/fakeWikipediaRestClient.ts` fakes at the
+`WikipediaRestClient` interface, one level below the adapter — not by
+replacing the whole adapter with a stub. This means every automated test
+exercises `WikipediaSourceRetrievalAdapter`'s REAL logic (approval gating,
+URL parsing, fingerprinting, citation upsert, audit writes) with zero real
+network dependency, configurable to `SUCCESS` (with an overridable summary),
+`EXTERNAL_PAGE_NOT_FOUND`, `MALFORMED_RESPONSE`, `TIMEOUT`, or
+`UNAVAILABLE`. `tests/integration/wikipediaSourceRetrievalAdapter.test.ts`
+is the real database + fake HTTP client suite this produces.
+
+## 109. Content fingerprinting and change detection
+
+Reuses the exact pattern `CitationBackedSourceRetrievalAdapter` established
+in 6H-8 (sha256 over a deterministic JSON serialization) — no second
+fingerprint mechanism. The fingerprint is computed over
+`{ title, description, extract }` from the Wikipedia response. On each
+retrieval, the new fingerprint is compared against the Source's
+*previously stored* `contentFingerprint` (not recomputed from scratch each
+time — this is the one genuine difference from the 6H-8 adapter, which has
+no "previous" to compare against) to classify the outcome:
+
+- `contentFingerprint === null` on the Source before this call ->
+  `FIRST_RETRIEVAL`
+- new fingerprint equals the stored one -> `UNCHANGED`
+- new fingerprint differs -> `CHANGED`
+
+`Source.lastRetrievedAt`/`contentFingerprint` — added but deliberately left
+unpopulated in 6H-8 — are now written by `recordSourceRetrievalSuccess`
+(`modules/db/repositories/sourceRepository.ts`), their first real use.
+No historical version table was added: per the brief, "current retrieval
+timestamp, current fingerprint, current retrieved content, ability to
+determine whether content changed" is sufficient, and a changed retrieval
+simply overwrites the prior Citation text and fingerprint — the previous
+content is not separately preserved. This is a deliberate, documented
+limitation (§113), not an oversight.
+
+A `CHANGED` result never triggers AI regeneration, never modifies canonical
+MMKE, and never publishes anything — it only updates the Source/Citation
+rows and writes an `EXTERNAL_SOURCE_CONTENT_CHANGED` audit entry (§111) for
+a future editorial workflow to act on. No scheduler, no bulk retrieval, and
+no automatic re-generation were built; retrieval only ever happens when a
+Studio editor explicitly clicks "Retrieve now."
+
+## 110. Evidence integration — zero changes to the Context Assembler
+
+This is the clearest architectural outcome of this phase: **no change was
+needed to `recordingContextRepository.ts`, `assembleRecordingContext.ts`,
+or `buildEvidenceIndex.ts`.** The explicit Wikipedia retrieval action
+persists its result as a real `Citation` row (via the existing
+`createCitation`/`updateCitation` from 6G-13, upserting the single Citation
+this adapter manages for a Wikipedia-backed Source — by convention, not a
+new schema flag, since a Source registered as a Wikipedia page is expected
+to carry exactly the one Citation this adapter maintains). The UNCHANGED
+6H-8 `CitationBackedSourceRetrievalAdapter`, which `getRecordingContext`
+already defaults to, picks up that Citation automatically the next time
+context is assembled for an entity this Source is attached to. The full
+chain — `AI statement -> evidenceRef -> Citation -> Source -> approved
+source -> Wikipedia` — was proven end to end in
+`tests/integration/externalEvidenceContextPipeline.test.ts` without
+touching any of those three files.
+
+`getRecordingContext` therefore still performs a live Wikipedia fetch
+**never** — AI generation requests remain exactly as fast and
+network-call-free (beyond the database) as before this phase. Retrieval is
+a separate, editor-triggered, out-of-band action that refreshes what is
+already stored, not a step in the generation request path.
+
+## 111. Audit
+
+Three new action strings, same generic `AuditLogEntry`, no new
+infrastructure:
+
+- `EXTERNAL_SOURCE_RETRIEVAL_SUCCEEDED` — every successful retrieval,
+  recording the fingerprint before/after and the `changeStatus`.
+- `EXTERNAL_SOURCE_CONTENT_CHANGED` — written in addition to the above,
+  only when `changeStatus === "CHANGED"`.
+- `EXTERNAL_SOURCE_RETRIEVAL_FAILED` — every rejected or failed attempt
+  (`SOURCE_NOT_APPROVED`, `UNSUPPORTED_PROVIDER`, network/parse failures),
+  recording the classified error type and message — never a raw stack
+  trace or response body.
+
+Deliberately NOT logged as a separate event: a bare "retrieval attempted"
+entry preceding every success/failure (the brief: "do not create excessive
+audit noise for every low-level HTTP operation") — succeeded/failed already
+implies an attempt occurred. `SOURCE_NOT_FOUND` (the Source row itself does
+not exist) and `MISSING_ACTOR` are not audited — there is no valid actor or
+existing Source row to attribute an entry to in either case.
+
+## 112. RBAC
+
+No new permission. `retrieveSourceAction` (the one Server Action that
+triggers a real retrieval) is gated by the same `CATALOGUE_WRITE`
+permission that already gates every other Source mutation on the same
+page — retrieval is a continuation of the same editorial-trust action as
+approving a source, not a distinct capability. `retrieveExternalSourceEvidence`
+and `WikipediaSourceRetrievalAdapter` themselves have no session/permission
+concept (mirroring `generateRecordingEditorialSuggestion`'s gateway) — RBAC
+is enforced once, at the Server Action boundary, exactly like every other
+mutation in this codebase.
+
+## 113. What this phase deliberately does not do
+
+Per the brief's explicit scope discipline: no Google/Bing/Brave/Perplexity
+search, no generic web crawling, no browser automation, no Claude/Gemini
+web browsing, no RAG, no vector database, no embeddings, no semantic
+search, no automatic source discovery/approval/registration, no AI entity
+matching, no automatic fact-checking or conflict resolution, no automatic
+AI regeneration, no automatic publication, no bulk or scheduled retrieval,
+and no new AI provider. `modules/ai/providers/` and `modules/ai/gateway/`
+were grepped for any reference to `retrieval`, `wikipedia`, `sourceId`, or
+`approvalState` and confirmed to contain none — the AI provider and gateway
+remain completely unaware this retrieval layer exists.
+
+Two things are explicitly deferred, by design:
+
+- **No retrieved-content version history.** Each retrieval overwrites the
+  prior Citation text and `Source.contentFingerprint`; the brief explicitly
+  permitted this ("do not introduce a full version-control system... unless
+  genuinely necessary") in favor of "current timestamp, current fingerprint,
+  current content, ability to detect change" — all four of which this phase
+  provides.
+- **No second real provider.** The `SourceRetrievalAdapter` interface is
+  provider-neutral by construction (6H-8), so a future institutional-archive
+  or RSS-feed adapter can be added beside `WikipediaSourceRetrievalAdapter`
+  without touching the Context Assembler, the AI Gateway, or evidence
+  validation — but none was built in this phase, per its explicit "choose
+  ONE controlled source type" instruction.
+
+## 114. Tests and validation
+
+- `tests/unit/extractWikipediaPageTitle.test.ts` — strict URL-to-title
+  derivation: well-formed URLs, percent-decoding, rejection of non-Wikipedia
+  hosts, other-language subdomains, `/w/index.php`-style URLs, query
+  strings/fragments, a bare `/wiki/` with no title, and null input — never
+  throws.
+- `tests/unit/fakeWikipediaRestClient.test.ts` — the fake HTTP-client
+  boundary: default success echoing the requested title, injected summary
+  overrides, and all four failure modes.
+- `tests/integration/wikipediaSourceRetrievalAdapter.test.ts` — the real
+  adapter logic against the live database with the fake HTTP client only:
+  successful retrieval for an APPROVED source; UNREVIEWED/REJECTED/DISABLED
+  sources rejected with zero HTTP calls made (proven via a call-counting
+  client wrapper); a nonexistent Source id rejected with zero HTTP calls;
+  the exact registered page title is what reaches the HTTP client, never a
+  caller-supplied one; a non-Wikipedia URL rejected as UNSUPPORTED_PROVIDER
+  with zero HTTP calls; EXTERNAL_PAGE_NOT_FOUND, TIMEOUT, UNAVAILABLE, and
+  MALFORMED_RESPONSE each handled as typed failures with no partial
+  Citation persisted; MISSING_ACTOR when no actor is supplied; retrieved
+  content preserved verbatim as a real, traceable Citation row;
+  `lastRetrievedAt` recorded; fingerprint determinism across repeated calls
+  with identical content (`FIRST_RETRIEVAL` then `UNCHANGED`); a changed
+  fingerprint and `CHANGED` status once content differs; both audit actions
+  (`SUCCEEDED`/`CONTENT_CHANGED`) and the `FAILED` action each verified
+  present; row-count-unchanged checks across Composer/MusicalWork/
+  Recording/ContentSuggestion/ContentGenerationRequest proving no canonical
+  or AI-workflow side effects.
+- `tests/integration/externalEvidenceContextPipeline.test.ts` — the
+  full, real, end-to-end path with zero Context Assembler changes: an
+  APPROVED, explicitly-associated Wikipedia source's retrieved Citation
+  reaches `RecordingContext.provenance.sources` and is indexed by
+  `buildEvidenceIndex` as its own `Citation`-typed evidence entity; an
+  APPROVED but unassociated Wikipedia source never enters that Recording's
+  context; retrieval never changes the canonical Work title or Composer
+  name; a retrieval attempt on an UNREVIEWED source never auto-approves it;
+  no Recording status/publication field changes as a side effect.
+- Full suite after this phase: **442 unit** (up from 426) and
+  **426 integration** (37 files), all passing in a clean run after the
+  fixture fix described in §115. Typecheck, lint (one pre-existing,
+  unrelated warning), and production build clean.
+- No schema migration — `Source.url`/`approvalState`/`lastRetrievedAt`/
+  `contentFingerprint` (all pre-existing from 6G-13/6H-8) were sufficient.
+- `SourceRetrievalRequest` gained one optional field (`actorId`);
+  `SourceRetrievalSuccess` gained one optional field (`changeStatus`); the
+  6H-8 `CitationBackedSourceRetrievalAdapter` and `FakeSourceRetrievalAdapter`
+  are unaffected (both fields are optional and neither adapter sets or
+  reads them) — confirmed by the unchanged 6H-8 test files passing
+  unmodified.
+
+## 115. Live validation, and a pre-existing test-fixture bug found and fixed
+
+**Real retrieval, performed once against the live Wikimedia REST Summary
+API** (disposable fixtures, deleted afterward; the throwaway test that drove
+it was never committed): a Source registered with the url
+`https://en.wikipedia.org/wiki/Johann_Sebastian_Bach` and attached to a
+Work of a published Recording was (1) rejected before approval
+(`SOURCE_NOT_APPROVED`), (2) approved, (3) retrieved for real —
+`FIRST_RETRIEVAL`, the genuine Bach extract, a sha256 fingerprint,
+`lastRetrievedAt` set — (4) retrieved again — `UNCHANGED`, same fingerprint
+— and (5) assembled into `RecordingContext` as an `APPROVED` source with
+one Citation, indexed by `buildEvidenceIndex` as an
+`APPROVED_EXTERNAL_SOURCE` `Citation` evidence ref. The canonical Work title
+was unchanged, and the audit log recorded `EXTERNAL_SOURCE_RETRIEVAL_FAILED`,
+`SOURCE_APPROVED`, then two `EXTERNAL_SOURCE_RETRIEVAL_SUCCEEDED`.
+
+**Manual Studio QA** (real browser, disposable editor): an `UNREVIEWED`
+Wikipedia-backed Source shows the External retrieval section but no
+"Retrieve now" button; after Approve the button appears; clicking it
+populated "Last retrieved", the fingerprint, and one Citation containing the
+real Wikipedia summary of the registered page (George Frideric Handel).
+
+**Pre-existing test-fixture bug (found while validating this phase; fixed
+with explicit user approval as a test-only change).** Seven integration
+test files hardcoded the Composer name `"Test Composer"`. Because vitest
+runs separate files in parallel against one shared database and
+`createComposer` rejects duplicate names, two files racing on that name
+made one throw `DuplicateEntityError`, orphaning its partially created
+fixture and cascading into further failures via that file's fixed test
+email. Each of the 7 files now uses `` `Test Composer ${randomUUID().slice(0, 8)}` ``
+(the pattern already used in `editorialGenerationHardening.test.ts`); no
+production code, schema, or assertion changed. Phase 6H-9's own new test
+fixture additionally had to randomize Venue (also duplicate-guarded) and
+complete its cleanup in FK-safe order (Programme before MusicalWork, since
+`ProgrammeItem` references it).
+
+Not fixed, deliberately out of scope: the 5-second Prisma interactive
+transaction timeout used by several repository writes can be exceeded when
+the shared Neon database is unusually slow. It surfaced intermittently
+during validation and is an environmental sensitivity, not a Phase 6H-9
+behavior.

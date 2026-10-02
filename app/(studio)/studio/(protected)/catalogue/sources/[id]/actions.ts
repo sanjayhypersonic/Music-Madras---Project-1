@@ -5,6 +5,8 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { approveSource, disableSource, rejectSource, updateSource } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { createCitation, updateCitation } from "../../../../../../../modules/db/repositories/citationRepository";
+import { retrieveExternalSourceEvidence } from "../../../../../../../modules/ai/retrieval/retrieveExternalSourceEvidence";
+import { describeSourceRetrievalFailureForEditor } from "../../../../../../../modules/ai/retrieval/describeSourceRetrievalFailureForEditor";
 
 function errorRedirect(sourceId: string, message: string): never {
   redirect(`/studio/catalogue/sources/${sourceId}?error=${encodeURIComponent(message)}`);
@@ -74,6 +76,27 @@ export async function disableSourceAction(sourceId: string) {
     await disableSource(sourceId, session!.user.id);
   } catch (error) {
     errorRedirect(sourceId, error instanceof Error ? error.message : "Could not disable this source.");
+  }
+
+  redirect(`/studio/catalogue/sources/${sourceId}`);
+}
+
+// Phase 6H-9 — the one explicit entry point that triggers a real external
+// retrieval. Reuses CATALOGUE_WRITE (the same permission as every other
+// Source mutation on this page) — there is no new permission for this
+// action (docs/content-intelligence-architecture.md Phase 6H-9 section).
+// Never runs on a schedule, never runs in bulk: exactly one Source, exactly
+// when an authorized editor clicks the button.
+
+export async function retrieveSourceAction(sourceId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(sourceId, "You do not have permission to retrieve this source.");
+  }
+
+  const result = await retrieveExternalSourceEvidence(sourceId, session!.user.id);
+  if (!result.ok) {
+    errorRedirect(sourceId, describeSourceRetrievalFailureForEditor(result.error.type));
   }
 
   redirect(`/studio/catalogue/sources/${sourceId}`);

@@ -59,7 +59,7 @@ interface Fixture {
 /** A minimal published Recording — a direct work attachment, no Performance needed for these tests. */
 async function createPublishedRecordingFixture(): Promise<Fixture> {
   const user = await createTestUser();
-  const composer = await createComposer({ slug: uniqueSlug("composer"), name: "Test Composer", actorId: user.id });
+  const composer = await createComposer({ slug: uniqueSlug("composer"), name: `Test Composer ${randomUUID().slice(0, 8)}`, actorId: user.id });
   const work = await createMusicalWork({ slug: uniqueSlug("work"), title: "Test Work", composerId: composer.id, actorId: user.id });
   const draft = await createDraftRecording({ slug: uniqueSlug("recording"), actorId: user.id, title: "Test Recording" });
   await attachWorkToRevision(draft.currentDraftRevision!.id, work.id, user.id);

@@ -82,7 +82,7 @@ async function createFullChainFixture() {
 
   const composer = await createComposer({
     slug: uniqueSlug("composer"),
-    name: "Test Composer",
+    name: `Test Composer ${randomUUID().slice(0, 8)}`,
     bornDate: "1685",
     diedDate: "1750",
     biography: "A test composer's short biography.",

@@ -213,6 +213,64 @@ export function listSourcesForEntity(
   });
 }
 
+// ---------------------------------------------------------------------------
+// External retrieval outcomes (Phase 6H-9) — the only functions that may
+// write Source.lastRetrievedAt/contentFingerprint, or audit-log an
+// EXTERNAL_SOURCE_RETRIEVAL_*/EXTERNAL_SOURCE_CONTENT_CHANGED event. Called
+// by modules/ai/retrieval/wikipedia/wikipediaSourceRetrievalAdapter.ts,
+// never directly by a Server Action — keeps every Prisma write and its
+// audit entry in the repository layer, exactly like approveSource/
+// rejectSource/disableSource above.
+// ---------------------------------------------------------------------------
+
+export type SourceRetrievalChangeStatusValue = "FIRST_RETRIEVAL" | "UNCHANGED" | "CHANGED";
+
+export async function recordSourceRetrievalSuccess(
+  sourceId: string,
+  actorId: string,
+  input: { contentFingerprint: string | null; changeStatus: SourceRetrievalChangeStatusValue }
+): Promise<Source> {
+  const before = await prisma.source.findUnique({ where: { id: sourceId } });
+  const retrievedAt = new Date();
+
+  const updated = await prisma.source.update({
+    where: { id: sourceId },
+    data: { lastRetrievedAt: retrievedAt, contentFingerprint: input.contentFingerprint },
+  });
+
+  await writeAuditLog({
+    actorId,
+    action: "EXTERNAL_SOURCE_RETRIEVAL_SUCCEEDED",
+    entityType: "Source",
+    entityId: sourceId,
+    beforeSnapshot: { contentFingerprint: before?.contentFingerprint ?? null, lastRetrievedAt: before?.lastRetrievedAt ?? null },
+    afterSnapshot: { contentFingerprint: updated.contentFingerprint, lastRetrievedAt: updated.lastRetrievedAt, changeStatus: input.changeStatus },
+  });
+
+  if (input.changeStatus === "CHANGED") {
+    await writeAuditLog({
+      actorId,
+      action: "EXTERNAL_SOURCE_CONTENT_CHANGED",
+      entityType: "Source",
+      entityId: sourceId,
+      beforeSnapshot: { contentFingerprint: before?.contentFingerprint ?? null },
+      afterSnapshot: { contentFingerprint: updated.contentFingerprint },
+    });
+  }
+
+  return updated;
+}
+
+export async function recordSourceRetrievalFailure(sourceId: string, actorId: string, errorType: string, errorMessage: string): Promise<void> {
+  await writeAuditLog({
+    actorId,
+    action: "EXTERNAL_SOURCE_RETRIEVAL_FAILED",
+    entityType: "Source",
+    entityId: sourceId,
+    afterSnapshot: { errorType, errorMessage },
+  });
+}
+
 /**
  * Phase 6H-8 — the ONLY entry point the Recording Context Assembler may use
  * to read the Source registry for AI evidence
