@@ -19,6 +19,7 @@ describe("YouTubeDataApiAdapter", () => {
               etag: '"etag-1"',
               snippet: { title: "Music Madras" },
               contentDetails: { relatedPlaylists: { uploads: "UUabc" } },
+              statistics: { videoCount: "14", viewCount: "999" },
             },
           ],
         },
@@ -27,9 +28,20 @@ describe("YouTubeDataApiAdapter", () => {
     const adapter = buildAdapter(fetchImpl);
 
     const channel = await adapter.getChannel("UCabc");
-    expect(channel).toEqual({ channelId: "UCabc", title: "Music Madras", uploadsPlaylistId: "UUabc", etag: '"etag-1"' });
+    expect(channel).toEqual({ channelId: "UCabc", title: "Music Madras", uploadsPlaylistId: "UUabc", videoCount: 14, etag: '"etag-1"' });
     expect(calls[0].url).toContain("channels?");
     expect(calls[0].url).toContain("id=UCabc");
+    // The reported video count is only returned when `statistics` is requested.
+    expect(decodeURIComponent(calls[0].url)).toContain("part=snippet,contentDetails,statistics");
+  });
+
+  it.each([[undefined], ["not-a-number"], [""], ["-3"], ["1.5"]])("getChannel reports videoCount as null (never a guess) when YouTube sends %j", async (raw) => {
+    const statistics = raw === undefined ? undefined : { videoCount: raw };
+    const { fetchImpl } = createFakeFetch([
+      { status: 200, body: { items: [{ id: "UCabc", contentDetails: { relatedPlaylists: { uploads: "UUabc" } }, statistics }] } },
+    ]);
+    const channel = await buildAdapter(fetchImpl).getChannel("UCabc");
+    expect(channel.videoCount).toBeNull();
   });
 
   it("getChannel throws NOT_FOUND when the channel does not exist", async () => {

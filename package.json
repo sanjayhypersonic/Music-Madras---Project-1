@@ -16,7 +16,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "seed:founder": "tsx scripts/seedFounder.ts"
+    "seed:founder": "tsx scripts/seedFounder.ts",
+    "youtube:full-sync": "tsx scripts/runYouTubeFullSync.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",

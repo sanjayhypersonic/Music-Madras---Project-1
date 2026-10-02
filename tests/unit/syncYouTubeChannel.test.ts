@@ -228,12 +228,13 @@ class FakeAdapter implements YouTubeDataAdapter {
     private readonly playlistsPages: YouTubePageResult<YouTubePlaylistRecord>[],
     private readonly playlistItemsByPlaylistId: Map<string, YouTubePageResult<YouTubePlaylistItemRecord>[]>,
     private readonly videosById: Map<string, YouTubeVideoRecord>,
-    private readonly failures: Partial<{ getChannel: boolean; listVideos: boolean; listPlaylistItemsForPlaylistId: string }> = {}
+    private readonly failures: Partial<{ getChannel: boolean; listVideos: boolean; listPlaylistItemsForPlaylistId: string }> = {},
+    private readonly channelVideoCount?: number | null
   ) {}
 
   async getChannel() {
     if (this.failures.getChannel) throw new Error("simulated getChannel failure");
-    return { channelId: this.channelId, title: "Music Madras", uploadsPlaylistId: this.uploadsPlaylistId, etag: '"channel-etag"' };
+    return { channelId: this.channelId, title: "Music Madras", uploadsPlaylistId: this.uploadsPlaylistId, videoCount: this.channelVideoCount, etag: '"channel-etag"' };
   }
 
   async listPlaylists(_channelId: string, pageToken?: string): Promise<YouTubePageResult<YouTubePlaylistRecord>> {
@@ -690,5 +691,111 @@ describe("runYouTubeSync", () => {
     // synced as a bare YouTubeVideo/YouTubePlaylistItem, nothing more.
     expect(repo.videos.size).toBe(1);
     expect(repo.videos.get(repo.videosByYoutubeId.get("v1")!)!.channelId).toBe("UCexternalChannel");
+  });
+});
+
+// Phase 6J-1 — hardening: a partial pass must never withdraw anything, a pass
+// that failed records is never a success, and the channel's own video count is
+// reconciled (reported, never acted on).
+describe("runYouTubeSync hardening", () => {
+  const playlist = (id: string) => ({ playlistId: id, title: id, description: null, publishedAt: null, privacyStatus: "public", channelId: CHANNEL_ID, thumbnails: {}, etag: `"${id}"` });
+
+  // v1 is in uploads; v2 lives ONLY in playlist PL1 (so it is not in uploads).
+  function build(options: { failPlaylist?: string; resolvable?: string[]; channelVideoCount?: number | null; uploadsIds?: string[] }) {
+    const resolvable = options.resolvable ?? ["v1", "v2"];
+    const videosById = new Map<string, YouTubeVideoRecord>(resolvable.map((id) => [id, makeVideo({ videoId: id })]));
+    const uploads = (options.uploadsIds ?? ["v1"]).map((id, i) => makePlaylistItem(UPLOADS_PLAYLIST_ID, id, i));
+    return new FakeAdapter(
+      UPLOADS_PLAYLIST_ID,
+      CHANNEL_ID,
+      [{ items: uploads, nextPageToken: null }],
+      [{ items: [playlist("PL1")], nextPageToken: null }],
+      new Map([["PL1", [{ items: [makePlaylistItem("PL1", "v2", 0)], nextPageToken: null }]]]),
+      videosById,
+      options.failPlaylist ? { listPlaylistItemsForPlaylistId: options.failPlaylist } : {},
+      options.channelVideoCount
+    );
+  }
+
+  it("a partial pass never flags a previously known video as NOT_OBSERVED (a playlist that could not be read hides its videos)", async () => {
+    const repo = new FakeYouTubeSyncRepository();
+    const first = await runYouTubeSync(build({}), repo, { channelId: CHANNEL_ID, now: NOW });
+    expect(first.completeness).toBe("FULL");
+    expect(first.videoAbsenceEvaluated).toBe(true);
+
+    // Second pass: PL1's membership fetch fails, so v2 (only in PL1) is simply never looked at.
+    const second = await runYouTubeSync(build({ failPlaylist: "PL1" }), repo, { channelId: CHANNEL_ID, now: NOW });
+    expect(second.completeness).toBe("PARTIAL");
+    expect(second.videoAbsenceEvaluated).toBe(false);
+    expect(second.videos.flagged).toBe(0);
+    const v2 = repo.videos.get(repo.videosByYoutubeId.get("v2")!)!;
+    expect(v2.observabilityState).toBe("OBSERVED");
+  });
+
+  it("a full pass still flags a genuinely absent video (the guard did not switch absence detection off)", async () => {
+    const repo = new FakeYouTubeSyncRepository();
+    await runYouTubeSync(build({}), repo, { channelId: CHANNEL_ID, now: NOW });
+    const second = await runYouTubeSync(build({ resolvable: ["v1"] }), repo, { channelId: CHANNEL_ID, now: NOW });
+    expect(second.videoAbsenceEvaluated).toBe(true);
+    expect(second.videos.flagged).toBe(1);
+    expect(repo.videos.get(repo.videosByYoutubeId.get("v2")!)!.observabilityState).toBe("NOT_OBSERVED");
+  });
+
+  it("a run that failed to process any record is PARTIAL even though every list was read completely", async () => {
+    // v2 is referenced by PL1 but videos.list does not return it.
+    const result = await runYouTubeSync(build({ resolvable: ["v1"] }), new FakeYouTubeSyncRepository(), { channelId: CHANNEL_ID, now: NOW });
+    expect(result.recordsFailed).toBe(1);
+    expect(result.completeness).toBe("PARTIAL");
+  });
+
+  it("a clean run with nothing failed stays FULL", async () => {
+    const result = await runYouTubeSync(build({}), new FakeYouTubeSyncRepository(), { channelId: CHANNEL_ID, now: NOW });
+    expect(result.recordsFailed).toBe(0);
+    expect(result.completeness).toBe("FULL");
+    expect(result.errors).toEqual([]);
+  });
+
+  it("records a checkpoint for both channel-wide scopes and for every playlist", async () => {
+    const repo = new FakeYouTubeSyncRepository();
+    await runYouTubeSync(build({}), repo, { channelId: CHANNEL_ID, now: NOW });
+    expect([...repo.checkpoints.keys()].sort()).toEqual(["YOUTUBE_PLAYLIST:channel-playlists", "YOUTUBE_PLAYLIST_ITEM:PL1", "YOUTUBE_PLAYLIST_ITEM:channel-uploads"]);
+    expect([...repo.checkpoints.values()].every((c) => c.completeness === "FULL")).toBe(true);
+  });
+
+  describe("reconciliation against the channel's reported video count", () => {
+    it("MATCH when the reported public count equals the public uploads this pass saw", async () => {
+      const result = await runYouTubeSync(build({ channelVideoCount: 1 }), new FakeYouTubeSyncRepository(), { channelId: CHANNEL_ID, now: NOW });
+      expect(result.reconciliation).toMatchObject({ status: "MATCH", reportedVideoCount: 1, uploadsPublicVideos: 1, uploadsVideoIds: 1, observedVideoIds: 2, resolvedVideos: 2, difference: 0 });
+    });
+
+    it("MISMATCH (reported, not acted on) when the channel reports more than the pass saw", async () => {
+      const repo = new FakeYouTubeSyncRepository();
+      const result = await runYouTubeSync(build({ channelVideoCount: 14 }), repo, { channelId: CHANNEL_ID, now: NOW });
+      expect(result.reconciliation).toMatchObject({ status: "MISMATCH", reportedVideoCount: 14, uploadsPublicVideos: 1, difference: 13 });
+      expect(result.reconciliation!.note).toMatch(/private/i);
+      // Information only: a mismatch never changes completeness or flags anything on its own.
+      expect(result.completeness).toBe("FULL");
+      expect(result.videos.flagged).toBe(0);
+    });
+
+    it("counts only PUBLIC uploads — an unlisted upload is not part of the public count", async () => {
+      const adapter = build({ channelVideoCount: 1 });
+      // Make the only uploads video unlisted.
+      const videos = (adapter as unknown as { videosById: Map<string, YouTubeVideoRecord> }).videosById;
+      videos.set("v1", makeVideo({ videoId: "v1", privacyStatus: "unlisted" }));
+      const result = await runYouTubeSync(adapter, new FakeYouTubeSyncRepository(), { channelId: CHANNEL_ID, now: NOW });
+      expect(result.reconciliation).toMatchObject({ status: "MISMATCH", uploadsPublicVideos: 0, difference: 1 });
+    });
+
+    it("UNAVAILABLE when YouTube reports no count — it does not pretend to have reconciled", async () => {
+      const result = await runYouTubeSync(build({ channelVideoCount: null }), new FakeYouTubeSyncRepository(), { channelId: CHANNEL_ID, now: NOW });
+      expect(result.reconciliation).toMatchObject({ status: "UNAVAILABLE", reportedVideoCount: null, difference: null });
+    });
+
+    it("there is no reconciliation when the pass never got far enough to have anything to compare", async () => {
+      const adapter = new FakeAdapter(UPLOADS_PLAYLIST_ID, CHANNEL_ID, [], [], new Map(), new Map(), { getChannel: true });
+      const result = await runYouTubeSync(adapter, new FakeYouTubeSyncRepository(), { channelId: CHANNEL_ID, now: NOW });
+      expect(result.reconciliation).toBeNull();
+    });
   });
 });

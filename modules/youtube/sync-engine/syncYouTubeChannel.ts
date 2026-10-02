@@ -87,8 +87,37 @@ function emptyCounts(): YouTubeSyncResourceCounts {
   return { discovered: 0, created: 0, updated: 0, unchanged: 0, flagged: 0 };
 }
 
+// What YouTube said the channel holds versus what this pass could actually
+// see. `statistics.videoCount` counts the channel's PUBLIC videos; an API key
+// cannot see private videos and unlisted ones are not in the uploads playlist
+// for a key, so a mismatch is information for the operator, never a reason to
+// flag or delete anything, and a match is not proof nothing is hidden.
+export interface YouTubeSyncReconciliation {
+  status: "MATCH" | "MISMATCH" | "UNAVAILABLE";
+  /** channels.list statistics.videoCount, or null if YouTube did not report it. */
+  reportedVideoCount: number | null;
+  /** Distinct video IDs seen in the uploads playlist. */
+  uploadsVideoIds: number;
+  /** Distinct video IDs seen in the uploads playlist that videos.list returned with privacyStatus "public". */
+  uploadsPublicVideos: number;
+  /** Distinct video IDs seen anywhere (uploads + every playlist). */
+  observedVideoIds: number;
+  /** Of those, how many videos.list returned at all. */
+  resolvedVideos: number;
+  /** reportedVideoCount - uploadsPublicVideos (null when UNAVAILABLE). */
+  difference: number | null;
+  note: string;
+}
+
 export interface YouTubeSyncResult {
   completeness: "FULL" | "PARTIAL";
+  /**
+   * True only when the pass observed its whole scope (uploads, every
+   * playlist, videos.list) and so was allowed to flag previously-known
+   * videos as not observed. A partial pass never flags absence.
+   */
+  videoAbsenceEvaluated: boolean;
+  reconciliation: YouTubeSyncReconciliation | null;
   videos: YouTubeSyncResourceCounts;
   playlists: YouTubeSyncResourceCounts;
   playlistItems: YouTubeSyncResourceCounts;
@@ -107,6 +136,8 @@ export async function runYouTubeSync(
   const maxPages = options.maxPagesPerList ?? MAX_PAGES_DEFAULT;
   const result: YouTubeSyncResult = {
     completeness: "FULL",
+    videoAbsenceEvaluated: false,
+    reconciliation: null,
     videos: emptyCounts(),
     playlists: emptyCounts(),
     playlistItems: emptyCounts(),
@@ -117,9 +148,11 @@ export async function runYouTubeSync(
 
   // Step 1: channel -> uploads playlist id.
   let uploadsPlaylistId: string;
+  let reportedVideoCount: number | null = null;
   try {
     const channel = await adapter.getChannel(options.channelId);
     uploadsPlaylistId = channel.uploadsPlaylistId;
+    reportedVideoCount = channel.videoCount ?? null;
   } catch (err) {
     result.completeness = "PARTIAL";
     result.errors.push({ phase: "getChannel", message: describeError(err) });
@@ -192,6 +225,8 @@ export async function runYouTubeSync(
     return result;
   }
 
+  result.reconciliation = buildReconciliation(reportedVideoCount, uploadsItems.items, allVideoIds, videos);
+
   // Step 6: reconcile every observed video, keyed by its immutable YouTube video ID — never title/description/thumbnail/date (brief §12).
   const videoInternalIdByYoutubeId = new Map<string, string>();
   for (const video of videos) {
@@ -200,15 +235,20 @@ export async function runYouTubeSync(
   }
   result.videos.discovered = videos.length;
 
-  // Step 7: flag videos previously known but not observed in this FULL pass — never delete, never escalate (ADR §15).
-  const existingVideos = await repo.listVideoIdentities();
-  const observedVideoInternalIds = new Set(videoInternalIdByYoutubeId.values());
-  for (const existing of existingVideos) {
-    if (observedVideoInternalIds.has(existing.id)) continue;
-    const update = computeObservabilityUpdate(existing.observabilityState, false);
-    if (update.changed) {
-      await repo.setVideoObservability(existing.id, update.nextState, "Not observed in the current full YouTube Data API synchronization pass.");
-      result.videos.flagged++;
+  // Step 7: flag videos previously known but not observed — only when this pass observed its WHOLE scope
+  // (a failed playlist page means a video that lives only in that playlist was never looked for, so its
+  // absence proves nothing). Never delete, never escalate (ADR §15).
+  if (result.completeness === "FULL") {
+    result.videoAbsenceEvaluated = true;
+    const existingVideos = await repo.listVideoIdentities();
+    const observedVideoInternalIds = new Set(videoInternalIdByYoutubeId.values());
+    for (const existing of existingVideos) {
+      if (observedVideoInternalIds.has(existing.id)) continue;
+      const update = computeObservabilityUpdate(existing.observabilityState, false);
+      if (update.changed) {
+        await repo.setVideoObservability(existing.id, update.nextState, "Not observed in the current full YouTube Data API synchronization pass.");
+        result.videos.flagged++;
+      }
     }
   }
 
@@ -266,7 +306,38 @@ export async function runYouTubeSync(
     }
   }
 
+  // A pass that could not process every record it found is not a complete pass, whatever else went right.
+  if (result.recordsFailed > 0) result.completeness = "PARTIAL";
+
   return result;
+}
+
+function buildReconciliation(
+  reportedVideoCount: number | null,
+  uploadsItems: YouTubePlaylistItemRecord[],
+  allVideoIds: Set<string>,
+  videos: YouTubeVideoRecord[]
+): YouTubeSyncReconciliation {
+  const uploadsIds = new Set(uploadsItems.map((item) => item.videoId));
+  const privacyById = new Map(videos.map((video) => [video.videoId, video.privacyStatus]));
+  let uploadsPublicVideos = 0;
+  for (const id of uploadsIds) if (privacyById.get(id) === "public") uploadsPublicVideos++;
+
+  const base = { reportedVideoCount, uploadsVideoIds: uploadsIds.size, uploadsPublicVideos, observedVideoIds: allVideoIds.size, resolvedVideos: videos.length };
+  if (reportedVideoCount === null) {
+    return { ...base, status: "UNAVAILABLE", difference: null, note: "YouTube did not report a channel video count, so the pass cannot be reconciled against it." };
+  }
+  const difference = reportedVideoCount - uploadsPublicVideos;
+  if (difference === 0) {
+    return { ...base, status: "MATCH", difference, note: "The channel's reported public video count equals the public videos this pass saw in the uploads playlist." };
+  }
+  return {
+    ...base,
+    status: "MISMATCH",
+    difference,
+    note:
+      "The channel's reported public video count differs from the public videos this pass saw. Private videos are invisible to an API key and some videos may be unresolved; investigate before treating the catalogue as complete.",
+  };
 }
 
 async function syncVideo(

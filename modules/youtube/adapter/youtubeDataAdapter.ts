@@ -40,7 +40,7 @@ export class YouTubeDataApiAdapter implements YouTubeDataAdapter {
 
   async getChannel(channelId: string): Promise<YouTubeChannelRecord> {
     const result = await this.http.get<YouTubeChannelsListResponse>("channels.list", "channels", {
-      part: "snippet,contentDetails",
+      part: "snippet,contentDetails,statistics",
       id: channelId,
     });
     if (result.notModified) {
@@ -66,6 +66,7 @@ export class YouTubeDataApiAdapter implements YouTubeDataAdapter {
       channelId: item.id,
       title: item.snippet?.title ?? null,
       uploadsPlaylistId,
+      videoCount: parseReportedCount(item.statistics?.videoCount),
       etag: item.etag ?? result.etag,
     };
   }
@@ -201,7 +202,14 @@ interface YouTubeChannelsListResponse {
     etag?: string;
     snippet?: { title?: string };
     contentDetails?: { relatedPlaylists?: { uploads?: string } };
+    statistics?: { videoCount?: string };
   }[];
+}
+
+// YouTube serialises counts as decimal strings; anything else is "not reported".
+function parseReportedCount(value: string | undefined): number | null {
+  if (value === undefined || !/^\d+$/.test(value)) return null;
+  return Number(value);
 }
 
 interface YouTubePlaylistsListResponse {

@@ -34,6 +34,8 @@ export interface YouTubeChannelRecord {
   channelId: string;
   title: string | null;
   uploadsPlaylistId: string;
+  /** channels.list statistics.videoCount (public videos); null/absent when YouTube did not report it. */
+  videoCount?: number | null;
   etag: string | null;
 }
 
