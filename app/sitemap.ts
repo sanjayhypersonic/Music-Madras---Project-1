@@ -1,14 +1,14 @@
 import type { MetadataRoute } from "next";
-import { listActiveComposers } from "../modules/db/repositories/composerRepository";
-import { listActiveArtists } from "../modules/db/repositories/artistRepository";
-import { listActiveChoirs } from "../modules/db/repositories/choirRepository";
-import { listActiveConductors } from "../modules/db/repositories/conductorRepository";
-import { listActiveVenues } from "../modules/db/repositories/venueRepository";
-import { listActiveOrganisations } from "../modules/db/repositories/organisationRepository";
 import { listPublishedCollections } from "../modules/db/repositories/collectionRepository";
 import { listPublishedVideoPages } from "../modules/db/repositories/youtubeVideoPageRepository";
 import { listPublicLearningGuides } from "../modules/db/repositories/learningGuideRepository";
 import {
+  listPublicArtistSitemapEntries,
+  listPublicChoirSitemapEntries,
+  listPublicComposerSitemapEntries,
+  listPublicConductorSitemapEntries,
+  listPublicOrganisationSitemapEntries,
+  listPublicVenueSitemapEntries,
   listPublicPerformanceSitemapEntries,
   listPublicProgrammeSitemapEntries,
   listPublicRecordingSitemapEntries,
@@ -17,10 +17,10 @@ import {
 
 // Phase 6G-11 — the canonical, database-driven sitemap for the public
 // Museum. No second visibility system: every entity list here is either
-// an existing public-visibility repository function (listActive*,
-// listPublishedCollections, listPublishedVideoPages) or a new function in
-// sitemapRepository.ts that copies its where-clause verbatim from
-// archiveSearchRepository.ts. Studio, API routes, drafts, archived
+// an existing public-visibility repository function
+// (listPublishedCollections, listPublishedVideoPages) or a sitemapRepository.ts
+// function built on the same eligibility fragments as the entity pages and
+// archive search (Phase 6J-1). Studio, API routes, drafts, archived
 // content, and /archive query-string states are never included — the
 // canonical bare entity URL is the only one ever listed.
 
@@ -42,12 +42,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     videoPages,
     learningGuides,
   ] = await Promise.all([
-    listActiveComposers(),
-    listActiveArtists(),
-    listActiveChoirs(),
-    listActiveConductors(),
-    listActiveVenues(),
-    listActiveOrganisations(),
+    listPublicComposerSitemapEntries(),
+    listPublicArtistSitemapEntries(),
+    listPublicChoirSitemapEntries(),
+    listPublicConductorSitemapEntries(),
+    listPublicVenueSitemapEntries(),
+    listPublicOrganisationSitemapEntries(),
     listPublicWorkSitemapEntries(),
     listPublicProgrammeSitemapEntries(),
     listPublicPerformanceSitemapEntries(),

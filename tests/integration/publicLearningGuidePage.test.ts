@@ -27,6 +27,8 @@ import { createMusicalWork, archiveMusicalWork } from "../../modules/db/reposito
 import { createDraftRecording, publishCurrentDraft } from "../../modules/db/repositories/recordingRepository";
 import { createArtist } from "../../modules/db/repositories/artistRepository";
 import { createVenue } from "../../modules/db/repositories/venueRepository";
+import { addPerformerToPerformance } from "../../modules/db/repositories/performanceRepository";
+import { publishedRecordingAtVenue, type PublishedContentHandle } from "./helpers/publishedContent";
 
 // Phase 6G-17: proves the public read-side of the Learning Guide Museum
 // experience against the real database — the visibility rule
@@ -175,11 +177,16 @@ describe("Reverse discovery (Composer/MusicalWork/Recording) against a real data
   let recordingId: string | null = null;
   let artistId: string | null = null;
   let venueId: string | null = null;
+  let discoverable: PublishedContentHandle | null = null;
 
   afterEach(async () => {
     if (learningGuideId) {
       await cleanupLearningGuide(learningGuideId).catch(() => {});
       learningGuideId = null;
+    }
+    if (discoverable) {
+      await discoverable.cleanup().catch(() => {});
+      discoverable = null;
     }
     if (recordingId) {
       await prisma.auditLogEntry.deleteMany({ where: { entityType: "Recording", entityId: recordingId } });
@@ -244,14 +251,22 @@ describe("Reverse discovery (Composer/MusicalWork/Recording) against a real data
     expect(recordingPage?.learningGuides.map((g) => g.id)).toEqual([guide.id]);
 
     // Deliberately not extended: Artist/Venue pages never surface LearningGuides.
+    // Phase 6J-1: an Artist/Venue page exists only while published content reaches it, so the
+    // Artist and Venue are placed on a Performance of a published Recording first.
     const artist = await createArtist({ slug: uniqueSlug("artist"), name: uniqueTitle("Artist"), actorId: user.id });
     artistId = artist.id;
-    const artistPage = await getArtistEntityPageData(artist.slug);
-    expect(artistPage?.relatedLearningGuides).toBeNull();
-
     const venue = await createVenue({ slug: uniqueSlug("venue"), name: uniqueTitle("Venue"), type: "CONCERT_HALL", actorId: user.id });
     venueId = venue.id;
+    const published = await publishedRecordingAtVenue({ actorId: user.id, venueId: venue.id });
+    discoverable = published;
+    await addPerformerToPerformance(published.performanceId!, artist.id, undefined, user.id);
+
+    const artistPage = await getArtistEntityPageData(artist.slug);
+    expect(artistPage).not.toBeNull();
+    expect(artistPage?.relatedLearningGuides).toBeNull();
+
     const venuePage = await getVenueEntityPageData(venue.slug);
+    expect(venuePage).not.toBeNull();
     expect(venuePage?.relatedLearningGuides).toBeNull();
   });
 

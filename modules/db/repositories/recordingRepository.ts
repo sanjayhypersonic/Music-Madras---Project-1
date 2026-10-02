@@ -654,7 +654,9 @@ export async function getPublishedRecordingContextBySlug(slug: string) {
             include: {
               venue: { include: { organisation: true } },
               programme: {
-                include: { items: { include: { musicalWork: true }, orderBy: { order: "asc" } } },
+                // composer included so the public page can tell an archived Work/Composer
+                // (omitted from the public programme) from an active one (Phase 6J-1).
+                include: { items: { include: { musicalWork: { include: { composer: true } } }, orderBy: { order: "asc" } } },
               },
               performers: { include: { artist: true } },
               choirs: { include: { choir: true } },

@@ -2,7 +2,20 @@ import { prisma } from "../client";
 import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
 import { findPublicCollectionsByIds } from "./collectionRepository";
-import { listMusicalWorksByComposer } from "./musicalWorkRepository";
+import {
+  eligibleArtistWhere,
+  eligibleChoirWhere,
+  eligibleComposerWhere,
+  eligibleConductorWhere,
+  eligibleOrganisationWhere,
+  eligiblePerformanceWhere,
+  eligibleProgrammeWhere,
+  eligibleVenueWhere,
+  eligibleWorkWhere,
+  isActivePerformance,
+  isActiveRef,
+  isActiveWork,
+} from "./publicEligibility";
 import { assembleEntityPageData } from "../../mmke/entityPage/assembleEntityPageData";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
 import { getPublishedRecordingContextBySlug } from "./recordingRepository";
@@ -19,7 +32,7 @@ import type { CollectionPageData } from "../../mmke/collectionPage/collectionPag
 import { assembleOrganisationPageData } from "../../mmke/organisationPage/assembleOrganisationPageData";
 import type { OrganisationPageData } from "../../mmke/organisationPage/organisationPageContract";
 import { listOccasionsForEntity } from "./occasionRepository";
-import { listSourcesForEntity } from "./sourceRepository";
+import { listApprovedSourcesForEntity } from "./sourceRepository";
 import { listRightsForEntity } from "./rightsInformationRepository";
 import { listPublicLearningGuidesForRecording, listPublicLearningGuidesForWorkIds } from "./learningGuideRepository";
 import { assembleLearningGuidePageData } from "../../mmke/learningGuidePage/assembleLearningGuidePageData";
@@ -117,14 +130,34 @@ export interface RelatedContentInput {
  * thin wrapper that computes its own performanceIds/workIds and defers
  * here for the actual traversal + public-visibility filtering.
  */
+/**
+ * Phase 6J-1: the Performance as the public may see it. A Performance reaches
+ * here only if it is ELIGIBLE (publicEligibility.ts), so its own Programme and
+ * Venue are active; this drops the archived parts of what hangs off it —
+ * archived participants and programme items for archived Works/Composers — so
+ * a public page never renders a link to an entity whose own page would 404.
+ */
+function toPublicPerformance<T extends PerformanceWithVenueAndProgramme>(performance: T): T {
+  return {
+    ...performance,
+    programme: { ...performance.programme, items: performance.programme.items.filter((item) => isActiveWork(item.musicalWork)) },
+    performers: performance.performers.filter((link) => isActiveRef(link.artist)),
+    choirs: performance.choirs.filter((link) => isActiveRef(link.choir)),
+    conductors: performance.conductors.filter((link) => isActiveRef(link.conductor)),
+  };
+}
+
 export async function resolveRelatedContent(input: RelatedContentInput): Promise<RelatedContent> {
   const explicitPerformanceIds = input.performanceIds ?? [];
   const workIds = input.workIds ?? [];
 
+  // Phase 6J-1: only ELIGIBLE Performances (reachable from a published
+  // Recording) are ever related publicly — a draft-only Performance, an
+  // orphan fixture, or one whose Programme/Venue is archived never resurfaces.
   const performancesFromWorks =
     workIds.length > 0
       ? await prisma.performance.findMany({
-          where: { archivedAt: null, programme: { items: { some: { musicalWorkId: { in: workIds } } } } },
+          where: { AND: [eligiblePerformanceWhere, { programme: { items: { some: { musicalWorkId: { in: workIds } } } } }] },
           select: { id: true },
         })
       : [];
@@ -133,10 +166,10 @@ export async function resolveRelatedContent(input: RelatedContentInput): Promise
     new Set([...explicitPerformanceIds, ...performancesFromWorks.map((p) => p.id)])
   );
 
-  const performances =
+  const performances = (
     allPerformanceIds.length > 0
       ? await prisma.performance.findMany({
-          where: { id: { in: allPerformanceIds }, archivedAt: null },
+          where: { AND: [{ id: { in: allPerformanceIds } }, eligiblePerformanceWhere] },
           include: {
             venue: true,
             programme: { include: { items: { include: { musicalWork: { include: { composer: true } } }, orderBy: { order: "asc" } } } },
@@ -146,7 +179,8 @@ export async function resolveRelatedContent(input: RelatedContentInput): Promise
           },
           orderBy: { createdAt: "desc" },
         })
-      : [];
+      : []
+  ).map(toPublicPerformance);
 
   const programmes = dedupeById(performances.map((p) => p.programme));
 
@@ -233,7 +267,12 @@ export interface ComposerRelatedContent extends RelatedContent {
 }
 
 export async function getComposerRelatedContent(composerId: string): Promise<ComposerRelatedContent> {
-  const works = await listMusicalWorksByComposer(composerId);
+  // Phase 6J-1: only the composer's publicly ELIGIBLE works are listed (and so
+  // linked) — never an archived work, or one no published content reaches.
+  const works = await prisma.musicalWork.findMany({
+    where: { AND: [{ composerId }, eligibleWorkWhere] },
+    orderBy: { title: "asc" },
+  });
   const content = await resolveRelatedContent({ workIds: works.map((w) => w.id) });
   return { works, ...content };
 }
@@ -254,7 +293,7 @@ export async function getArtistRelatedContent(artistId: string): Promise<Related
 }
 
 export async function getVenueRelatedContent(venueId: string): Promise<RelatedContent> {
-  const performances = await prisma.performance.findMany({ where: { venueId, archivedAt: null }, select: { id: true } });
+  const performances = await prisma.performance.findMany({ where: { AND: [{ venueId }, eligiblePerformanceWhere] }, select: { id: true } });
   return resolveRelatedContent({ performanceIds: performances.map((p) => p.id) });
 }
 
@@ -268,8 +307,10 @@ export async function getVenueRelatedContent(venueId: string): Promise<RelatedCo
 // ---------------------------------------------------------------------------
 
 export async function getComposerEntityPageData(slug: string): Promise<EntityPageData | null> {
-  const composer = await prisma.composer.findUnique({ where: { slug } });
-  if (!composer || composer.archivedAt !== null) return null;
+  // Phase 6J-1: a Composer is public only while eligible (an active work that
+  // published content reaches) — see publicEligibility.ts.
+  const composer = await prisma.composer.findFirst({ where: { AND: [{ slug }, eligibleComposerWhere] } });
+  if (!composer) return null;
 
   const content = await getComposerRelatedContent(composer.id);
 
@@ -299,8 +340,10 @@ export async function getComposerEntityPageData(slug: string): Promise<EntityPag
 }
 
 export async function getVenueEntityPageData(slug: string): Promise<EntityPageData | null> {
-  const venue = await prisma.venue.findUnique({ where: { slug }, include: { organisation: true } });
-  if (!venue || venue.archivedAt !== null) return null;
+  const venue = await prisma.venue.findFirst({ where: { AND: [{ slug }, eligibleVenueWhere] }, include: { organisation: true } });
+  if (!venue) return null;
+  // An archived Organisation is not linked (its own page would 404).
+  const venueOrganisation = venue.organisation && isActiveRef(venue.organisation) ? venue.organisation : null;
 
   const content = await getVenueRelatedContent(venue.id);
 
@@ -327,7 +370,7 @@ export async function getVenueEntityPageData(slug: string): Promise<EntityPageDa
       address: venue.address,
       city: venue.city,
       country: venue.country,
-      organisation: venue.organisation ? { id: venue.organisation.id, slug: venue.organisation.slug, name: venue.organisation.name } : null,
+      organisation: venueOrganisation ? { id: venueOrganisation.id, slug: venueOrganisation.slug, name: venueOrganisation.name } : null,
     },
     works: worksPerformedHere.map((work) => ({ id: work.id, slug: work.slug, title: work.title })),
     composers: composersPerformedHere.map((composer) => ({ id: composer.id, slug: composer.slug, name: composer.name })),
@@ -355,8 +398,8 @@ export async function getVenueEntityPageData(slug: string): Promise<EntityPageDa
  * convention as every other public entity-page function above).
  */
 export async function getPublicWorkPageData(slug: string): Promise<WorkPageData | null> {
-  const work = await prisma.musicalWork.findUnique({ where: { slug }, include: { composer: true } });
-  if (!work || work.archivedAt !== null) return null;
+  const work = await prisma.musicalWork.findFirst({ where: { AND: [{ slug }, eligibleWorkWhere] }, include: { composer: true } });
+  if (!work) return null;
 
   const content = await resolveRelatedContent({ workIds: [work.id] });
   const learningGuides = await listPublicLearningGuidesForWorkIds([work.id]);
@@ -393,8 +436,8 @@ export async function getPublicWorkPageData(slug: string): Promise<WorkPageData 
 // ---------------------------------------------------------------------------
 
 export async function getArtistEntityPageData(slug: string): Promise<EntityPageData | null> {
-  const artist = await prisma.artist.findUnique({ where: { slug } });
-  if (!artist || artist.archivedAt !== null) return null;
+  const artist = await prisma.artist.findFirst({ where: { AND: [{ slug }, eligibleArtistWhere] } });
+  if (!artist) return null;
 
   const content = await getArtistRelatedContent(artist.id);
 
@@ -418,8 +461,8 @@ export async function getArtistEntityPageData(slug: string): Promise<EntityPageD
 }
 
 export async function getChoirEntityPageData(slug: string): Promise<EntityPageData | null> {
-  const choir = await prisma.choir.findUnique({ where: { slug } });
-  if (!choir || choir.archivedAt !== null) return null;
+  const choir = await prisma.choir.findFirst({ where: { AND: [{ slug }, eligibleChoirWhere] } });
+  if (!choir) return null;
 
   const content = await getChoirRelatedContent(choir.id);
 
@@ -443,8 +486,8 @@ export async function getChoirEntityPageData(slug: string): Promise<EntityPageDa
 }
 
 export async function getConductorEntityPageData(slug: string): Promise<EntityPageData | null> {
-  const conductor = await prisma.conductor.findUnique({ where: { slug } });
-  if (!conductor || conductor.archivedAt !== null) return null;
+  const conductor = await prisma.conductor.findFirst({ where: { AND: [{ slug }, eligibleConductorWhere] } });
+  if (!conductor) return null;
 
   const content = await getConductorRelatedContent(conductor.id);
 
@@ -483,8 +526,8 @@ export async function getConductorEntityPageData(slug: string): Promise<EntityPa
  * convention as every other public entity-page function in this file).
  */
 export async function getPublicProgrammePageData(slug: string): Promise<ProgrammePageData | null> {
-  const programme = await prisma.programme.findUnique({
-    where: { slug },
+  const programme = await prisma.programme.findFirst({
+    where: { AND: [{ slug }, eligibleProgrammeWhere] },
     include: {
       items: {
         include: { musicalWork: { include: { composer: true } } },
@@ -492,10 +535,12 @@ export async function getPublicProgrammePageData(slug: string): Promise<Programm
       },
     },
   });
-  if (!programme || programme.archivedAt !== null) return null;
+  if (!programme) return null;
+  // Items for an archived Work (or Composer) are omitted, never linked to a 404.
+  const activeItems = programme.items.filter((item) => isActiveWork(item.musicalWork));
 
   const performanceRows = await prisma.performance.findMany({
-    where: { programmeId: programme.id, archivedAt: null },
+    where: { AND: [{ programmeId: programme.id }, eligiblePerformanceWhere] },
     select: { id: true },
   });
 
@@ -506,7 +551,7 @@ export async function getPublicProgrammePageData(slug: string): Promise<Programm
     slug: programme.slug,
     title: programme.title,
     notes: programme.notes,
-    items: programme.items,
+    items: activeItems,
     performances: content.performances,
     recordings: content.recordings,
     videos: content.videos,
@@ -531,8 +576,8 @@ export async function getPublicProgrammePageData(slug: string): Promise<Programm
  * file).
  */
 export async function getPublicPerformancePageData(slug: string): Promise<PerformancePageData | null> {
-  const performance = await prisma.performance.findUnique({
-    where: { slug },
+  const found = await prisma.performance.findFirst({
+    where: { AND: [{ slug }, eligiblePerformanceWhere] },
     include: {
       programme: {
         include: { items: { include: { musicalWork: { include: { composer: true } } }, orderBy: { order: "asc" } } },
@@ -543,7 +588,10 @@ export async function getPublicPerformancePageData(slug: string): Promise<Perfor
       conductors: { include: { conductor: true } },
     },
   });
-  if (!performance || performance.archivedAt !== null) return null;
+  if (!found) return null;
+  // Archived participants / programme items / organisation are omitted, never linked to a 404.
+  const performance = toPublicPerformance(found);
+  const organisation = found.venue.organisation && isActiveRef(found.venue.organisation) ? found.venue.organisation : null;
 
   const content = await resolveRelatedContent({ performanceIds: [performance.id] });
 
@@ -556,9 +604,7 @@ export async function getPublicPerformancePageData(slug: string): Promise<Perfor
       id: performance.venue.id,
       slug: performance.venue.slug,
       name: performance.venue.name,
-      organisation: performance.venue.organisation
-        ? { id: performance.venue.organisation.id, slug: performance.venue.organisation.slug, name: performance.venue.organisation.name }
-        : null,
+      organisation: organisation ? { id: organisation.id, slug: organisation.slug, name: organisation.name } : null,
     },
     performers: performance.performers,
     choirs: performance.choirs,
@@ -609,6 +655,13 @@ export async function getPublicRecordingPageData(slug: string): Promise<Recordin
   const collections = await findPublicCollectionsByIds(collectionLinks.map((link) => link.collectionId));
   const learningGuides = await listPublicLearningGuidesForRecording(recording.id);
 
+  // Phase 6J-1: this Recording is published, so what it references is
+  // eligible by construction — except an entity archived since. Those are
+  // omitted (never linked to a page that would 404): archived Works/Composers,
+  // an archived Performance/Programme/Venue (the whole performance block goes),
+  // archived participants, and an archived Organisation.
+  const publicPerformance = revision.performance && isActivePerformance(revision.performance) ? revision.performance : null;
+
   return assembleRecordingPageData({
     id: recording.id,
     slug: recording.slug,
@@ -620,36 +673,37 @@ export async function getPublicRecordingPageData(slug: string): Promise<Recordin
     educationalDifficultyLevel: revision.educationalDifficultyLevel,
     educationalListeningGuide: revision.educationalListeningGuide,
     educationalAnalysis: revision.educationalAnalysis,
-    works: revision.works.map((link) => ({
-      id: link.musicalWork.id,
-      slug: link.musicalWork.slug,
-      title: link.musicalWork.title,
-      composer: { id: link.musicalWork.composer.id, slug: link.musicalWork.composer.slug, name: link.musicalWork.composer.name },
-    })),
-    programme: revision.performance?.programme
+    works: revision.works
+      .filter((link) => isActiveWork(link.musicalWork))
+      .map((link) => ({
+        id: link.musicalWork.id,
+        slug: link.musicalWork.slug,
+        title: link.musicalWork.title,
+        composer: { id: link.musicalWork.composer.id, slug: link.musicalWork.composer.slug, name: link.musicalWork.composer.name },
+      })),
+    programme: publicPerformance
       ? {
-          id: revision.performance.programme.id,
-          slug: revision.performance.programme.slug,
-          title: revision.performance.programme.title,
-          items: revision.performance.programme.items,
+          id: publicPerformance.programme.id,
+          slug: publicPerformance.programme.slug,
+          title: publicPerformance.programme.title,
+          items: publicPerformance.programme.items.filter((item) => isActiveWork(item.musicalWork)),
         }
       : null,
-    performance: revision.performance
+    performance: publicPerformance
       ? {
-          id: revision.performance.id,
-          slug: revision.performance.slug,
-          performanceDate: revision.performance.performanceDate,
-          venue: revision.performance.venue
-            ? {
-                id: revision.performance.venue.id,
-                slug: revision.performance.venue.slug,
-                name: revision.performance.venue.name,
-                organisation: revision.performance.venue.organisation,
-              }
-            : null,
-          performers: revision.performance.performers,
-          choirs: revision.performance.choirs,
-          conductors: revision.performance.conductors,
+          id: publicPerformance.id,
+          slug: publicPerformance.slug,
+          performanceDate: publicPerformance.performanceDate,
+          venue: {
+            id: publicPerformance.venue.id,
+            slug: publicPerformance.venue.slug,
+            name: publicPerformance.venue.name,
+            organisation:
+              publicPerformance.venue.organisation && isActiveRef(publicPerformance.venue.organisation) ? publicPerformance.venue.organisation : null,
+          },
+          performers: publicPerformance.performers.filter((link) => isActiveRef(link.artist)),
+          choirs: publicPerformance.choirs.filter((link) => isActiveRef(link.choir)),
+          conductors: publicPerformance.conductors.filter((link) => isActiveRef(link.conductor)),
         }
       : null,
     videos,
@@ -721,9 +775,9 @@ export async function getPublicCollectionPageData(slug: string): Promise<Collect
     (link) => link.recording.currentPublishedRevision !== null && isRecordingPublished(link.recording)
   );
 
-  // Archived Works are never publicly shown, same convention as every
-  // other public page's catalogue-visibility rule.
-  const activeWorkLinks = collection.workLinks.filter((link) => link.musicalWork.archivedAt === null);
+  // Archived Works (or Works of an archived Composer) are never publicly
+  // shown, same convention as every other public page's catalogue-visibility rule.
+  const activeWorkLinks = collection.workLinks.filter((link) => isActiveWork(link.musicalWork));
 
   const candidateYouTubeVideoIds = Array.from(
     new Set(
@@ -744,32 +798,25 @@ export async function getPublicCollectionPageData(slug: string): Promise<Collect
     description: collection.description,
     recordings: publishedRecordingLinks.map((link) => {
       const revision = link.recording.currentPublishedRevision!;
+      const performance = revision.performance && isActivePerformance(revision.performance) ? revision.performance : null;
       return {
         id: link.recording.id,
         slug: link.recording.slug,
         title: revision.title,
         order: link.order,
-        performance: revision.performance
+        performance: performance
           ? {
-              id: revision.performance.id,
-              slug: revision.performance.slug,
-              performanceDate: revision.performance.performanceDate,
-              programme: revision.performance.programme
-                ? {
-                    id: revision.performance.programme.id,
-                    slug: revision.performance.programme.slug,
-                    title: revision.performance.programme.title,
-                  }
-                : null,
-              venue: revision.performance.venue
-                ? { id: revision.performance.venue.id, slug: revision.performance.venue.slug, name: revision.performance.venue.name }
-                : null,
-              performers: revision.performance.performers,
-              choirs: revision.performance.choirs,
-              conductors: revision.performance.conductors,
+              id: performance.id,
+              slug: performance.slug,
+              performanceDate: performance.performanceDate,
+              programme: { id: performance.programme.id, slug: performance.programme.slug, title: performance.programme.title },
+              venue: { id: performance.venue.id, slug: performance.venue.slug, name: performance.venue.name },
+              performers: performance.performers.filter((p) => isActiveRef(p.artist)),
+              choirs: performance.choirs.filter((c) => isActiveRef(c.choir)),
+              conductors: performance.conductors.filter((c) => isActiveRef(c.conductor)),
             }
           : null,
-        works: revision.works.map((link) => link.musicalWork),
+        works: revision.works.filter((workLink) => isActiveWork(workLink.musicalWork)).map((workLink) => workLink.musicalWork),
       };
     }),
     works: activeWorkLinks.map((link) => ({ order: link.order, musicalWork: link.musicalWork })),
@@ -792,16 +839,18 @@ export async function getPublicCollectionPageData(slug: string): Promise<Collect
 // ---------------------------------------------------------------------------
 
 export async function getPublicOrganisationPageData(slug: string): Promise<OrganisationPageData | null> {
-  const organisation = await prisma.organisation.findUnique({
-    where: { slug },
-    include: { venues: { where: { archivedAt: null }, orderBy: { name: "asc" } } },
+  // Phase 6J-1: an Organisation is public only while it operates an eligible
+  // Venue, and lists only its eligible Venues.
+  const organisation = await prisma.organisation.findFirst({
+    where: { AND: [{ slug }, eligibleOrganisationWhere] },
+    include: { venues: { where: eligibleVenueWhere, orderBy: { name: "asc" } } },
   });
-  if (!organisation || organisation.archivedAt !== null) return null;
+  if (!organisation) return null;
 
   const venueIds = organisation.venues.map((v) => v.id);
   const performanceRows =
     venueIds.length > 0
-      ? await prisma.performance.findMany({ where: { venueId: { in: venueIds }, archivedAt: null }, select: { id: true } })
+      ? await prisma.performance.findMany({ where: { AND: [{ venueId: { in: venueIds } }, eligiblePerformanceWhere] }, select: { id: true } })
       : [];
 
   const content = await resolveRelatedContent({ performanceIds: performanceRows.map((p) => p.id) });
@@ -826,9 +875,11 @@ export async function getPublicOrganisationPageData(slug: string): Promise<Organ
   // own derived Recordings' existing EntitySource/EntityRights
   // attachments (Phase 6G-13 — Recording is a supported provenance entity
   // type; Organisation itself is not, and no direct Organisation-level
-  // attachment is added here).
+  // attachment is added here). Phase 6J-1: only APPROVED Sources are public
+  // provenance — the same approval rule the AI evidence uses (Phase 6H-8); an
+  // unreviewed, rejected or disabled Source is never shown.
   const [sourceLinkLists, rightsLinkLists] = await Promise.all([
-    Promise.all(content.recordings.map((r) => listSourcesForEntity("RECORDING", r.id))),
+    Promise.all(content.recordings.map((r) => listApprovedSourcesForEntity("RECORDING", r.id))),
     Promise.all(content.recordings.map((r) => listRightsForEntity("RECORDING", r.id))),
   ]);
   const sources = dedupeById(sourceLinkLists.flat().map((link) => link.source)).map((source) => ({
@@ -911,9 +962,9 @@ export async function getPublicLearningGuidePageData(slug: string): Promise<Lear
 
   if (!guide || guide.status !== "PUBLISHED" || guide.archivedAt !== null) return null;
 
-  // Archived Works are never publicly shown, same convention as every
-  // other public page's catalogue-visibility rule.
-  const activeWorkLinks = guide.workLinks.filter((link) => link.musicalWork.archivedAt === null);
+  // Archived Works (or Works of an archived Composer) are never publicly
+  // shown, same convention as every other public page's catalogue-visibility rule.
+  const activeWorkLinks = guide.workLinks.filter((link) => isActiveWork(link.musicalWork));
 
   // A Recording only counts as publicly attached once it is itself
   // published — isRecordingPublished (Phase 6G-5A) is the single
@@ -938,24 +989,21 @@ export async function getPublicLearningGuidePageData(slug: string): Promise<Lear
     })),
     recordings: publishedRecordingLinks.map((link) => {
       const revision = link.recording.currentPublishedRevision!;
+      const performance = revision.performance && isActivePerformance(revision.performance) ? revision.performance : null;
       return {
         id: link.recording.id,
         slug: link.recording.slug,
         title: revision.title,
-        performance: revision.performance
+        performance: performance
           ? {
-              id: revision.performance.id,
-              slug: revision.performance.slug,
-              performanceDate: revision.performance.performanceDate,
-              programme: revision.performance.programme
-                ? { id: revision.performance.programme.id, slug: revision.performance.programme.slug, title: revision.performance.programme.title }
-                : null,
-              venue: revision.performance.venue
-                ? { id: revision.performance.venue.id, slug: revision.performance.venue.slug, name: revision.performance.venue.name }
-                : null,
-              performers: revision.performance.performers,
-              choirs: revision.performance.choirs,
-              conductors: revision.performance.conductors,
+              id: performance.id,
+              slug: performance.slug,
+              performanceDate: performance.performanceDate,
+              programme: { id: performance.programme.id, slug: performance.programme.slug, title: performance.programme.title },
+              venue: { id: performance.venue.id, slug: performance.venue.slug, name: performance.venue.name },
+              performers: performance.performers.filter((p) => isActiveRef(p.artist)),
+              choirs: performance.choirs.filter((c) => isActiveRef(c.choir)),
+              conductors: performance.conductors.filter((c) => isActiveRef(c.conductor)),
             }
           : null,
       };

@@ -30,6 +30,7 @@ import {
   getPublicProgrammePageData,
 } from "../../modules/db/repositories/entityRelationshipsRepository";
 import { searchArchiveAll, searchArtists, searchChoirs, searchConductors } from "../../modules/db/repositories/archiveSearchRepository";
+import { publishedRecordingAtVenue } from "./helpers/publishedContent";
 import { slugify } from "../../modules/mmke/slug/slugify";
 import { SlugConflictError } from "../../modules/mmke/slug/SlugConflictError";
 import type { ObservabilityState } from "@prisma/client";
@@ -439,6 +440,12 @@ describe("ARCHIVE SEARCH — Artist/Choir/Conductor", () => {
         return createArtist({ slug: slugify(`${name}-${randomUUID().slice(0, 8)}`), name, actorId: user.id });
       })
     );
+    // Phase 6J-1: an Artist is searchable only while on a Performance a published Recording reaches.
+    const venue = await createVenue({ slug: uniqueSlug("page-venue"), name: `Zzp9 Page Venue ${marker}`, type: "CHURCH", actorId: user.id });
+    const published = await publishedRecordingAtVenue({ actorId: user.id, venueId: venue.id });
+    for (const artist of artists) {
+      await addPerformerToPerformance(published.performanceId!, artist.id, undefined, user.id);
+    }
     try {
       const pageOne = await searchArtists(marker, 1, 2);
       const pageTwo = await searchArtists(marker, 2, 2);
@@ -452,6 +459,9 @@ describe("ARCHIVE SEARCH — Artist/Choir/Conductor", () => {
       const allIds = [...pageOne.items, ...pageTwo.items, ...pageThree.items].map((a) => a.id);
       expect(new Set(allIds).size).toBe(5);
     } finally {
+      await published.cleanup();
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: "Venue", entityId: venue.id } });
+      await prisma.venue.deleteMany({ where: { id: venue.id } });
       for (const artist of artists) {
         await prisma.auditLogEntry.deleteMany({ where: { entityType: "Artist", entityId: artist.id } });
         await prisma.artist.delete({ where: { id: artist.id } });

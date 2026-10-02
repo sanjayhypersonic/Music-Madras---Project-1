@@ -200,8 +200,10 @@ describe("WORK — getPublicWorkPageData", () => {
       expect(recordingIds).not.toContain(inReviewId);
 
       await archiveRecording(fixture.recordingId, fixture.user.id);
+      // Phase 6J-1: once the only published Recording is archived, no published content
+      // reaches this Work, so the Work page is no longer public at all.
       const afterArchive = await getPublicWorkPageData(fixture.work.slug);
-      expect(afterArchive!.recordings.map((r) => r.id)).not.toContain(fixture.recordingId);
+      expect(afterArchive).toBeNull();
     } finally {
       if (draftId) {
         await prisma.auditLogEntry.deleteMany({ where: { entityType: "Recording", entityId: draftId } });
@@ -343,10 +345,10 @@ describe("VENUE — getVenueEntityPageData", () => {
       const { archivePerformance } = await import("../../modules/db/repositories/performanceRepository");
       await archivePerformance(fixture.performance.id, fixture.user.id);
 
+      // Phase 6J-1: with its only Performance archived, nothing published reaches this
+      // Venue, so the Venue page is no longer public (and so shows none of it).
       const after = await getVenueEntityPageData(fixture.venue.slug);
-      expect(after!.relatedPerformances.map((p) => p.id)).not.toContain(fixture.performance.id);
-      expect(after!.relatedRecordings.map((r) => r.id)).not.toContain(fixture.recordingId);
-      expect(after!.relatedVideos.map((v) => v.slug)).not.toContain(videoPage.slug);
+      expect(after).toBeNull();
     } finally {
       await prisma.auditLogEntry.deleteMany({ where: { entityType: "YouTubeVideoPage", entityId: videoPage.id } });
       await prisma.youTubeVideoPage.delete({ where: { id: videoPage.id } }).catch(() => {});

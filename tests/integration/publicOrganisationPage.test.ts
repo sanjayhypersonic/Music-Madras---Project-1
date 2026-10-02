@@ -22,7 +22,8 @@ import { attachMediaToRevision } from "../../modules/db/repositories/mediaResour
 import { createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { createCollection, addRecordingToCollection, publishCollection } from "../../modules/db/repositories/collectionRepository";
 import { createOccasion, attachOccasionToEntity } from "../../modules/db/repositories/occasionRepository";
-import { createSource, attachSourceToEntity } from "../../modules/db/repositories/sourceRepository";
+import { approveSource, createSource, attachSourceToEntity } from "../../modules/db/repositories/sourceRepository";
+import { publishedRecordingAtVenue } from "./helpers/publishedContent";
 import { createRightsInformation, attachRightsInformationToEntity } from "../../modules/db/repositories/rightsInformationRepository";
 import {
   getPublicOrganisationPageData,
@@ -126,13 +127,21 @@ describe("Organisation slug behaviour against a real database", () => {
     userId = user.id;
     const organisation = await createOrganisation({ slug: uniqueSlug("archived-org"), name: uniqueName("Archived Organisation"), actorId: user.id });
     organisationId = organisation.id;
+    // Phase 6J-1: an Organisation is public only while it operates a Venue that published content reaches.
+    const venue = await createVenue({ slug: uniqueSlug("archived-org-venue"), name: uniqueName("Archived Org Venue"), type: "CHURCH", organisationId: organisation.id, actorId: user.id });
+    const published = await publishedRecordingAtVenue({ actorId: user.id, venueId: venue.id });
+    try {
+      expect(await getPublicOrganisationPageData(organisation.slug)).not.toBeNull();
 
-    expect(await getPublicOrganisationPageData(organisation.slug)).not.toBeNull();
+      await archiveOrganisation(organisation.id, user.id);
+      expect(await getPublicOrganisationPageData(organisation.slug)).toBeNull();
 
-    await archiveOrganisation(organisation.id, user.id);
-    expect(await getPublicOrganisationPageData(organisation.slug)).toBeNull();
-
-    expect(await getPublicOrganisationPageData(uniqueSlug("nonexistent"))).toBeNull();
+      expect(await getPublicOrganisationPageData(uniqueSlug("nonexistent"))).toBeNull();
+    } finally {
+      await published.cleanup();
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: "Venue", entityId: venue.id } });
+      await prisma.venue.deleteMany({ where: { id: venue.id } });
+    }
   });
 });
 
@@ -157,13 +166,21 @@ describe("Organisation archive search against a real database", () => {
     const marker = randomUUID().slice(0, 8);
     const organisation = await createOrganisation({ slug: uniqueSlug("search"), name: `Searchable ${marker} Organisation`, actorId: user.id });
     organisationId = organisation.id;
+    // Phase 6J-1: searchable only while it operates a Venue that published content reaches.
+    const venue = await createVenue({ slug: uniqueSlug("search-venue"), name: `Searchable ${marker} Venue`, type: "CHURCH", organisationId: organisation.id, actorId: user.id });
+    const published = await publishedRecordingAtVenue({ actorId: user.id, venueId: venue.id });
+    try {
+      const found = await searchOrganisations(marker, 1, 20);
+      expect(found.items.map((o) => o.id)).toContain(organisation.id);
 
-    const found = await searchOrganisations(marker, 1, 20);
-    expect(found.items.map((o) => o.id)).toContain(organisation.id);
-
-    await archiveOrganisation(organisation.id, user.id);
-    const foundAfterArchive = await searchOrganisations(marker, 1, 20);
-    expect(foundAfterArchive.items.map((o) => o.id)).not.toContain(organisation.id);
+      await archiveOrganisation(organisation.id, user.id);
+      const foundAfterArchive = await searchOrganisations(marker, 1, 20);
+      expect(foundAfterArchive.items.map((o) => o.id)).not.toContain(organisation.id);
+    } finally {
+      await published.cleanup();
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: "Venue", entityId: venue.id } });
+      await prisma.venue.deleteMany({ where: { id: venue.id } });
+    }
   });
 });
 
@@ -332,6 +349,8 @@ describe("Organisation full canonical graph: venue -> performance -> recording -
 
     const source = await createSource({ title: uniqueName("Org Test Source"), actorId: user.id });
     sourceId = source.id;
+    // Phase 6J-1: only an APPROVED Source is public provenance.
+    await approveSource(source.id, user.id);
     await attachSourceToEntity({ entityType: "RECORDING", entityId: recording.id, sourceId: source.id, actorId: user.id });
 
     const rights = await createRightsInformation({ holder: uniqueName("Org Test Rights Holder"), actorId: user.id });
@@ -379,20 +398,13 @@ describe("Organisation full canonical graph: venue -> performance -> recording -
     }
   });
 
-  it("resolves an Organisation with no Venues to an empty-but-valid page (never throws)", async () => {
+  it("does not publish an Organisation with no Venue that published content reaches (null, never an error)", async () => {
     const user = await createTestUser();
     userId = user.id;
     const organisation = await createOrganisation({ slug: uniqueSlug("empty-org"), name: uniqueName("Empty Organisation"), actorId: user.id });
     organisationId = organisation.id;
 
-    const page = await getPublicOrganisationPageData(organisation.slug);
-    expect(page).not.toBeNull();
-    expect(page!.venues).toEqual([]);
-    expect(page!.performances).toEqual([]);
-    expect(page!.recordings).toEqual([]);
-    expect(page!.videos).toEqual([]);
-    expect(page!.occasions).toEqual([]);
-    expect(page!.sources).toEqual([]);
-    expect(page!.rights).toEqual([]);
+    // Phase 6J-1: an Organisation with no eligible Venue is not discoverable.
+    expect(await getPublicOrganisationPageData(organisation.slug)).toBeNull();
   });
 });

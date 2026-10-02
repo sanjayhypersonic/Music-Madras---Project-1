@@ -5,6 +5,7 @@ import { createComposer } from "../../modules/db/repositories/composerRepository
 import { createMusicalWork } from "../../modules/db/repositories/musicalWorkRepository";
 import { addProgrammeItem, archiveProgramme, createProgramme } from "../../modules/db/repositories/programmeRepository";
 import { createVenue } from "../../modules/db/repositories/venueRepository";
+import { publishRecordingFor } from "./helpers/publishedContent";
 import { archivePerformance, createPerformance } from "../../modules/db/repositories/performanceRepository";
 import {
   attachWorkToRevision,
@@ -166,9 +167,10 @@ describe("PROGRAMME — getPublicProgrammePageData", () => {
 
       await archivePerformance(fixture.performance.id, fixture.user.id);
 
+      // Phase 6J-1: with its only Performance archived, no published content reaches
+      // this Programme any more, so the Programme page itself is no longer public.
       const after = await getPublicProgrammePageData(fixture.programme.slug);
-      expect(after!.performances.map((p) => p.id)).not.toContain(fixture.performance.id);
-      expect(after!.recordings.map((r) => r.id)).not.toContain(fixture.recordingId);
+      expect(after).toBeNull();
     } finally {
       await cleanupFixture(fixture);
     }
@@ -205,17 +207,13 @@ describe("PROGRAMME — getPublicProgrammePageData", () => {
     }
   });
 
-  it("returns a Programme with empty performances/recordings/videos when none have been catalogued (missing relationships, not an error)", async () => {
+  it("does not publish a Programme that no published content reaches (never an error — simply not public)", async () => {
     const user = await createTestUser();
     const programme = await createProgramme({ slug: uniqueSlug("programme-bare"), title: "Zzqa Bare Programme", actorId: user.id });
     try {
-      const data = await getPublicProgrammePageData(programme.slug);
-      expect(data).not.toBeNull();
-      expect(data!.items).toEqual([]);
-      expect(data!.performances).toEqual([]);
-      expect(data!.recordings).toEqual([]);
-      expect(data!.videos).toEqual([]);
-      expect(data!.collections).toEqual([]);
+      // Phase 6J-1: a Programme with no Performance used by a published Recording is not
+      // discoverable — it returns null (a 404 route), not an empty-but-public page.
+      expect(await getPublicProgrammePageData(programme.slug)).toBeNull();
     } finally {
       await prisma.auditLogEntry.deleteMany({ where: { entityType: "Programme", entityId: programme.id } });
       await prisma.programme.delete({ where: { id: programme.id } });
@@ -267,6 +265,13 @@ describe("ARCHIVE SEARCH — Programme", () => {
         createProgramme({ slug: uniqueSlug(`page-programme-${i}`), title: `Zzqa Page Programme ${marker} ${i}`, actorId: user.id })
       )
     );
+    // Phase 6J-1: a Programme is searchable only while a published Recording uses one of its Performances.
+    const venue = await createVenue({ slug: uniqueSlug("page-venue"), name: `Zzqa Page Venue ${marker}`, type: "CHURCH", actorId: user.id });
+    const performances = await Promise.all(programmes.map((programme) => createPerformance({ programmeId: programme.id, venueId: venue.id, actorId: user.id })));
+    const published = [];
+    for (const performance of performances) {
+      published.push(await publishRecordingFor({ actorId: user.id, performanceId: performance.id }));
+    }
     try {
       const pageOne = await searchProgrammes(marker, 1, 2);
       const pageTwo = await searchProgrammes(marker, 2, 2);
@@ -280,6 +285,15 @@ describe("ARCHIVE SEARCH — Programme", () => {
       const allIds = [...pageOne.items, ...pageTwo.items, ...pageThree.items].map((p) => p.id);
       expect(new Set(allIds).size).toBe(5);
     } finally {
+      for (const handle of published) {
+        await handle.cleanup();
+      }
+      for (const performance of performances) {
+        await prisma.auditLogEntry.deleteMany({ where: { entityType: "Performance", entityId: performance.id } });
+        await prisma.performance.deleteMany({ where: { id: performance.id } });
+      }
+      await prisma.auditLogEntry.deleteMany({ where: { entityType: "Venue", entityId: venue.id } });
+      await prisma.venue.deleteMany({ where: { id: venue.id } });
       for (const programme of programmes) {
         await prisma.auditLogEntry.deleteMany({ where: { entityType: "Programme", entityId: programme.id } });
         await prisma.programme.delete({ where: { id: programme.id } });

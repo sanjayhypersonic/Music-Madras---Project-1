@@ -8,7 +8,7 @@ import { createArtist } from "../../modules/db/repositories/artistRepository";
 import { createChoir } from "../../modules/db/repositories/choirRepository";
 import { createConductor } from "../../modules/db/repositories/conductorRepository";
 import { addProgrammeItem, createProgramme } from "../../modules/db/repositories/programmeRepository";
-import { createPerformance } from "../../modules/db/repositories/performanceRepository";
+import { addChoirToPerformance, addConductorToPerformance, addPerformerToPerformance, createPerformance } from "../../modules/db/repositories/performanceRepository";
 import {
   attachWorkToRevision,
   createDraftRecording,
@@ -74,6 +74,10 @@ describe("app/sitemap.ts", () => {
     const programme = await createProgramme({ slug: uniqueSlug("programme"), title: "Sitemap Programme", actorId: user.id });
     await addProgrammeItem({ programmeId: programme.id, musicalWorkId: work.id, actorId: user.id });
     const performance = await createPerformance({ programmeId: programme.id, venueId: venue.id, performanceDate: new Date("2021-03-03"), actorId: user.id });
+    // Phase 6J-1: participants are listed only while on a Performance a published Recording uses.
+    await addPerformerToPerformance(performance.id, artist.id, undefined, user.id);
+    await addChoirToPerformance(performance.id, choir.id, user.id);
+    await addConductorToPerformance(performance.id, conductor.id, user.id);
 
     const draft = await createDraftRecording({ slug: uniqueSlug("recording"), actorId: user.id, title: "Sitemap Recording" });
     await updateDraftRevisionContent(draft.id, draft.currentDraftRevision!.updatedAt, user.id, { performanceId: performance.id });

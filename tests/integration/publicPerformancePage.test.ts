@@ -19,6 +19,7 @@ import {
   updateDraftRevisionContent,
 } from "../../modules/db/repositories/recordingRepository";
 import { attachMediaToRevision } from "../../modules/db/repositories/mediaResourceRepository";
+import { publishRecordingFor } from "./helpers/publishedContent";
 import { createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { getPublicPerformancePageData } from "../../modules/db/repositories/entityRelationshipsRepository";
 import { searchArchiveAll, searchPerformances } from "../../modules/db/repositories/archiveSearchRepository";
@@ -320,6 +321,11 @@ describe("ARCHIVE SEARCH — Performance", () => {
     const performances = await Promise.all(
       Array.from({ length: 5 }, () => createPerformance({ programmeId: programme.id, venueId: venue.id, actorId: user.id }))
     );
+    // Phase 6J-1: a Performance is searchable only while a published Recording uses it.
+    const published = [];
+    for (const performance of performances) {
+      published.push(await publishRecordingFor({ actorId: user.id, performanceId: performance.id }));
+    }
     try {
       const pageOne = await searchPerformances(marker, 1, 2);
       const pageTwo = await searchPerformances(marker, 2, 2);
@@ -333,6 +339,9 @@ describe("ARCHIVE SEARCH — Performance", () => {
       const allIds = [...pageOne.items, ...pageTwo.items, ...pageThree.items].map((p) => p.id);
       expect(new Set(allIds).size).toBe(5);
     } finally {
+      for (const handle of published) {
+        await handle.cleanup();
+      }
       for (const performance of performances) {
         await prisma.auditLogEntry.deleteMany({ where: { entityType: "Performance", entityId: performance.id } });
         await prisma.performance.delete({ where: { id: performance.id } });

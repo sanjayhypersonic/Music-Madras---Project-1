@@ -1,6 +1,17 @@
 import { prisma } from "../client";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
+import {
+  eligibleArtistWhere,
+  eligibleChoirWhere,
+  eligibleComposerWhere,
+  eligibleConductorWhere,
+  eligibleOrganisationWhere,
+  eligiblePerformanceWhere,
+  eligibleProgrammeWhere,
+  eligibleVenueWhere,
+  eligibleWorkWhere,
+} from "./publicEligibility";
 import type {
   ArchiveSearchAllResult,
   ArchiveSearchPage,
@@ -20,7 +31,8 @@ import type {
 // function here is database-side (Postgres ILIKE via Prisma's
 // `mode: "insensitive"`), bounded (skip/take), and reuses the exact same
 // public-visibility rules every other public page already uses:
-// archivedAt-null for Composer/MusicalWork/Venue, isRecordingPublished
+// Phase 6J-1 eligibility (publicEligibility.ts — an entity is searchable only while
+// reachable from a published Recording) for every catalogue entity, isRecordingPublished
 // (Phase 6G-5A, never a second predicate) for Recording. No query ever
 // touches YouTube directly or fetches an entire table into memory.
 //
@@ -45,7 +57,7 @@ export async function searchComposers(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultComposer>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
+    ...eligibleComposerWhere,
     ...(query ? { name: { contains: query, mode: "insensitive" as const } } : {}),
   };
 
@@ -80,15 +92,19 @@ export async function searchWorks(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultWork>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
-    ...(query
-      ? {
-          OR: [
-            { title: { contains: query, mode: "insensitive" as const } },
-            { alternateTitles: { has: query } },
-          ],
-        }
-      : {}),
+    AND: [
+      eligibleWorkWhere,
+      ...(query
+        ? [
+            {
+              OR: [
+                { title: { contains: query, mode: "insensitive" as const } },
+                { alternateTitles: { has: query } },
+              ],
+            },
+          ]
+        : []),
+    ],
   };
 
   const [rows, total] = await Promise.all([
@@ -122,7 +138,7 @@ export async function searchVenues(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultVenue>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
+    ...eligibleVenueWhere,
     ...(query
       ? {
           OR: [
@@ -258,7 +274,7 @@ export async function searchProgrammes(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultProgramme>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
+    ...eligibleProgrammeWhere,
     ...(query
       ? {
           OR: [
@@ -272,7 +288,15 @@ export async function searchProgrammes(
   const [rows, total] = await Promise.all([
     prisma.programme.findMany({
       where,
-      include: { items: { include: { musicalWork: true }, orderBy: { order: "asc" }, take: 3 } },
+      // The preview never names an archived Work (or a Work of an archived Composer).
+      include: {
+        items: {
+          where: { musicalWork: { archivedAt: null, composer: { archivedAt: null } } },
+          include: { musicalWork: true },
+          orderBy: { order: "asc" },
+          take: 3,
+        },
+      },
       orderBy: query ? { title: "asc" } : { createdAt: "desc" },
       skip: (currentPage - 1) * pageSize,
       take: pageSize,
@@ -306,7 +330,7 @@ export async function searchPerformances(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultPerformance>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
+    ...eligiblePerformanceWhere,
     ...(query
       ? {
           OR: [
@@ -355,7 +379,7 @@ export async function searchArtists(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultArtist>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
+    ...eligibleArtistWhere,
     ...(query
       ? {
           OR: [
@@ -395,7 +419,7 @@ export async function searchChoirs(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultChoir>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
+    ...eligibleChoirWhere,
     ...(query
       ? {
           OR: [
@@ -435,7 +459,7 @@ export async function searchConductors(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultConductor>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
+    ...eligibleConductorWhere,
     ...(query ? { name: { contains: query, mode: "insensitive" as const } } : {}),
   };
 
@@ -473,7 +497,7 @@ export async function searchOrganisations(
 ): Promise<ArchiveSearchPage<ArchiveSearchResultOrganisation>> {
   const currentPage = clampPage(page);
   const where = {
-    archivedAt: null,
+    ...eligibleOrganisationWhere,
     ...(query
       ? {
           OR: [

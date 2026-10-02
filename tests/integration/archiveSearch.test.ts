@@ -14,6 +14,7 @@ import {
   updateDraftRevisionContent,
   archiveRecording,
 } from "../../modules/db/repositories/recordingRepository";
+import { publishRecordingFor, publishedRecordingAtVenue } from "./helpers/publishedContent";
 import {
   ARCHIVE_ALL_TYPES_LIMIT,
   searchArchiveAll,
@@ -84,12 +85,17 @@ describe("Composer search — archiveSearchRepository", () => {
     const user = await createTestUser();
     const marker = randomUUID().slice(0, 8);
     const composer = await createComposer({ slug: uniqueSlug("composer"), name: `Zzarch Bachwood ${marker}`, actorId: user.id });
+    // Phase 6J-1: a Composer is searchable only while published content reaches them.
+    const work = await createMusicalWork({ slug: uniqueSlug("work"), title: `Zzarch Bachwood Work ${marker}`, composerId: composer.id, actorId: user.id });
+    const published = await publishRecordingFor({ actorId: user.id, workIds: [work.id] });
     try {
       const lower = await searchComposers(marker.toLowerCase());
       const upper = await searchComposers(marker.toUpperCase());
       expect(lower.items.map((c) => c.id)).toContain(composer.id);
       expect(upper.items.map((c) => c.id)).toContain(composer.id);
     } finally {
+      await published.cleanup();
+      await cleanupWork(work.id);
       await cleanupComposer(composer.id);
       await prisma.studioUser.deleteMany({ where: { id: user.id } });
     }
@@ -135,6 +141,7 @@ describe("Work search — archiveSearchRepository", () => {
       catalogueNumber: "BWV 999",
       actorId: user.id,
     });
+    const published = await publishRecordingFor({ actorId: user.id, workIds: [work.id] });
     try {
       const result = await searchWorks(marker);
       const found = result.items.find((w) => w.id === work.id);
@@ -142,6 +149,7 @@ describe("Work search — archiveSearchRepository", () => {
       expect(found?.composerSlug).toBe(composer.slug);
       expect(found?.catalogueNumber).toBe("BWV 999");
     } finally {
+      await published.cleanup();
       await cleanupWork(work.id);
       await cleanupComposer(composer.id);
       await prisma.studioUser.deleteMany({ where: { id: user.id } });
@@ -170,11 +178,13 @@ describe("Venue search — archiveSearchRepository", () => {
     const user = await createTestUser();
     const marker = randomUUID().slice(0, 8);
     const venue = await createVenue({ slug: uniqueSlug("venue"), name: `Zzarch Hall ${marker}`, type: "CONCERT_HALL", city: "Chennai", actorId: user.id });
+    const published = await publishedRecordingAtVenue({ actorId: user.id, venueId: venue.id });
     try {
       const result = await searchVenues(marker);
       expect(result.items.map((v) => v.id)).toContain(venue.id);
       expect(result.items.find((v) => v.id === venue.id)?.city).toBe("Chennai");
     } finally {
+      await published.cleanup();
       await cleanupVenue(venue.id);
       await prisma.studioUser.deleteMany({ where: { id: user.id } });
     }
@@ -184,10 +194,12 @@ describe("Venue search — archiveSearchRepository", () => {
     const user = await createTestUser();
     const marker = randomUUID().slice(0, 8);
     const venue = await createVenue({ slug: uniqueSlug("venue"), name: "Zzarch Plain Hall", type: "CONCERT_HALL", city: `Zzarchtown ${marker}`, actorId: user.id });
+    const published = await publishedRecordingAtVenue({ actorId: user.id, venueId: venue.id });
     try {
       const result = await searchVenues(marker);
       expect(result.items.map((v) => v.id)).toContain(venue.id);
     } finally {
+      await published.cleanup();
       await cleanupVenue(venue.id);
       await prisma.studioUser.deleteMany({ where: { id: user.id } });
     }
@@ -281,6 +293,11 @@ describe("Pagination — archiveSearchRepository", () => {
     const composers = await Promise.all(
       Array.from({ length: 5 }, (_, i) => createComposer({ slug: uniqueSlug(`composer-${i}`), name: `Zzarch Page Composer ${marker} ${i}`, actorId: user.id }))
     );
+    // Phase 6J-1: each Composer is searchable only through a Work that a published Recording reaches.
+    const works = await Promise.all(
+      composers.map((composer, i) => createMusicalWork({ slug: uniqueSlug(`work-${i}`), title: `Zzarch Page Work ${marker} ${i}`, composerId: composer.id, actorId: user.id }))
+    );
+    const published = await publishRecordingFor({ actorId: user.id, workIds: works.map((w) => w.id) });
     try {
       const pageOne = await searchComposers(marker, 1, 2);
       const pageTwo = await searchComposers(marker, 2, 2);
@@ -294,6 +311,10 @@ describe("Pagination — archiveSearchRepository", () => {
       const allIds = [...pageOne.items, ...pageTwo.items, ...pageThree.items].map((c) => c.id);
       expect(new Set(allIds).size).toBe(5); // no duplicate/overlapping rows across pages
     } finally {
+      await published.cleanup();
+      for (const work of works) {
+        await cleanupWork(work.id);
+      }
       for (const composer of composers) {
         await cleanupComposer(composer.id);
       }
@@ -310,6 +331,9 @@ describe("Combined search across all supported entity types — searchArchiveAll
     const work = await createMusicalWork({ slug: uniqueSlug("work"), title: `Zzarch Combined ${marker}`, composerId: composer.id, actorId: user.id });
     const venue = await createVenue({ slug: uniqueSlug("venue"), name: `Zzarch Combined ${marker}`, type: "CONCERT_HALL", actorId: user.id });
     const draft = await createDraftRecording({ slug: uniqueSlug("recording"), actorId: user.id, title: `Zzarch Combined ${marker}` });
+    // Phase 6J-1: the Composer/Work and the Venue are searchable only through published content.
+    const workContent = await publishRecordingFor({ actorId: user.id, workIds: [work.id] });
+    const venueContent = await publishedRecordingAtVenue({ actorId: user.id, venueId: venue.id });
     try {
       const published = await publishCurrentDraft(draft.id, user.id);
 
@@ -321,6 +345,8 @@ describe("Combined search across all supported entity types — searchArchiveAll
       expect(all.composers.pageSize).toBe(ARCHIVE_ALL_TYPES_LIMIT);
     } finally {
       await cleanupRecording(draft.id);
+      await workContent.cleanup();
+      await venueContent.cleanup();
       await cleanupVenue(venue.id);
       await cleanupWork(work.id);
       await cleanupComposer(composer.id);

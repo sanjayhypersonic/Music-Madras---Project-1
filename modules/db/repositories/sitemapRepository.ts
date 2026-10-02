@@ -1,39 +1,68 @@
 import { prisma } from "../client";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import {
+  eligibleArtistWhere,
+  eligibleChoirWhere,
+  eligibleComposerWhere,
+  eligibleConductorWhere,
+  eligibleOrganisationWhere,
+  eligiblePerformanceWhere,
+  eligibleProgrammeWhere,
+  eligibleVenueWhere,
+  eligibleWorkWhere,
+} from "./publicEligibility";
 
-// Phase 6G-11 — app/sitemap.ts's sole data source for the four entity
-// types that don't already have a public "list all" repository function
-// (Composer/Artist/Choir/Conductor/Venue already have listActive*;
-// Collection already has listPublishedCollections; Video already has
-// listPublishedVideoPages). No new visibility system: every where-clause
-// here is copied verbatim from modules/db/repositories/archiveSearchRepository.ts's
-// equivalent search function (archivedAt-null for Work/Programme/Performance,
-// isRecordingPublished — Phase 6G-5A — for Recording), never re-invented.
+// app/sitemap.ts's sole data source for the catalogue entity types.
+//
+// Phase 6J-1: no entity is listed merely because it exists. Each list uses
+// the SAME eligibility fragment (publicEligibility.ts) as the entity's own
+// public page and as archive search, so the sitemap, search and a direct URL
+// can never disagree: a draft-only or orphan entity is in none of them, and a
+// listed URL always resolves. Recording uses isRecordingPublished
+// (Phase 6G-5A); Collection, LearningGuide and video pages keep their own
+// existing public gates (listPublishedCollections etc.).
 
 export interface SitemapSlugEntry {
   slug: string;
   updatedAt: Date;
 }
 
+const slugEntry = { slug: true, updatedAt: true } as const;
+
+export function listPublicComposerSitemapEntries(): Promise<SitemapSlugEntry[]> {
+  return prisma.composer.findMany({ where: eligibleComposerWhere, select: slugEntry });
+}
+
+export function listPublicArtistSitemapEntries(): Promise<SitemapSlugEntry[]> {
+  return prisma.artist.findMany({ where: eligibleArtistWhere, select: slugEntry });
+}
+
+export function listPublicChoirSitemapEntries(): Promise<SitemapSlugEntry[]> {
+  return prisma.choir.findMany({ where: eligibleChoirWhere, select: slugEntry });
+}
+
+export function listPublicConductorSitemapEntries(): Promise<SitemapSlugEntry[]> {
+  return prisma.conductor.findMany({ where: eligibleConductorWhere, select: slugEntry });
+}
+
+export function listPublicVenueSitemapEntries(): Promise<SitemapSlugEntry[]> {
+  return prisma.venue.findMany({ where: eligibleVenueWhere, select: slugEntry });
+}
+
+export function listPublicOrganisationSitemapEntries(): Promise<SitemapSlugEntry[]> {
+  return prisma.organisation.findMany({ where: eligibleOrganisationWhere, select: slugEntry });
+}
+
 export function listPublicWorkSitemapEntries(): Promise<SitemapSlugEntry[]> {
-  return prisma.musicalWork.findMany({
-    where: { archivedAt: null },
-    select: { slug: true, updatedAt: true },
-  });
+  return prisma.musicalWork.findMany({ where: eligibleWorkWhere, select: slugEntry });
 }
 
 export function listPublicProgrammeSitemapEntries(): Promise<SitemapSlugEntry[]> {
-  return prisma.programme.findMany({
-    where: { archivedAt: null },
-    select: { slug: true, updatedAt: true },
-  });
+  return prisma.programme.findMany({ where: eligibleProgrammeWhere, select: slugEntry });
 }
 
 export function listPublicPerformanceSitemapEntries(): Promise<SitemapSlugEntry[]> {
-  return prisma.performance.findMany({
-    where: { archivedAt: null },
-    select: { slug: true, updatedAt: true },
-  });
+  return prisma.performance.findMany({ where: eligiblePerformanceWhere, select: slugEntry });
 }
 
 /**
