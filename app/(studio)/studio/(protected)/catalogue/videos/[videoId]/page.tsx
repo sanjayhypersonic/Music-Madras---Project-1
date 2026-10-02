@@ -7,10 +7,12 @@ import { findByYouTubeVideoId } from "../../../../../../../modules/db/repositori
 import { canPublishVideoPage, canUnpublishVideoPage } from "../../../../../../../modules/publishing/videoPageTransitions";
 import { isYouTubeVideoPagePublic } from "../../../../../../../modules/mmke/catalogue/isYouTubeVideoPagePublic";
 import { deriveCataloguePageState } from "../../../../../../../modules/mmke/catalogue/deriveCataloguePageState";
+import { findRecordingLinkedToYouTubeVideo } from "../../../../../../../modules/db/repositories/recordingIntakeRepository";
 import {
   approveUnlistedPublicationAction,
   archiveVideoPageAction,
   createCataloguePageAction,
+  createRecordingFromVideoAction,
   publishVideoPageAction,
   revokeUnlistedApprovalAction,
   unarchiveVideoPageAction,
@@ -45,7 +47,13 @@ export default async function YouTubeVideoManagePage({
   }
 
   const page = await findByYouTubeVideoId(videoId);
+  const linkedRecording = await findRecordingLinkedToYouTubeVideo(videoId);
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
+  const canCreateRecording = can(session.user.role, "RECORDING_WRITE");
+  const durationLabel =
+    video.durationSeconds === null
+      ? "—"
+      : `${Math.floor(video.durationSeconds / 60)}:${String(video.durationSeconds % 60).padStart(2, "0")}`;
   const isPublic = page
     ? isYouTubeVideoPagePublic({
         page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
@@ -93,6 +101,39 @@ export default async function YouTubeVideoManagePage({
             </p>
           )}
         </div>
+      </section>
+
+      <section style={{ margin: "1.5rem 0", padding: "1rem", border: "1px solid #ccc" }}>
+        <h3>Canonical Recording</h3>
+        <p style={{ fontSize: "0.9rem", color: "#666" }}>
+          YouTube ID: <code>{video.youtubeVideoId}</code> · Published:{" "}
+          {video.publishedAt ? new Date(video.publishedAt).toLocaleDateString() : "—"} · Duration: {durationLabel} · Visibility:{" "}
+          {video.privacyStatus ?? "unknown"}
+        </p>
+        {linkedRecording ? (
+          <p>
+            This YouTube video is linked to MusicMadras Recording{" "}
+            <Link href={`/studio/recordings/${linkedRecording.recordingId}/media`}>{linkedRecording.title ?? linkedRecording.slug}</Link> (
+            {linkedRecording.status}).
+          </p>
+        ) : canCreateRecording ? (
+          video.observabilityState === "OBSERVED" ? (
+            <>
+              <p style={{ fontSize: "0.9rem" }}>
+                Creates a <strong>draft</strong> Recording whose primary video is this YouTube video. The YouTube title becomes an editable
+                working title only — no composer, work, programme, performance, venue or participant is created or guessed, nothing is
+                generated, and nothing becomes public.
+              </p>
+              <form action={createRecordingFromVideoAction.bind(null, videoId)}>
+                <button type="submit">Create Recording from this YouTube Video</button>
+              </form>
+            </>
+          ) : (
+            <p>This video is not currently available in the synchronized catalogue, so a Recording cannot be created from it.</p>
+          )
+        ) : (
+          <p>No Recording is linked to this video, and you do not have permission to create one.</p>
+        )}
       </section>
 
       {!page && (

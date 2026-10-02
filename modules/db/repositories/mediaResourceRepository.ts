@@ -1,7 +1,7 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
-import type { MediaProvider, MediaResource, MediaRole } from "@prisma/client";
+import type { MediaProvider, MediaResource, MediaRole, Prisma } from "@prisma/client";
 
 // MediaResource attachment (ADR §4/§18, brief §10) — every attachment goes
 // through an explicit FK to the entity it belongs to, and, for
@@ -19,8 +19,12 @@ export interface AttachMediaToRevisionInput {
   actorId: string;
 }
 
-export async function attachMediaToRevision(input: AttachMediaToRevisionInput): Promise<MediaResource> {
-  const media = await prisma.mediaResource.create({
+export async function attachMediaToRevision(
+  input: AttachMediaToRevisionInput,
+  /** Phase 6I-1 — optional caller-owned transaction (see createDraftRecording). Omitted by every existing caller. */
+  client: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<MediaResource> {
+  const media = await client.mediaResource.create({
     data: {
       recordingRevisionId: input.recordingRevisionId,
       provider: input.provider,
@@ -32,13 +36,16 @@ export async function attachMediaToRevision(input: AttachMediaToRevisionInput): 
     },
   });
 
-  await writeAuditLog({
-    actorId: input.actorId,
-    action: "MEDIA_ATTACHED_TO_RECORDING_REVISION",
-    entityType: "RecordingRevision",
-    entityId: input.recordingRevisionId,
-    afterSnapshot: media,
-  });
+  await writeAuditLog(
+    {
+      actorId: input.actorId,
+      action: "MEDIA_ATTACHED_TO_RECORDING_REVISION",
+      entityType: "RecordingRevision",
+      entityId: input.recordingRevisionId,
+      afterSnapshot: media,
+    },
+    client
+  );
 
   return media;
 }
@@ -64,7 +71,7 @@ export async function attachRightsToMedia(
   return media;
 }
 
-export function listMediaForRevision(recordingRevisionId: string): Promise<MediaResource[]> {
+export function listMediaForRevision(recordingRevisionId: string) {
   return prisma.mediaResource.findMany({
     where: { recordingRevisionId },
     include: { youtubeVideo: true, rightsInformation: true },

@@ -13,6 +13,7 @@ import {
   unpublishVideoPage,
   updateEditorialFields,
 } from "../../../../../../../modules/db/repositories/youtubeVideoPageRepository";
+import { createRecordingFromYouTubeVideo } from "../../../../../../../modules/db/repositories/recordingIntakeRepository";
 
 // Phase 6G-1C — Server Actions for the per-video Studio manage page
 // (brief "STUDIO ROUTE 2"). Every action re-checks the session and
@@ -38,6 +39,39 @@ export async function createCataloguePageAction(videoId: string) {
   }
 
   redirect(`/studio/catalogue/videos/${videoId}`);
+}
+
+// Phase 6I-1 — the one explicit entry point that turns a synced YouTube video
+// into a canonical DRAFT Recording. Gated by RECORDING_WRITE (the same
+// permission /studio/recordings already requires to start a draft) — no new
+// permission. Never automatic, never bulk, never AI-assisted: one video, one
+// editor click. Creates nothing but the Recording, its first draft revision,
+// and the linked PRIMARY_VIDEO MediaResource.
+export async function createRecordingFromVideoAction(videoId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "RECORDING_WRITE")) {
+    errorRedirect(videoId, "You do not have permission to create a Recording.");
+  }
+
+  let result: Awaited<ReturnType<typeof createRecordingFromYouTubeVideo>>;
+  try {
+    result = await createRecordingFromYouTubeVideo({ youtubeVideoId: videoId, actorId: session!.user.id });
+  } catch {
+    errorRedirect(videoId, "The Recording could not be created. Please try again.");
+  }
+
+  if (!result.ok) {
+    switch (result.reason) {
+      case "ALREADY_LINKED":
+        errorRedirect(videoId, "This YouTube video is already linked to a MusicMadras Recording.");
+      case "VIDEO_NOT_AVAILABLE":
+        errorRedirect(videoId, "This YouTube video is not currently available in the synchronized catalogue, so a Recording cannot be created from it.");
+      default:
+        errorRedirect(videoId, "This YouTube video could not be found.");
+    }
+  }
+
+  redirect(`/studio/recordings/${result.recording.id}/media`);
 }
 
 export async function updateEditorialFieldsAction(videoId: string, pageId: string, formData: FormData) {

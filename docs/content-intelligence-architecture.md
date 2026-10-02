@@ -2437,3 +2437,94 @@ transaction timeout used by several repository writes can be exceeded when
 the shared Neon database is unusually slow. It surfaced intermittently
 during validation and is an environmental sensitivity, not a Phase 6H-9
 behavior.
+
+## 116. Phase 6I-1 — Recording intake from a synced YouTube video
+
+The Phase 6I pre-flight audit found 226 synced `YouTubeVideo` rows and zero
+Recordings, and that no Studio path set `MediaResource.youtubeVideoId` — the
+one link `RecordingContext` needs to see a video's title and description
+(the manual media form stores only free-text provider/URL/ID). This phase
+adds the single missing capability: an explicit, per-video Studio action that
+creates a canonical DRAFT Recording linked to a synced video.
+
+**No schema migration.** The relationship already existed in the schema:
+
+```
+YouTubeVideo <- MediaResource(youtubeVideoId, role PRIMARY_VIDEO)
+             <- RecordingRevision <- Recording
+```
+
+(The brief named a `RecordingRevisionMediaResource` table; no such model
+exists — `MediaResource.recordingRevisionId` is the real, only link, and is
+what is used.) `YouTubeVideo` stays a synchronization mirror and is never
+written; `Recording` stays the canonical archival object. They are never merged.
+
+**Workflow** (`/studio/catalogue/videos`, existing surface): the list gained
+title/YouTube-id search and a "Recording" column (a link when the video is
+already linked). The per-video page gained a "Canonical Recording" section
+showing YouTube ID, published date, duration, and visibility, then either the
+link to the existing Recording, or the button "Create Recording from this
+YouTube Video". On success the editor lands on the new Recording's media step,
+which now also states that the primary video is linked to a synced YouTube
+video.
+
+**What is created, and only this** (`recordingIntakeRepository.createRecordingFromYouTubeVideo`),
+in one transaction that reuses the existing lifecycle functions
+(`createDraftRecording`, `attachMediaToRevision` — each gained an optional
+transaction-client parameter, unchanged for every existing caller):
+a Recording (`status DRAFT`, `currentDraftRevisionId` set,
+`currentPublishedRevisionId` null), its first draft revision (revision 1,
+title = the YouTube title as an editable *working* title, never asserted to
+be the work's canonical title), and a `PRIMARY_VIDEO` MediaResource with
+`youtubeVideoId` -> the existing row. The YouTube description is deliberately
+not copied into the revision: `RecordingContext` already reads it live
+through the link, so the YouTube metadata remains the source of YouTube
+context rather than being duplicated into canonical data.
+
+**Nothing is invented.** No title/description inference, no matching of any
+kind (exact, fuzzy, or semantic): no Composer, Work, Programme, Performance,
+Venue, Artist, Choir, Conductor, or Organisation is created or linked; no AI
+call; no source retrieval; no publication; nothing public.
+
+**Duplicate protection** is application-level (no unique constraint was
+added): inside the same transaction a per-video Postgres advisory lock
+(`pg_advisory_xact_lock`) serializes concurrent intakes, then any existing
+`MediaResource` linking the video — on any revision of any Recording, draft,
+published, superseded, or archived — blocks creation and returns the existing
+Recording ("This YouTube video is already linked to a MusicMadras
+Recording"). The concurrency test was mutation-verified: with the lock line
+removed it fails; with it, two simultaneous intakes yield exactly one
+Recording. A video that is not currently `OBSERVED` (absent from the latest
+sync) is refused rather than linked — a judgment call not in the brief,
+chosen so a link never points at a possibly-removed video.
+
+**RBAC / audit.** `RECORDING_WRITE` (the permission `/studio/recordings`
+already uses to start a draft) — no new permission. Every defined Studio role,
+including `CONTRIBUTOR`, holds it, and no read-only role exists; the
+tested refusal paths are an unauthenticated caller and a policy denial.
+Audit: the existing `RECORDING_DRAFT_CREATED` and
+`MEDIA_ATTACHED_TO_RECORDING_REVISION` events plus one new
+`RECORDING_CREATED_FROM_YOUTUBE_VIDEO` (entity Recording; snapshot holds the
+internal and external video ids, revision id, and media id; actor and time as
+for every audit entry).
+
+**Public safety.** The draft is invisible through every public surface,
+verified: `getPublicRecordingPageData`, `findPublishedRecordingBySlug`, the
+sitemap's Recording entries, and the video-to-recording resolver all return
+nothing for it; `isRecordingPublished` and the sitemap predicates were not
+touched.
+
+**Context verification.** `getRecordingContext(recordingId, "DRAFT")` returns
+the linked video's title and description verbatim with no change to
+`RecordingContext`; `PUBLISHED` mode correctly reports `NO_PUBLISHED_REVISION`
+until the Recording is published; the context fingerprint is deterministic.
+
+**Known limitations / not done here.** One video at a time (no bulk or
+automatic intake); the editor must still attach Work, Performance, and
+participants by hand; the Recording must be completed and published before
+the Studio's generation form will offer it (it lists PUBLISHED Recordings
+only). Observed while tracing the next phase's path, and not changed here:
+`forkDraftFromPublished` copies only the revision's own columns (title,
+description, performance link, SEO, educational fields) — not its linked
+Works or MediaResources — which the "apply an approved suggestion to a draft
+revision" phase will need to account for.

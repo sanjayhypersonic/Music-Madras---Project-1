@@ -53,6 +53,7 @@ export default async function MediaStepPage({
           {media.map((m) => (
             <li key={m.id}>
               {m.role} ({m.provider}) — {m.url}
+              {m.youtubeVideo && <> — linked to synced YouTube video “{m.youtubeVideo.title ?? m.youtubeVideo.youtubeVideoId}”</>}
             </li>
           ))}
         </ul>

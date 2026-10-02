@@ -12,7 +12,7 @@ import {
   type CompletenessReportItem,
   type RecordingReadiness,
 } from "../../mmke/completeness/checkRecordingRevisionCompleteness";
-import type { Recording, RecordingRevision } from "@prisma/client";
+import type { Prisma, Recording, RecordingRevision } from "@prisma/client";
 
 // Recording / RecordingRevision repository — the mechanical core of the
 // Draft & Revision model (ADR §5). This file implements the *mechanics*
@@ -59,48 +59,58 @@ export interface RecordingWithRevisions extends Recording {
  * exactly as before.
  */
 export async function createDraftRecording(
-  input: CreateDraftRecordingInput
+  input: CreateDraftRecordingInput,
+  /**
+   * Phase 6I-1 — optional: run inside a caller-owned transaction instead of
+   * opening a new one, so a larger operation (recording intake from a synced
+   * YouTube video) can create the draft, attach its media, and audit it
+   * atomically using this same function rather than a second copy of its
+   * logic. Omitted by every existing caller; behavior without it is unchanged.
+   */
+  client?: Prisma.TransactionClient
 ): Promise<RecordingWithRevisions> {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const recording = await tx.recording.create({
-        data: {
-          slug: input.slug,
-          createdById: input.actorId,
-          updatedById: input.actorId,
-        },
-      });
-
-      const revision = await tx.recordingRevision.create({
-        data: {
-          recordingId: recording.id,
-          revisionNumber: 1,
-          revisionStatus: "DRAFT",
-          title: input.title,
-          description: input.description,
-          createdById: input.actorId,
-          updatedById: input.actorId,
-        },
-      });
-
-      const updated = await tx.recording.update({
-        where: { id: recording.id },
-        data: { currentDraftRevisionId: revision.id },
-      });
-
-      await writeAuditLog(
-        {
-          actorId: input.actorId,
-          action: "RECORDING_DRAFT_CREATED",
-          entityType: "Recording",
-          entityId: recording.id,
-          afterSnapshot: { recording: updated, revision },
-        },
-        tx
-      );
-
-      return { ...updated, currentDraftRevision: revision, currentPublishedRevision: null };
+  const run = async (tx: Prisma.TransactionClient): Promise<RecordingWithRevisions> => {
+    const recording = await tx.recording.create({
+      data: {
+        slug: input.slug,
+        createdById: input.actorId,
+        updatedById: input.actorId,
+      },
     });
+
+    const revision = await tx.recordingRevision.create({
+      data: {
+        recordingId: recording.id,
+        revisionNumber: 1,
+        revisionStatus: "DRAFT",
+        title: input.title,
+        description: input.description,
+        createdById: input.actorId,
+        updatedById: input.actorId,
+      },
+    });
+
+    const updated = await tx.recording.update({
+      where: { id: recording.id },
+      data: { currentDraftRevisionId: revision.id },
+    });
+
+    await writeAuditLog(
+      {
+        actorId: input.actorId,
+        action: "RECORDING_DRAFT_CREATED",
+        entityType: "Recording",
+        entityId: recording.id,
+        afterSnapshot: { recording: updated, revision },
+      },
+      tx
+    );
+
+    return { ...updated, currentDraftRevision: revision, currentPublishedRevision: null };
+  };
+
+  try {
+    return client ? await run(client) : await prisma.$transaction(run);
   } catch (err) {
     if (isUniqueConstraintViolation(err, "slug")) {
       throw new SlugConflictError(input.slug);

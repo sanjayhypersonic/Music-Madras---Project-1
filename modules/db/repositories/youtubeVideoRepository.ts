@@ -95,8 +95,14 @@ export interface YouTubeVideoForStudioCatalogue {
  * visibility gate (modules/mmke/catalogue/isYouTubeVideoPagePublic) —
  * unlisted/private videos are shown here on purpose, per the brief.
  */
-export function listYouTubeVideosForStudioCatalogue(): Promise<YouTubeVideoForStudioCatalogue[]> {
+export function listYouTubeVideosForStudioCatalogue(searchQuery?: string): Promise<YouTubeVideoForStudioCatalogue[]> {
+  const query = searchQuery?.trim();
   return prisma.youTubeVideo.findMany({
+    // Phase 6I-1 — optional case-insensitive filter on title / YouTube id, so
+    // an editor can find the right video before creating a Recording from it.
+    where: query
+      ? { OR: [{ title: { contains: query, mode: "insensitive" } }, { youtubeVideoId: { contains: query, mode: "insensitive" } }] }
+      : undefined,
     select: {
       id: true,
       youtubeVideoId: true,
