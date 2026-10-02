@@ -14,12 +14,22 @@ export default async function SourceStepPage({ params }: { params: Promise<{ id:
   if (!recording) redirect("/studio/recordings");
 
   if (!recording.currentDraftRevision) {
-    const canWrite = can(session.user.role, "RECORDING_WRITE");
+    const archived = recording.status === "ARCHIVED";
+    const canWrite = can(session.user.role, "RECORDING_WRITE") && !archived;
     async function forkAction() {
       "use server";
       const session = await getCurrentStudioSession();
       if (!session || !can(session.user.role, "RECORDING_WRITE")) return;
-      await forkDraftFromPublished(id, session.user.id);
+      // Phase 6J-1: forking an ARCHIVED Recording would quietly move it to IN_REVIEW, bypassing
+      // restore (and its audit entry); a double-click would also fork twice. Re-check the live state.
+      const current = await findRecordingById(id);
+      if (current && current.status !== "ARCHIVED" && current.currentDraftRevisionId === null) {
+        try {
+          await forkDraftFromPublished(id, session.user.id);
+        } catch {
+          // Nothing to fork (never published) — fall through to the page, which explains the state.
+        }
+      }
       redirect(`/studio/recordings/${id}/source`);
     }
 
@@ -30,6 +40,7 @@ export default async function SourceStepPage({ params }: { params: Promise<{ id:
           This recording is published with no pending changes (revision “
           {recording.currentPublishedRevision?.title ?? recording.slug}”).
         </p>
+        {archived && <p>This recording is archived. Restore it from the Review &amp; Publish step before making changes.</p>}
         {canWrite && (
           <form action={forkAction}>
             <button type="submit">Start a new draft to make changes</button>

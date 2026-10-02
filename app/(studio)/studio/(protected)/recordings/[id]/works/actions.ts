@@ -3,7 +3,21 @@
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
-import { attachWorkToRevision, detachWorkFromRevision } from "../../../../../../../modules/db/repositories/recordingRepository";
+import {
+  attachWorkToRevision,
+  detachWorkFromRevision,
+  resolveEditableDraftRevision,
+} from "../../../../../../../modules/db/repositories/recordingRepository";
+import { describeEditableDraftRefusal } from "../../../../../../../modules/publishing/editableDraftRefusal";
+
+// Phase 6J-1: the revision id bound into these forms is only an "expected"
+// token. The server resolves the Recording's actual editable draft
+// (resolveEditableDraftRevision) and refuses a stale, published, archived or
+// unrelated revision — it never mutates whichever revision the browser names.
+
+function fail(recordingId: string, message: string): never {
+  redirect(`/studio/recordings/${recordingId}/works?error=${encodeURIComponent(message)}`);
+}
 
 export async function attachWorkAction(recordingId: string, revisionId: string, formData: FormData) {
   const session = await getCurrentStudioSession();
@@ -16,8 +30,11 @@ export async function attachWorkAction(recordingId: string, revisionId: string, 
     redirect(`/studio/recordings/${recordingId}/works?error=Select+a+work.`);
   }
 
+  const draft = await resolveEditableDraftRevision(recordingId, revisionId);
+  if (!draft.ok) fail(recordingId, describeEditableDraftRefusal(draft.reason));
+
   try {
-    await attachWorkToRevision(revisionId, musicalWorkId, session!.user.id);
+    await attachWorkToRevision(draft.revisionId, musicalWorkId, session!.user.id);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not attach the work.";
     redirect(`/studio/recordings/${recordingId}/works?error=${encodeURIComponent(message)}`);
@@ -32,6 +49,13 @@ export async function detachWorkAction(recordingId: string, revisionId: string, 
     redirect(`/studio/recordings/${recordingId}/works?error=You+do+not+have+permission+to+edit+this+recording.`);
   }
 
-  await detachWorkFromRevision(revisionId, musicalWorkId, session!.user.id);
+  const draft = await resolveEditableDraftRevision(recordingId, revisionId);
+  if (!draft.ok) fail(recordingId, describeEditableDraftRefusal(draft.reason));
+
+  try {
+    await detachWorkFromRevision(draft.revisionId, musicalWorkId, session!.user.id);
+  } catch {
+    fail(recordingId, "That work is no longer attached to this recording.");
+  }
   redirect(`/studio/recordings/${recordingId}/works`);
 }

@@ -12,6 +12,7 @@ import {
   type CompletenessReportItem,
   type RecordingReadiness,
 } from "../../mmke/completeness/checkRecordingRevisionCompleteness";
+import type { EditableDraftRefusal } from "../../publishing/editableDraftRefusal";
 import type { Prisma, Recording, RecordingRevision } from "@prisma/client";
 
 // Recording / RecordingRevision repository — the mechanical core of the
@@ -119,6 +120,43 @@ export async function createDraftRecording(
   }
 }
 
+export type EditableDraftResolution =
+  | { ok: true; recordingId: string; revisionId: string; revisionUpdatedAt: Date; performanceId: string | null }
+  | { ok: false; reason: EditableDraftRefusal };
+
+/**
+ * Phase 6J-1 — the authoritative answer to "which revision may a Studio edit
+ * to this Recording touch?". The server resolves it from the Recording id, so a
+ * client-supplied revision id is never trusted on its own: it is only an
+ * `expectedRevisionId` token proving the form was rendered for THIS draft.
+ * Refused (never silently redirected to a different revision):
+ *   - an unknown or ARCHIVED Recording
+ *   - a Recording with no open draft (e.g. its draft was just published)
+ *   - a revision that is not this Recording's current DRAFT: a stale one, an
+ *     already-published or superseded one, or another Recording's revision
+ * It does not weaken updateDraftRevisionContent's optimistic concurrency or the
+ * advisory locks used by apply/intake — it is checked before them.
+ */
+export async function resolveEditableDraftRevision(recordingId: string, expectedRevisionId?: string): Promise<EditableDraftResolution> {
+  const recording = await prisma.recording.findUnique({
+    where: { id: recordingId },
+    select: {
+      id: true,
+      status: true,
+      currentDraftRevision: { select: { id: true, recordingId: true, revisionStatus: true, updatedAt: true, performanceId: true } },
+    },
+  });
+
+  if (!recording) return { ok: false, reason: "RECORDING_NOT_FOUND" };
+  if (recording.status === "ARCHIVED") return { ok: false, reason: "RECORDING_ARCHIVED" };
+
+  const draft = recording.currentDraftRevision;
+  if (!draft || draft.recordingId !== recording.id || draft.revisionStatus !== "DRAFT") return { ok: false, reason: "NO_OPEN_DRAFT" };
+  if (expectedRevisionId !== undefined && expectedRevisionId !== draft.id) return { ok: false, reason: "STALE_REVISION" };
+
+  return { ok: true, recordingId: recording.id, revisionId: draft.id, revisionUpdatedAt: draft.updatedAt, performanceId: draft.performanceId };
+}
+
 /**
  * Updates fields on the current draft revision, guarded by optimistic
  * concurrency (ADR §5.4): the caller must pass the `updatedAt` value it
@@ -153,6 +191,9 @@ export async function updateDraftRevisionContent(
 
   if (!recording?.currentDraftRevision) {
     throw new Error(`Recording ${recordingId} has no open draft revision to update.`);
+  }
+  if (recording.status === "ARCHIVED") {
+    throw new Error(`Recording ${recordingId} is archived and cannot be edited. Restore it first.`);
   }
 
   if (recording.currentDraftRevision.updatedAt.getTime() !== expectedRevisionUpdatedAt.getTime()) {
@@ -333,6 +374,12 @@ export async function publishCurrentDraft(
       // Unreachable given the check above; needed for TypeScript narrowing.
       throw new Error(`Recording ${recordingId} has no open draft revision to publish.`);
     }
+    // Phase 6J-1: publishing must never silently un-archive a Recording. An archived
+    // Recording keeps any open draft (archive does not clear it); it must be restored
+    // deliberately first, so restore stays the only way back from ARCHIVED.
+    if (recording.status === "ARCHIVED") {
+      throw new Error(`Recording ${recordingId} is archived. Restore it before publishing.`);
+    }
 
     const draft = recording.currentDraftRevision;
     const previousPublished = recording.currentPublishedRevision;
@@ -376,7 +423,7 @@ export async function publishCurrentDraft(
       currentDraftRevision: null,
       currentPublishedRevision: { ...draft, revisionStatus: "PUBLISHED" },
     };
-  });
+  }, { timeout: 30000, maxWait: 10000 });
 }
 
 export function findRecordingById(id: string): Promise<RecordingWithRevisions | null> {
@@ -441,6 +488,16 @@ export async function submitRecordingForReview(recordingId: string, actorId: str
  * currentPublishedRevisionId still points at real revision history.
  */
 export async function archiveRecording(recordingId: string, actorId: string): Promise<Recording> {
+  const existing = await prisma.recording.findUnique({ where: { id: recordingId } });
+  if (!existing) {
+    throw new Error(`Recording ${recordingId} does not exist.`);
+  }
+  // Phase 6J-1: idempotent — archiving an already-archived Recording (a double-click,
+  // a replayed form) changes nothing and writes no second audit entry.
+  if (existing.status === "ARCHIVED") {
+    return existing;
+  }
+
   const updated = await prisma.recording.update({
     where: { id: recordingId },
     data: { status: "ARCHIVED", updatedById: actorId },

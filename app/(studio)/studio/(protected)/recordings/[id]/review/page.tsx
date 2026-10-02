@@ -3,7 +3,8 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { findRecordingById, getRecordingRevisionCompletenessReport } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { isReadyToPublish } from "../../../../../../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
-import { submitForReviewAction, publishAction, archiveAction } from "./actions";
+import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
+import { submitForReviewAction, publishAction, unpublishAction, restoreAction, archiveAction } from "./actions";
 
 export default async function ReviewStepPage({
   params,
@@ -25,8 +26,12 @@ export default async function ReviewStepPage({
   const ready = completeness ? isReadyToPublish(completeness.report) : false;
 
   const canSubmitForReview = can(session.user.role, "EDITORIAL_REVIEW") && recording.status === "DRAFT";
-  const canPublish = can(session.user.role, "RECORDING_PUBLISH") && recording.currentDraftRevisionId !== null && ready;
-  const canArchive = can(session.user.role, "RECORDING_PUBLISH") && recording.status !== "ARCHIVED";
+  const mayPublish = can(session.user.role, "RECORDING_PUBLISH");
+  // Phase 6J-1: an ARCHIVED recording is never published from here — it must be restored first.
+  const canPublish = mayPublish && recording.currentDraftRevisionId !== null && ready && recording.status !== "ARCHIVED";
+  const canUnpublish = mayPublish && recording.status === "PUBLISHED";
+  const canRestore = mayPublish && recording.status === "ARCHIVED";
+  const canArchive = mayPublish && recording.status !== "ARCHIVED";
 
   return (
     <div>
@@ -63,20 +68,52 @@ export default async function ReviewStepPage({
         </>
       )}
 
-      <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+      <p>Status: {recording.status}</p>
+
+      <div style={{ display: "flex", gap: "1rem", marginTop: "1rem", flexWrap: "wrap" }}>
         {canSubmitForReview && (
           <form action={submitForReviewAction.bind(null, id)}>
-            <button type="submit">Submit for editorial review</button>
+            <ConfirmSubmitButton>Submit for editorial review</ConfirmSubmitButton>
           </form>
         )}
         {canPublish && (
           <form action={publishAction.bind(null, id, recording.currentDraftRevisionId!)}>
-            <button type="submit">Publish</button>
+            <ConfirmSubmitButton
+              confirmMessage="Publish this recording? The current draft will become the version visitors see on the public Museum."
+              pendingLabel="Publishing…"
+            >
+              Publish
+            </ConfirmSubmitButton>
+          </form>
+        )}
+        {canUnpublish && (
+          <form action={unpublishAction.bind(null, id)}>
+            <ConfirmSubmitButton
+              confirmMessage="Unpublish this recording? It will disappear from the public Museum immediately. Its history is kept, and it can be published again later."
+              pendingLabel="Unpublishing…"
+            >
+              Unpublish
+            </ConfirmSubmitButton>
+          </form>
+        )}
+        {canRestore && (
+          <form action={restoreAction.bind(null, id)}>
+            <ConfirmSubmitButton
+              confirmMessage="Restore this archived recording to Draft? It stays hidden from the public Museum until it is published again."
+              pendingLabel="Restoring…"
+            >
+              Restore to draft
+            </ConfirmSubmitButton>
           </form>
         )}
         {canArchive && (
           <form action={archiveAction.bind(null, id)}>
-            <button type="submit">Archive</button>
+            <ConfirmSubmitButton
+              confirmMessage="Archive this recording? It will be removed from the public Museum. You can restore it later."
+              pendingLabel="Archiving…"
+            >
+              Archive
+            </ConfirmSubmitButton>
           </form>
         )}
       </div>
