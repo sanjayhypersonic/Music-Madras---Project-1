@@ -16,8 +16,7 @@ node_modules/
 
 # env files — never commit real secrets; .env.example is the template
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
 
 # misc
@@ -37,3 +36,7 @@ next-env.d.ts
 
 # prisma
 /prisma/generated/
+
+# private keys and cloud service-account files
+*.pem
+*-service-account*.json

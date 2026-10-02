@@ -2697,3 +2697,86 @@ operator completes it (unchanged from 6H-6); the queue makes it visible.
 query per Recording (pre-existing; not changed). Analytics (YouTube Analytics,
 GA4, Search Console) and the final pre-launch full YouTube sync remain out of
 scope; the full sync is a launch gate, not part of this phase.
+
+## 119. Phase 6J-1 - V1 foundation hardening: operations notes
+
+This section records the operational facts a person deploying or running V1
+needs. It does not claim production readiness; the open items are listed at the
+end.
+
+**Public visibility is eligibility, not existence.** A catalogue entity
+(composer, work, venue, programme, performance, artist, choir, conductor,
+organisation) is public only while it is reachable from published content, using
+shared query fragments in `modules/db/repositories/publicEligibility.ts`. Page
+data, search, the sitemap and related links all use them, so an unpublished or
+archived Recording withdraws everything that was only reachable through it. No
+schema change was needed, and no fixture data was deleted: old test fixtures are
+simply no longer reachable from the public site.
+
+**Release procedure (in this order).**
+
+1. Set the environment in the host's settings (see `.env.example`):
+   `DATABASE_URL`, `DIRECT_URL`, `PUBLIC_SITE_URL` (https, not localhost),
+   `AUTH_SECRET`, `AUTH_URL` (https), email (`EMAIL_PROVIDER=smtp`, `SMTP_URL`,
+   `EMAIL_FROM`), `YOUTUBE_API_KEY`, `YOUTUBE_CHANNEL_ID`. Production fails
+   loudly at runtime if `PUBLIC_SITE_URL` or email is missing/invalid.
+2. Install dependencies (`npm ci`).
+3. Apply migrations as an explicit, reviewed step: `npm run prisma:migrate:deploy`
+   (uses `DIRECT_URL`). It is intentionally NOT part of `build` or `start`: a
+   build must never change a database, and a rollback must not depend on it.
+4. `npm run build`. It runs `prisma generate` first, so the build cannot compile
+   against a stale client; this needs `DIRECT_URL` present in the build
+   environment (`prisma.config.ts`). `next build` itself does not need
+   `PUBLIC_SITE_URL`.
+5. Start, then check `GET /api/health` (liveness: `{"status":"ok"}`; it does not
+   query the database or reveal configuration), `/robots.txt`, `/sitemap.xml`,
+   and the response headers.
+
+**Error monitoring.** None is integrated and no vendor is chosen. The public
+error boundary and `global-error` deliberately show no message or stack. When a
+provider is chosen, wire it through Next's `instrumentation.ts`
+(`onRequestError`) so server-side render and Server Action failures are captured
+with request context; until then, server errors are visible only in the host's
+runtime logs.
+
+**YouTube synchronization.** Run only through `npm run youtube:full-sync`
+(preflight, changes nothing) and `npm run youtube:full-sync -- --execute`. It
+takes a Postgres session advisory lock on `DIRECT_URL` (a pooled endpoint is
+refused), prints the run id and summary (never a secret), marks the run FAILED
+on SIGINT/SIGTERM, and exits 0 succeeded / 1 partial / 2 failed / 3 already
+running / 4 configuration / 5 interrupted. Rules enforced in the engine:
+videos are flagged NOT_OBSERVED only when the pass observed its whole scope; any
+failed record makes the pass PARTIAL; the pass is reconciled against the
+channel's reported public video count (`statistics.videoCount`), recorded as an
+audit entry `youtube.sync.reconciliation`. A MISMATCH is information only: an
+API key cannot see private videos, so neither a match nor a mismatch proves the
+catalogue is complete. The earlier 12-versus-14 checkpoint gap was historical
+test damage to scope keys, not an engine defect; the script verifies after each
+run that `channel-uploads`, `channel-playlists` and one checkpoint per observed
+playlist exist. The final launch synchronization has NOT been run as part of
+this phase.
+
+**Integration tests and the database.** `npm run test:integration` creates and
+deletes rows. It now refuses to start unless the database is local or its host is
+named in `ALLOW_INTEGRATION_TESTS_ON_HOST` (and never in a production
+environment, or when `DATABASE_URL` and `DIRECT_URL` name different databases).
+The only database configured for this project today is the single Neon database
+that Phase 5A documented as the development database; it also holds the real
+synced YouTube catalogue and the Founder account, because no separate test
+database exists. Tests use unique disposable fixtures and clean up after
+themselves, but a dedicated Neon branch for tests is the safer arrangement.
+
+**Secrets assessment (not a rotation).** `legacy-prototype/firebase-applet-config.json`
+holds only the standard Firebase web-app client fields (project id, app id, API
+key, auth domain, storage bucket, messaging sender id, measurement id) and no
+service-account or private-key material. A Firebase web API key identifies the
+project and is public by Firebase's design; protection is the Firestore/Storage
+security rules, which were not inspected. Recommended before launch: confirm the
+rules deny public writes, restrict the key by HTTP referrer, or retire the
+project. That app is a separate Vite prototype excluded from the Next build,
+type-check and lint. `.gitignore` now ignores every `.env*` file except
+`.env.example`, plus `*.pem` and service-account JSON.
+
+**Deferred (POST-LAUNCH, unchanged by this phase).** Analytics feedback loop,
+Search Console, Studio design-token refactor and broad accessibility pass, AI
+usage quotas, vector search/RAG, public Occasion pages, field-ownership UI.

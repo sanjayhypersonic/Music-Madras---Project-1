@@ -9,6 +9,9 @@ import path from "path";
 export default defineConfig({
   test: {
     include: ["tests/integration/**/*.test.ts"],
+    // Phase 6J-1 — refuse to run against a database the operator has not named
+    // (tests/integration/setup/databaseGuardRules.ts).
+    setupFiles: ["tests/integration/setup/guardDatabase.ts"],
     environment: "node",
     // Phase 6G-4A: multiple files now create/count real global-scope rows
     // (Recording, Collection, MediaResource) against the same shared
