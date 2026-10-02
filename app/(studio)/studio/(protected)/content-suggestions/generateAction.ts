@@ -15,19 +15,33 @@ import { describeGenerationFailureForEditor } from "../../../../../modules/ai/ga
 // suggestion's review page; failure goes back to the list with a safe,
 // secret-free message (modules/ai/gateway/describeGenerationFailureForEditor.ts).
 
-function errorRedirect(message: string): never {
+// Phase 6I-3: the Editorial Operations Queue (/studio/editorial) reuses this
+// exact action for its "Generate suggestion" / "Regenerate" buttons, so
+// permission, the duplicate-generation guard and the audit trail are the same
+// code path. It only differs in where a FAILURE lands: the form may carry a
+// `returnTo` naming the queue, so the editor sees the message where they
+// clicked. Anything but the queue path (an exact, relative /studio/editorial
+// URL) is ignored — never an open redirect.
+const QUEUE_RETURN_PATH = /^\/studio\/editorial(\?[A-Za-z0-9_=&%.+-]*)?$/;
+
+function errorRedirect(message: string, returnTo?: string | null): never {
+  if (returnTo && QUEUE_RETURN_PATH.test(returnTo)) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  }
   redirect(`/studio/content-suggestions?error=${encodeURIComponent(message)}`);
 }
 
 export async function generateEditorialSuggestionAction(formData: FormData): Promise<void> {
+  const returnTo = String(formData.get("returnTo") ?? "").trim() || null;
+
   const session = await getCurrentStudioSession();
   if (!session || !can(session.user.role, "RECORDING_WRITE")) {
-    errorRedirect("You do not have permission to request an editorial suggestion.");
+    errorRedirect("You do not have permission to request an editorial suggestion.", returnTo);
   }
 
   const recordingId = String(formData.get("recordingId") ?? "").trim();
   if (!recordingId) {
-    errorRedirect("Select a Recording to generate an editorial suggestion for.");
+    errorRedirect("Select a Recording to generate an editorial suggestion for.", returnTo);
   }
 
   const result = await generateRecordingEditorialSuggestion({ recordingId, requestedById: session!.user.id });
@@ -36,5 +50,5 @@ export async function generateEditorialSuggestionAction(formData: FormData): Pro
     redirect(`/studio/content-suggestions/${result.suggestion.id}`);
   }
 
-  errorRedirect(describeGenerationFailureForEditor(result));
+  errorRedirect(describeGenerationFailureForEditor(result), returnTo);
 }

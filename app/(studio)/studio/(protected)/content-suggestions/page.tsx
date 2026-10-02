@@ -4,6 +4,7 @@ import { getCurrentStudioSession } from "../../../../../modules/auth/authService
 import { can } from "../../../../../modules/auth/policy";
 import { listContentSuggestionsForStudio } from "../../../../../modules/db/repositories/contentSuggestionRepository";
 import { listRecordingsForStudio } from "../../../../../modules/db/repositories/recordingRepository";
+import { getRecordingDisplayTitles } from "../../../../../modules/db/repositories/editorialQueueRepository";
 import { isRecordingPublished } from "../../../../../modules/mmke/catalogue/isRecordingPublished";
 import { formatAuditTimestamp } from "../../../../../modules/audit/auditDisplay";
 import { generateEditorialSuggestionAction } from "./generateAction";
@@ -70,6 +71,12 @@ export default async function ContentSuggestionsPage({ searchParams }: { searchP
     listContentSuggestionsForStudio({ targetEntityType: "RECORDING" }),
     listRecordingsForStudio(),
   ]);
+
+  // Phase 6I-3: the Target column shows the Recording's title (resolved from its
+  // revisions in one query), never the raw id.
+  const recordingTitles = await getRecordingDisplayTitles(
+    suggestions.filter((suggestion) => suggestion.targetEntityType === "RECORDING").map((suggestion) => suggestion.targetEntityId)
+  );
 
   const eligibleRecordings = allRecordings.filter((recording) => isRecordingPublished(recording));
   const suggestionCountByRecordingId = new Map<string, number>();
@@ -157,7 +164,9 @@ export default async function ContentSuggestionsPage({ searchParams }: { searchP
                 <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{formatAuditTimestamp(suggestion.createdAt)}</td>
                 <td style={{ borderBottom: "1px solid #eee" }}>{suggestion.suggestionType}</td>
                 <td style={{ borderBottom: "1px solid #eee" }}>
-                  {suggestion.targetEntityType}: {suggestion.targetEntityId}
+                  {suggestion.targetEntityType === "RECORDING"
+                    ? `Recording — ${recordingTitles.get(suggestion.targetEntityId) ?? "(Recording no longer available)"}`
+                    : suggestion.targetEntityType}
                 </td>
                 <td style={{ borderBottom: "1px solid #eee" }}>
                   <Link href={`/studio/content-suggestions/${suggestion.id}`}>{suggestion.status}</Link>

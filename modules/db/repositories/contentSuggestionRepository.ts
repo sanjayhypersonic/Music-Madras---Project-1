@@ -6,6 +6,10 @@ import {
 } from "../../mmke/contentIntelligence/contentSuggestionEntityType";
 import { computeContextFingerprint } from "../../mmke/contentIntelligence/computeContextFingerprint";
 import {
+  deriveContentSuggestionFreshness,
+  type ContentSuggestionFreshness,
+} from "../../mmke/contentIntelligence/deriveContentSuggestionFreshness";
+import {
   canApproveContentSuggestion,
   canRejectContentSuggestion,
   canRequestContentSuggestionChanges,
@@ -363,7 +367,7 @@ export function listContentSuggestionsForStudio(filters: ListContentSuggestionsF
   });
 }
 
-export type ContentSuggestionFreshness = "CURRENT" | "STALE" | "UNKNOWN";
+export type { ContentSuggestionFreshness };
 
 /**
  * Re-assembles the CURRENT RecordingContext (Phase 6H-3) for the
@@ -386,10 +390,8 @@ export async function checkContentSuggestionFreshness(suggestionId: string): Pro
   }
 
   const currentContext = await getRecordingContext(suggestion.targetEntityId);
-  if (!currentContext.ok) {
-    return "UNKNOWN";
-  }
-
-  const currentFingerprint = computeContextFingerprint(currentContext.context);
-  return currentFingerprint === suggestion.generationRequest.contextFingerprint ? "CURRENT" : "STALE";
+  return deriveContentSuggestionFreshness(
+    suggestion.generationRequest.contextFingerprint,
+    currentContext.ok ? computeContextFingerprint(currentContext.context) : null
+  );
 }

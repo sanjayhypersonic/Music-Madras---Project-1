@@ -2615,3 +2615,85 @@ just before, not inside, the apply transaction (a very small window). Rollback
 atomicity holds by construction (single transaction) and was not fault-injected.
 The "forkDraftFromPublished does not copy Works/Media" limitation noted in 116 is
 resolved here.
+
+## 118. Phase 6I-3 - Editorial Operations Queue
+
+**What it is.** `/studio/editorial` (the existing route; no duplicate page) now
+leads with a queue of what needs a human, or an explicit action, next. It is a
+VIEW derived live from state that already exists: Recording and its revisions,
+ContentGenerationRequest, ContentSuggestion, the `CONTENT_SUGGESTION_APPLIED`
+audit entry (6I-2), and the existing freshness fingerprint comparison. There is
+no task/work-item/priority/score/assignment table, no schema change, no AI call,
+no analytics, no bulk generation, and nothing acts automatically: generation,
+review, application and publication all remain explicit actions with their
+existing permissions. The existing phase-grouped list stays below the queue.
+
+**Seven states** (rules are pure and unit-tested:
+`modules/mmke/contentIntelligence/editorialOperationsQueue.ts`):
+
+| State | Derived from |
+|---|---|
+| NEEDS_ENRICHMENT | Recording not publicly published (not yet eligible for generation). Shows the existing completeness report's MISSING categories and readiness; links to the editor. |
+| READY_FOR_GENERATION | published, no generation in flight, no open suggestion, and no editorial prose on the published revision (the same rule as the context's EDITORIAL_CONTENT gap). Action: explicit "Generate suggestion". |
+| GENERATION | a request is PENDING/GENERATING (no duplicate Generate offered; the existing guard still enforces it), or the Recording's latest request FAILED (until superseded; explicit retry). SUCCEEDED requests are not rows of their own: their result is a suggestion, listed in its own state. |
+| AWAITING_REVIEW | suggestion DRAFT_READY or EDITOR_REVIEW. |
+| CHANGES_REQUESTED | suggestion CHANGES_REQUESTED; shows the note, reviewer and date. |
+| STALE | an open suggestion whose freshness is STALE per the same rule `checkContentSuggestionFreshness` uses (now one shared pure function, `deriveContentSuggestionFreshness`). Actions: Review, and Regenerate (explicit; hidden while a generation is in flight). Nothing is regenerated or discarded automatically. |
+| APPROVED_AWAITING_APPLICATION | APPROVED, applicable to a Recording field, with no `CONTENT_SUGGESTION_APPLIED` entry. Links to the existing apply control. |
+
+REJECTED suggestions, applied suggestions, approved suggestions with nothing to
+apply (e.g. an information gap), published Recordings that already have prose
+and no open work, and ARCHIVED Recordings have no row. A Recording can have
+several rows (one per open suggestion). An open suggestion replaces the
+Recording-level READY row, so there is one work item, not two.
+
+**Rows** show Recording title, YouTube title (primary video, when linked), state,
+target field, suggestion status and type, freshness, last updated, and the
+action. Titles are resolved from the canonical relationships (published revision
+title, else draft title, else slug) by `getRecordingDisplayTitles`, one query;
+nothing is copied onto ContentSuggestion. The existing Content Suggestions list,
+which showed `RECORDING: <uuid>`, now uses the same resolution.
+
+**Filters and paging** live in the URL: `state`, `q` (Recording title), `yt`
+(YouTube title), `field` (target field), `page`; e.g.
+`/studio/editorial?state=AWAITING_REVIEW&q=handel`. Invalid values are ignored.
+Summary counts cover the whole queue and are unaffected by filters. Ordering is
+deterministic: with no state selected, human-attention states come first;
+attention queues (awaiting review, changes requested, stale, approved) are
+oldest-first, generation/enrichment queues most-recently-touched-first, with the
+row key as the final tie-breaker. Pagination is server-side, default 20 per page.
+
+**Permissions.** The page needs a Studio session (the existing convention for
+`/studio/editorial`). Buttons reuse existing actions, each enforcing its own
+permission server-side regardless of the UI: generate/regenerate `RECORDING_WRITE`
+(the existing `generateEditorialSuggestionAction`, which now accepts an optional
+`returnTo` so a failure lands back on the queue; only an exact relative
+`/studio/editorial` URL is honoured, anything else is ignored), review
+`EDITORIAL_REVIEW`, apply `RECORDING_WRITE`, publish `RECORDING_PUBLISH`. The
+Generate button is hidden without `RECORDING_WRITE`.
+
+**Efficiency.** `editorialQueueRepository.ts` gathers the facts in a constant
+number of queries (Recordings with the needed revision columns; open
+suggestions; one audit lookup for applied state; in-flight and latest generation
+requests), not one per row; an integration test counts the SQL and proves the
+count does not grow with the number of Recordings or suggestions. The one cost
+that is not constant is freshness: it needs the Recording's current context
+fingerprint, assembled by the existing `getRecordingContext` (about ten queries)
+ONCE per distinct Recording that has an open suggestion, never once per
+suggestion. Filtering, sorting and paging run in memory over the derived rows.
+
+**Known limitations.** (1) Derivation is O(Recordings + open suggestions) per
+page view, and freshness is O(Recordings with open suggestions) context
+assemblies; fine at MVP volume, but the natural scaling fixes are persisted
+`appliedAt` and "current fingerprint" columns (migrations, deliberately not made
+here). (2) "Applied" is audit-derived, as in 6I-2. (3) Gaps are the existing
+completeness categories (Identity, Works, Media, Performance, Venue, Performers,
+SEO, Educational); provenance gaps from the Recording context are not shown.
+(4) READY_FOR_GENERATION treats "no description / listening guide / analysis" as
+the signal; a published Recording with prose but no SEO text has no row.
+(5) A stuck GENERATING request blocks generation for its Recording until an
+operator completes it (unchanged from 6H-6); the queue makes it visible.
+(6) The existing phase-grouped list below the queue still issues one completeness
+query per Recording (pre-existing; not changed). Analytics (YouTube Analytics,
+GA4, Search Console) and the final pre-launch full YouTube sync remain out of
+scope; the full sync is a launch gate, not part of this phase.
