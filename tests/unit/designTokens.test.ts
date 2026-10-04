@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "crypto";
-import { readdirSync, readFileSync, statSync } from "fs";
+import { readFileSync, statSync } from "fs";
 import path from "path";
 import { composite, contrastRatio, relativeLuminance } from "../../modules/design/contrast";
 import { evaluateDirection, failures } from "../../modules/design/evaluateDirection";
 import { VISUAL_DIRECTIONS, type ThemeColours } from "../../modules/design/visualDirections";
 
-// Phase 6J-3A — the shared semantic token foundation. This phase must change
-// NOTHING that renders today, so the tests pin: the roster, the exact legacy
-// values every Museum token resolved to before the move, accessibility of the
-// shipped roles, the official logo, and that the evaluation data for the
-// current palette cannot drift away from what actually ships.
+// The shared semantic token system. Phase 6J-3A built it as a no-op; Phase 6J-3B
+// applied the approved Direction C through it. These tests pin: the roster, the
+// accessibility of every shipped role, the semantic discipline (amber = heritage,
+// teal-blue = interaction, functional colours independent), that the evaluation
+// data for Direction C cannot drift from what ships, and the official logo.
 
 const root = path.resolve(__dirname, "../..");
 const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");
@@ -35,7 +35,7 @@ const COLOUR_TOKENS = [
   // text
   "text-primary", "text-secondary", "text-muted", "text-inverse", "heading", "link", "link-hover",
   // brand
-  "brand", "brand-hover", "brand-subtle", "on-brand", "brand-gradient", "brand-glow",
+  "brand", "brand-hover", "brand-subtle", "on-brand",
   // discovery / interaction
   "discovery", "discovery-hover", "discovery-subtle", "on-discovery", "focus",
   // heritage
@@ -72,48 +72,102 @@ describe("the token roster", () => {
     for (const token of Object.keys(dark)) expect(token, token).not.toMatch(/-(magenta|purple|lavender|blue|gold|amber|teal|red|green|orange|yellow|\d{3})(-|$)/);
   });
 
-  it("does not set color-scheme (a page-level decision owned by each surface's own stylesheet)", () => {
-    expect(tokenCss.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/color-scheme/);
-    const museum = read("app/(museum)/museum.css");
-    expect(museum).toMatch(/:root\s*\{\s*color-scheme:\s*dark;\s*\}/);
-    expect(museum).toMatch(/:root\[data-theme="light"\]\s*\{\s*color-scheme:\s*light;\s*\}/);
+  it("declares the page colour scheme once, here, for both themes — never per stylesheet", () => {
+    const own = tokenCss.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(own).toMatch(/color-scheme:\s*dark/);
+    expect(own).toMatch(/color-scheme:\s*light/);
+    expect(read("app/(museum)/museum.css")).not.toMatch(/color-scheme/);
   });
-
   it("is imported once, by the root layout", () => {
     expect(read("app/layout.tsx")).toMatch(/^import "\.\/tokens\.css"/m);
   });
 });
 
-describe("the move is a no-op: every Museum token still resolves to the value it had before", () => {
-  // The exact values of museum.css's own token block at commit d59addb, mapped to the role that replaced each name.
-  const LEGACY: { role: string; dark: string; light: string }[] = [
-    { role: "background", dark: "#1a1a2e", light: "#faf8fb" }, // --mm-bg
-    { role: "surface", dark: "#211f36", light: "#ffffff" },
-    { role: "background-elevated", dark: "#292640", light: "#f3eef9" }, // --mm-surface-raised
-    { role: "border", dark: "rgba(201, 184, 232, 0.14)", light: "rgba(106, 59, 168, 0.16)" },
-    { role: "shadow", dark: "rgba(0, 0, 0, 0.45)", light: "rgba(26, 26, 46, 0.12)" },
-    { role: "text-primary", dark: "#f1eef8", light: "#1a1a2e" }, // --mm-text
-    { role: "text-muted", dark: "#a9a3c2", light: "#5b5770" },
-    { role: "brand", dark: "#c2185b", light: "#c2185b" }, // --mm-accent
-    { role: "brand-hover", dark: "#95135a", light: "#95135a" }, // --mm-accent-deep
-    { role: "brand-glow", dark: "#6a3ba8", light: "#6a3ba8" }, // --mm-accent-secondary
-    { role: "border-hover", dark: "#c9b8e8", light: "#8f7ac4" }, // --mm-accent-tertiary
-    { role: "on-brand", dark: "#ffffff", light: "#ffffff" }, // --mm-accent-on
-    { role: "link", dark: "#c9b8e8", light: "#6a3ba8" },
-    { role: "link-hover", dark: "#ece3fa", light: "#95135a" },
-    { role: "heritage", dark: "#c9b8e8", light: "#6a3ba8" }, // --mm-text-accent
-    { role: "border-strong", dark: "#c9b8e8", light: "#6a3ba8" },
-    { role: "focus", dark: "#c9b8e8", light: "#6a3ba8" }, // the focus ring used --mm-link
-  ];
+// Hue of a #rrggbb colour, in degrees.
+function hue(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d === 0) return 0;
+  const h = max === r ? ((g - b) / d + (g < b ? 6 : 0)) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return h * 60;
+}
+function saturation(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  return max === min ? 0 : (max - min) / (l > 0.5 ? 2 - max - min : max + min);
+}
 
-  it.each(LEGACY)("--mm-$role keeps its dark and light value", ({ role, dark: d, light: l }) => {
-    expect(dark[`--mm-${role}`]).toBe(d);
-    expect(light[`--mm-${role}`]).toBe(l);
+describe("Direction C: the semantic discipline", () => {
+  const themes = { dark, light };
+
+  for (const [name, t] of Object.entries(themes)) {
+    describe(`${name} theme`, () => {
+      it("amber is the logo's marigold family (heritage / archive / identity)", () => {
+        for (const role of ["brand", "heritage"]) {
+          const h = hue(t[`--mm-${role}`]);
+          expect(h, `${role} hue`).toBeGreaterThanOrEqual(30);
+          expect(h, `${role} hue`).toBeLessThanOrEqual(50);
+        }
+        expect(t["--mm-brand"].toLowerCase()).toBe("#f1b902"); // sampled from the official logo
+      });
+
+      it("the interaction colour is teal-leaning (kin to the logo's teal, hue ~180), not a generic product blue (hue ~210-230)", () => {
+        for (const role of ["link", "link-hover", "discovery", "discovery-hover", "focus"]) {
+          const h = hue(t[`--mm-${role}`]);
+          expect(h, `${role} hue`).toBeGreaterThanOrEqual(185);
+          expect(h, `${role} hue`).toBeLessThanOrEqual(200);
+        }
+      });
+
+      it("the interaction colour is muted, not neon (saturation capped)", () => {
+        for (const role of ["link", "discovery"]) expect(saturation(t[`--mm-${role}`]), role).toBeLessThanOrEqual(0.7);
+      });
+
+      it("functional colours are independent of both: info is a different hue from the interaction colour, warning is not the marigold", () => {
+        expect(Math.abs(hue(t["--mm-info"]) - hue(t["--mm-link"]))).toBeGreaterThanOrEqual(25);
+        expect(hue(t["--mm-warning"])).toBeLessThanOrEqual(hue(t["--mm-brand"]) - 8);
+        expect(t["--mm-warning"]).not.toBe(t["--mm-heritage"]);
+        expect(t["--mm-error"]).not.toBe(t["--mm-brand"]);
+      });
+    });
+  }
+
+  // Rules in museum.css: which selectors may use which family.
+  const rules = read("app/(museum)/museum.css")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("}")
+    .map((chunk) => {
+      const open = chunk.lastIndexOf("{");
+      return open === -1 ? null : { selector: chunk.slice(chunk.lastIndexOf("\n", open - 1) + 1 === 0 ? 0 : 0, open).trim().split(/@media[^{]*\{/).pop()!.trim(), body: chunk.slice(open + 1) };
+    })
+    .filter((r): r is { selector: string; body: string } => Boolean(r));
+
+  it("amber (brand / heritage) is never used on an interactive control, link or hover state", () => {
+    const offenders = rules.filter((r) => /--mm-(brand|heritage)/.test(r.body) && /(^|[\s,])(a|button|input|select|textarea)\b|:hover|:focus|-button|-toggle|-pill|-input/.test(r.selector));
+    expect(offenders.map((r) => r.selector)).toEqual([]);
   });
 
-  it("the brand gradient, motion, radii, shadows and focus ring keep their values", () => {
-    expect(dark["--mm-brand-gradient"]).toBe("linear-gradient(135deg, #95135a, #6a3ba8)");
-    expect(light["--mm-brand-gradient"]).toBe("linear-gradient(135deg, #95135a, #6a3ba8)");
+  it("the interaction colour (discovery / link) is never used for heritage markers", () => {
+    const offenders = rules.filter((r) => /--mm-(discovery|link)/.test(r.body) && /eyebrow|group-heading|curator-note|category-card__status/.test(r.selector));
+    expect(offenders.map((r) => r.selector)).toEqual([]);
+  });
+
+  it("the Museum's heritage markers do use amber", () => {
+    for (const selector of ["eyebrow", "group-heading", "curator-note", "category-card__status"]) {
+      expect(rules.some((r) => r.selector.includes(selector) && /--mm-heritage/.test(r.body)), selector).toBe(true);
+    }
+  });
+
+  it("the primary button is the discovery fill with on-discovery text — not amber, not a gradient", () => {
+    const button = rules.find((r) => r.selector === ".museum-button")!;
+    expect(button.body).toMatch(/background:\s*var\(--mm-discovery\)/);
+    expect(button.body).not.toMatch(/gradient\(/);
+  });
+
+  it("the shared shape, elevation, focus and motion tokens keep their values", () => {
     expect(dark["--mm-transition"]).toBe("180ms ease");
     expect([dark["--mm-radius-md"], dark["--mm-radius-lg"], dark["--mm-radius-pill"]]).toEqual(["0.85rem", "1rem", "999px"]);
     expect([dark["--mm-shadow-sm"], dark["--mm-shadow-md"]]).toEqual(["0 6px 18px var(--mm-shadow)", "0 8px 24px var(--mm-shadow)"]);
@@ -133,13 +187,12 @@ describe("the move is a no-op: every Museum token still resolves to the value it
   });
 
   it("no retired token name survives anywhere in the app", () => {
-    const retired = /--mm-(accent|bg|surface-raised|text-accent|gradient-accent)(?![a-z-])|var\(--mm-text\)/;
-    for (const file of ["app/(museum)/museum.css", "app/tokens.css", "components/museum/MuseumShell.tsx", "app/(museum)/fonts.ts"]) {
+    const retired = /--mm-(accent|bg|surface-raised|text-accent|gradient-accent|brand-gradient|brand-glow)(?![a-z-])|var\(--mm-text\)/;
+    for (const file of ["app/(museum)/museum.css", "app/tokens.css", "components/museum/MuseumShell.tsx"]) {
       expect(read(file), file).not.toMatch(retired);
     }
   });
 });
-
 describe("the shipped roles are accessible (WCAG 2.x AA)", () => {
   const themes = { dark, light };
   const hex = (value: string) => value;
@@ -149,7 +202,7 @@ describe("the shipped roles are accessible (WCAG 2.x AA)", () => {
       const surfaces = ["--mm-background", "--mm-surface", "--mm-background-elevated"].map((k) => hex(t[k]));
 
       it("text roles are >= 4.5:1 on every surface", () => {
-        for (const role of ["text-primary", "text-secondary", "text-muted", "heading", "link", "link-hover", "heritage", "discovery", "discovery-hover"]) {
+        for (const role of ["text-primary", "text-secondary", "text-muted", "heading", "link", "link-hover", "heritage"]) {
           for (const surface of surfaces) expect(contrastRatio(t[`--mm-${role}`], surface), `${role} on ${surface}`).toBeGreaterThanOrEqual(4.5);
         }
       });
@@ -160,8 +213,24 @@ describe("the shipped roles are accessible (WCAG 2.x AA)", () => {
         }
       });
 
-      it("text on the solid brand fills is >= 4.5:1", () => {
-        for (const fill of ["brand", "brand-hover", "brand-glow"]) expect(contrastRatio(t["--mm-on-brand"], t[`--mm-${fill}`]), fill).toBeGreaterThanOrEqual(4.5);
+      it("text on the solid fills is >= 4.5:1 (amber brand fill, teal-blue discovery fill)", () => {
+        for (const fill of ["brand", "brand-hover"]) expect(contrastRatio(t["--mm-on-brand"], t[`--mm-${fill}`]), fill).toBeGreaterThanOrEqual(4.5);
+        for (const fill of ["discovery", "discovery-hover"]) expect(contrastRatio(t["--mm-on-discovery"], t[`--mm-${fill}`]), fill).toBeGreaterThanOrEqual(4.5);
+      });
+
+      it("the interaction colour is legible on its own tinted background", () => {
+        const tint = `#${composite(t["--mm-discovery-subtle"], t["--mm-surface"]).map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+        expect(contrastRatio(t["--mm-link"], tint)).toBeGreaterThanOrEqual(4.5);
+        const heritageTint = `#${composite(t["--mm-heritage-subtle"], t["--mm-surface"]).map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+        expect(contrastRatio(t["--mm-heritage"], heritageTint)).toBeGreaterThanOrEqual(4.5);
+      });
+
+      it("decorative dividers are no longer near-invisible (they were 1.07:1) yet stay soft (< 3:1)", () => {
+        for (const surface of [t["--mm-background"], t["--mm-surface"]]) {
+          const ratio = contrastRatio(t["--mm-border"], surface);
+          expect(ratio).toBeGreaterThanOrEqual(1.5);
+          expect(ratio).toBeLessThan(3);
+        }
       });
 
       it("functional colours are >= 4.5:1 as text, on the surfaces and on their own tinted background", () => {
@@ -206,8 +275,8 @@ describe("the evaluation data for the four directions", () => {
     for (const d of VISUAL_DIRECTIONS) expect(d.functional).toEqual(VISUAL_DIRECTIONS[0].functional);
   });
 
-  it("direction A is exactly what ships (it cannot drift from app/tokens.css)", () => {
-    const a = VISUAL_DIRECTIONS[0];
+  it("direction C (the approved direction) is exactly what ships — it cannot drift from app/tokens.css", () => {
+    const a = VISUAL_DIRECTIONS.find((d) => d.id === "C")!;
     for (const [themeName, tokens] of [["dark", dark], ["light", light]] as const) {
       const theme = a[themeName];
       expect(theme.background).toBe(tokens["--mm-background"]);
@@ -223,6 +292,10 @@ describe("the evaluation data for the four directions", () => {
       expect(theme.focus).toBe(tokens["--mm-focus"]);
       expect(theme.heritage).toBe(tokens["--mm-heritage"]);
       expect(theme.discovery).toBe(tokens["--mm-discovery"]);
+      expect(theme.primaryFill).toBe(tokens["--mm-discovery"]);
+      expect(theme.primaryOn).toBe(tokens["--mm-on-discovery"]);
+      expect(theme.discoverySubtle).toBe(tokens["--mm-discovery-subtle"]);
+      expect(theme.heritageSubtle).toBe(tokens["--mm-heritage-subtle"]);
       for (const role of ["success", "warning", "error", "info"] as const) expect(a.functional[themeName][role]).toBe(tokens[`--mm-${role}`]);
     }
   });
@@ -239,20 +312,4 @@ describe("the official Music Madras logo is untouched", () => {
     const css = read("app/(museum)/museum.css").replace(/\/\*[\s\S]*?\*\//g, "");
     for (const rule of css.match(/\.museum-(header|hero)__logo\s*\{[^}]*\}/g) ?? []) expect(rule).not.toMatch(/filter|mix-blend|opacity|mask/);
   });
-});
-
-describe("scope: this phase does not migrate Studio", () => {
-  it("no Studio file consumes the tokens yet", () => {
-    const offenders: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (/\.(tsx?|css)$/.test(entry.name) && readFileSync(full, "utf8").includes("var(--mm-")) offenders.push(path.relative(root, full));
-      }
-    };
-    walk(path.join(root, "app/(studio)"));
-    walk(path.join(root, "components/studio"));
-    expect(offenders).toEqual([]);
-  }, 30000);
 });

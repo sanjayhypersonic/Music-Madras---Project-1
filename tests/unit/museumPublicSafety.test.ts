@@ -209,25 +209,23 @@ describe("Museum colour tokens meet WCAG contrast for their role", () => {
         expect(contrast(t["mm-text-muted"], t["mm-background"])).toBeGreaterThanOrEqual(4.5);
       });
 
-      it("white text on the brand fills (buttons) is >= 4.5:1", () => {
-        for (const fill of ["mm-brand", "mm-brand-hover", "mm-brand-glow"]) {
-          expect(contrast(t["mm-on-brand"], t[fill]), `white on ${fill}`).toBeGreaterThanOrEqual(4.5);
-        }
+      it("text on the solid fills (discovery buttons, amber brand fill) is >= 4.5:1", () => {
+        for (const fill of ["mm-discovery", "mm-discovery-hover"]) expect(contrast(t["mm-on-discovery"], t[fill]), `on ${fill}`).toBeGreaterThanOrEqual(4.5);
+        for (const fill of ["mm-brand", "mm-brand-hover"]) expect(contrast(t["mm-on-brand"], t[fill]), `on ${fill}`).toBeGreaterThanOrEqual(4.5);
       });
     });
   }
 
-  it("the brand palette itself is unchanged", () => {
-    expect(dark["mm-brand"].toLowerCase()).toBe("#c2185b");
-    expect(dark["mm-brand-hover"].toLowerCase()).toBe("#95135a");
-    expect(dark["mm-brand-glow"].toLowerCase()).toBe("#6a3ba8");
-    expect(dark["mm-border-hover"].toLowerCase()).toBe("#c9b8e8");
-    expect(dark["mm-background"].toLowerCase()).toBe("#1a1a2e");
+  it("the approved palette: warm near-black foundation, the logo's marigold, a teal-leaning interaction colour", () => {
+    expect(dark["mm-background"].toLowerCase()).toBe("#14110e");
+    expect(dark["mm-brand"].toLowerCase()).toBe("#f1b902");
+    expect(dark["mm-link"].toLowerCase()).toBe("#6cbdd1");
+    expect(light["mm-link"].toLowerCase()).toBe("#1b6a7f");
   });
 
-  it("no link or small text rule uses the brand magenta/purple directly as a text colour", () => {
-    // Magenta/Purple are fills: on the near-black they are 2.0-2.9:1 as text.
-    const textRules = css.match(/[^{}]+\{[^{}]*\bcolor:\s*var\(--mm-brand(-hover|-glow)?\)[^{}]*\}/g) ?? [];
+  it("no rule uses a solid FILL colour (brand marigold, discovery fill) directly as a text colour", () => {
+    // Marigold is 1.7:1 on a light page and the dark discovery fill is only 4:1 on the near-black: text roles are --mm-heritage / --mm-link.
+    const textRules = css.match(/[^{}]+\{[^{}]*\bcolor:\s*var\(--mm-(brand|discovery)(-hover)?\)[^{}]*\}/g) ?? [];
     expect(textRules).toEqual([]);
   });
 

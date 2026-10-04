@@ -102,7 +102,7 @@ const html = `<!doctype html>
 <h1>Music Madras — visual direction specimen</h1>
 <p class="note">Palette specimens for the product-owner decision (Phase 6J-3A), generated from <code>modules/design/visualDirections.ts</code> by <code>npm run design:specimen</code>.
 They show roles (surfaces, text, links, buttons, badges, status colours, focus) — not product pages, and no catalogue data. The logo is the approved asset, unmodified.
-Direction A is what ships today; B, C and D are proposals whose exact values are open to adjustment once a direction is chosen.
+Direction C was approved and ships (Phase 6J-3B); A is the previous palette; B and D were not chosen.
 Headings use Georgia here only so this file is self-contained; the site uses Playfair Display and Inter.</p>
 ${sections}
 </body></html>

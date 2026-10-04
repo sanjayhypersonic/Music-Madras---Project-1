@@ -1,8 +1,9 @@
-// Phase 6J-3A — the four candidate visual directions, expressed in the SAME
-// semantic roles the token foundation uses (see app/tokens.css). This is
-// EVALUATION DATA for the product owner's decision: nothing here is applied to
-// the site. Direction A is the palette the site uses today; B, C and D are
-// proposals whose exact values are open to adjustment once a direction is chosen.
+// Phase 6J-3A/3B — the four candidate visual directions, expressed in the SAME
+// semantic roles the token foundation uses (see app/tokens.css). Phase 6J-3A used
+// this as EVALUATION DATA; the product owner then approved Direction C, which
+// Phase 6J-3B ships: direction C below is exactly app/tokens.css (a test prevents
+// drift). A is the previous palette, kept for the record; B and D are the
+// alternatives that were not chosen.
 //
 // Everything is derived from the official logo (public/music-madras-logo.webp,
 // sampled): marigold #F1B902 (25% of the artwork), brick red #C03431, teal
@@ -52,15 +53,15 @@ export interface VisualDirection {
 // is a burnt orange (not the heritage marigold) so it cannot be mistaken for
 // the brand; info is a calm blue.
 const FUNCTIONAL = {
-  dark: { success: "#5cc48a", warning: "#f2a65a", error: "#f2767d", info: "#7bb4e8" },
-  light: { success: "#16703f", warning: "#8f4f00", error: "#b3261e", info: "#1d5fa6" },
+  dark: { success: "#5cc48a", warning: "#f2a65a", error: "#f2767d", info: "#8fa8f2" },
+  light: { success: "#16703f", warning: "#8f4f00", error: "#b3261e", info: "#3a4fb0" },
 };
 
 export const VISUAL_DIRECTIONS: readonly VisualDirection[] = [
   {
     id: "A",
-    name: "Current magenta / purple",
-    summary: "Deep Magenta #95135A, Bright Magenta #C2185B, Purple #6A3BA8, Lavender #C9B8E8 on near-black #1A1A2E — as shipped.",
+    name: "Previous magenta / purple",
+    summary: "The previous palette (until 6J-3B): Deep Magenta #95135A, Bright Magenta #C2185B, Purple #6A3BA8, Lavender #C9B8E8 on near-black #1A1A2E.",
     dark: {
       background: "#1a1a2e",
       backgroundElevated: "#292640",
@@ -141,30 +142,32 @@ export const VISUAL_DIRECTIONS: readonly VisualDirection[] = [
       discoverySubtle: "rgba(138, 90, 0, 0.10)",
       focus: "#8a5a00",
       heritage: "#8a5a00",
-      heritageSubtle: "rgba(241, 185, 2, 0.20)",
+      heritageSubtle: "rgba(241, 185, 2, 0.2)",
     },
     functional: FUNCTIONAL,
   },
   {
     id: "C",
     name: "Black + amber + restrained digital blue",
-    summary: "Warm near-black. Amber = heritage / archive / identity (eyebrows, rules, archive badges). Blue = discovery / links / search / focus / primary actions.",
+    summary:
+      "APPROVED and shipped (Phase 6J-3B). Warm near-black. Amber = heritage / archive / identity (eyebrows, archive markers, curator rules). Teal-leaning blue = discovery / links / search / focus / primary actions. Values are exactly app/tokens.css (a test prevents drift).",
     dark: {
-      background: "#16120f",
-      backgroundElevated: "#28211c",
-      surface: "#1e1915",
-      border: "rgba(245, 237, 224, 0.14)",
+      background: "#14110e",
+      backgroundElevated: "#2a231d",
+      surface: "#1d1814",
+      border: "rgba(245, 237, 224, 0.22)",
       borderStrong: "#8f8372",
       textPrimary: "#f5ede0",
       textSecondary: "#d2c8b8",
       textMuted: "#a89e8e",
-      link: "#7db4e6",
-      linkHover: "#a9cdf0",
-      primaryFill: "#2f6fb3",
+      link: "#6cbdd1",
+      linkHover: "#9ad7e6",
+      primaryFill: "#1f7f99",
       primaryOn: "#ffffff",
-      discovery: "#7db4e6",
-      discoverySubtle: "rgba(125, 180, 230, 0.14)",
-      focus: "#7db4e6",
+      discovery: "#1f7f99", // the SOLID action fill; link is its text counterpart
+      discoverySubtle: "rgba(108, 189, 209, 0.14)",
+      discoveryOnSubtle: "#6cbdd1",
+      focus: "#6cbdd1",
       heritage: "#f1b902",
       heritageSubtle: "rgba(241, 185, 2, 0.14)",
     },
@@ -172,24 +175,24 @@ export const VISUAL_DIRECTIONS: readonly VisualDirection[] = [
       background: "#faf6ee",
       backgroundElevated: "#f3ecdd",
       surface: "#ffffff",
-      border: "rgba(31, 25, 20, 0.14)",
+      border: "rgba(31, 25, 20, 0.24)",
       borderStrong: "#7d7262",
       textPrimary: "#1f1914",
       textSecondary: "#4a4137",
       textMuted: "#675d50",
-      link: "#1d5fa6",
-      linkHover: "#144a85",
-      primaryFill: "#1d5fa6",
+      link: "#1b6a7f",
+      linkHover: "#14515f",
+      primaryFill: "#1b6a7f",
       primaryOn: "#ffffff",
-      discovery: "#1d5fa6",
-      discoverySubtle: "rgba(29, 95, 166, 0.10)",
-      focus: "#1d5fa6",
+      discovery: "#1b6a7f",
+      discoverySubtle: "rgba(27, 106, 127, 0.1)",
+      discoveryOnSubtle: "#1b6a7f",
+      focus: "#1b6a7f",
       heritage: "#8a5a00",
-      heritageSubtle: "rgba(241, 185, 2, 0.20)",
+      heritageSubtle: "rgba(241, 185, 2, 0.2)",
     },
     functional: FUNCTIONAL,
-  },
-  {
+  },  {
     id: "D",
     name: "Black + blue + restrained amber",
     summary: "Cool near-black. Blue leads everything interactive and brand-facing; amber is a small heritage accent (eyebrows, archive badges).",
@@ -229,7 +232,7 @@ export const VISUAL_DIRECTIONS: readonly VisualDirection[] = [
       discoverySubtle: "rgba(29, 95, 166, 0.10)",
       focus: "#1d5fa6",
       heritage: "#8a5a00",
-      heritageSubtle: "rgba(241, 185, 2, 0.20)",
+      heritageSubtle: "rgba(241, 185, 2, 0.2)",
     },
     functional: FUNCTIONAL,
   },

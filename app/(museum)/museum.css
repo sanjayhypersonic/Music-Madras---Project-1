@@ -1,5 +1,5 @@
 /*
- * Museum stylesheet (Phase 6G-2B; tokens moved in Phase 6J-3A).
+ * Museum stylesheet (Phase 6G-2B; tokens moved in 6J-3A; Direction C applied in 6J-3B).
  * Scoped entirely to app/(museum)/** (imported only by its layout and the
  * site-wide not-found page, so Next's per-route CSS splitting means Studio never
  * loads this file).
@@ -14,14 +14,6 @@
  * app/(museum)/fonts.ts) on the .museum-root element; they are used directly.
  */
 
-/* The Museum owns its pages, so it declares the colour scheme for form controls and scrollbars. */
-:root {
-  color-scheme: dark;
-}
-
-:root[data-theme="light"] {
-  color-scheme: light;
-}
 /* ---------------------------------------------------------------------
    Base
 --------------------------------------------------------------------- */
@@ -39,6 +31,7 @@
 .museum-root h2,
 .museum-root h3,
 .museum-root h4 {
+  color: var(--mm-heading);
   font-family: var(--mm-font-serif);
   font-weight: 600;
   line-height: 1.25;
@@ -139,6 +132,8 @@
 }
 
 .museum-nav a {
+  display: inline-block;
+  padding: 0.3rem 0; /* a comfortable (>= 24px) target without changing the visual rhythm */
   font-family: var(--mm-font-sans);
   font-size: 0.85rem;
   font-weight: 600;
@@ -226,7 +221,8 @@
   font-style: italic;
   font-size: 1.1rem;
   color: var(--mm-text-primary);
-  border-left: 3px solid var(--mm-border-strong);
+  /* The curator's note is an archival marker: heritage amber, not the interaction colour. */
+  border-left: 3px solid var(--mm-heritage);
   padding-left: 1rem;
   margin: 1.5rem 0;
 }
@@ -245,7 +241,7 @@
   gap: 0.5rem;
   padding: 0.6rem 1.25rem;
   border-radius: var(--mm-radius-pill);
-  background: var(--mm-brand-gradient);
+  background: var(--mm-discovery);
   font-weight: 600;
   font-size: 0.95rem;
   border: none;
@@ -258,14 +254,15 @@
    --mm-on-brand. `.museum-root a.museum-button` beats that unambiguously. */
 .museum-root a.museum-button,
 .museum-button {
-  color: var(--mm-on-brand);
+  color: var(--mm-on-discovery);
 }
 
 .museum-button:hover,
 .museum-root a.museum-button:hover {
   transform: translateY(-1px);
   box-shadow: var(--mm-shadow-sm);
-  color: var(--mm-on-brand);
+  background: var(--mm-discovery-hover);
+  color: var(--mm-on-discovery);
 }
 
 .museum-footer {
@@ -286,7 +283,8 @@
   margin: 0 auto;
   padding: 4.5rem 1.5rem 3.5rem;
   text-align: center;
-  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--mm-brand-glow) 16%, transparent), transparent 70%);
+  /* A faint amber glow (the logo's own colour) behind the hero, never a wash of colour behind the logo itself. */
+  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--mm-brand) 8%, transparent), transparent 70%);
 }
 
 .museum-hero__logo {
@@ -628,9 +626,9 @@
 }
 
 .museum-root .museum-filter-pills a.museum-filter-pill--active {
-  border-color: var(--mm-border-strong);
+  border-color: var(--mm-link);
   color: var(--mm-text-primary);
-  background: var(--mm-background-elevated);
+  background: var(--mm-discovery-subtle);
   /* The active filter is not marked by colour alone. */
   font-weight: 700;
   text-decoration: underline;

@@ -1,81 +1,83 @@
 /*
- * Phase 6J-3A — the shared semantic design tokens for Music Madras (Museum and
- * Studio). Imported once, by the root layout.
+ * The shared semantic design tokens for Music Madras — Museum and Studio.
+ * Imported once, by the root layout. (Foundation: Phase 6J-3A. Palette:
+ * Phase 6J-3B, the approved "Direction C".)
  *
- * This file is the ARCHITECTURE for the visual system, not a new look: the
- * values below are exactly the palette the Museum has always used (Deep Magenta
- * #95135A, Bright Magenta #C2185B, Purple #6A3BA8, Lavender #C9B8E8, near-black
- * #1A1A2E). Choosing a different palette is a later, explicit decision
- * (Phase 6J-3B); when it is made, only the VALUES in this file change — no
- * component names a colour, it names a role.
+ * The semantic language:
+ *   BLACK   (warm near-black + cream)  = foundation, depth, the editorial canvas
+ *   AMBER   (the logo's marigold)      = heritage / archive / preservation / identity
+ *   TEAL-BLUE (kin to the logo's teal) = discovery / digital / navigation / interaction
+ * Amber is special: eyebrows, archive markers, curator rules, the brand fill.
+ * It is never the colour of a link, an ordinary button, or a warning.
+ * The blue is deliberately teal-leaning (hue ~192-197 deg, the logo's own teal
+ * is ~180), muted, and kept to links, search, focus and primary actions — it is
+ * not a product-UI blue. Functional colours (success / warning / error / info)
+ * are independent of both.
  *
  *   - Components use roles ("--mm-link", "--mm-surface"), never raw colours.
- *   - Dark is the default; light is a full, deliberate override on
- *     :root[data-theme="light"] (the Museum sets that attribute; Studio sets it
- *     when it adopts these tokens).
- *   - Brand colours are not status colours: success / warning / error / info
- *     are their own roles so a state is never signalled by the brand accent.
- *   - Roles marked "reserved" have a defined meaning and value but no consumer
- *     yet; their first consumer is the Studio component layer.
- *   - Deliberately NOT here: `color-scheme` (a page-level decision made by the
- *     stylesheet of the surface that owns the page) and font families (provided
- *     by next/font as --mm-font-serif / --mm-font-sans where a shell loads them).
+ *   - Dark is the default (the primary editorial expression); light is a full,
+ *     deliberate override on :root[data-theme="light"], not an inversion.
+ *   - Every text/indicator role is >= 4.5:1 (text) or >= 3:1 (non-text) on every
+ *     surface it is used on, in both themes; tests/unit/designTokens.test.ts and
+ *     `npm run design:evaluate` enforce it.
+ *   - Roles marked "reserved" have a defined meaning and value but no consumer yet.
+ *   - Font families are not tokens: next/font provides --mm-font-serif (Playfair
+ *     Display, Museum editorial headings) and --mm-font-sans (Inter, everything
+ *     operational) where a shell loads them (app/fonts.ts).
  */
 
 :root {
-  /* ----- Surface ----- */
-  --mm-background: #1a1a2e; /* the page */
-  --mm-background-elevated: #292640; /* raised: media placeholders, active pills, overlays */
-  --mm-surface: #211f36; /* cards, panels, inputs */
-  --mm-surface-hover: #292640; /* reserved: hovered row / list item */
-  --mm-surface-active: #312e4d; /* reserved: pressed / selected row */
-  --mm-border: rgba(201, 184, 232, 0.14); /* decorative edge and divider */
-  --mm-border-strong: #c9b8e8; /* a border that identifies a control or marks state (>= 3:1) */
-  --mm-border-hover: #c9b8e8; /* a card/control edge on hover or focus-within */
+  /* ----- Surface: three warm layers, so depth comes from hierarchy, not from "black everywhere" ----- */
+  --mm-background: #14110e; /* the page */
+  --mm-background-elevated: #2a231d; /* raised: media placeholders, active pills, dialogs, menus */
+  --mm-surface: #1d1814; /* cards, panels, inputs, table bodies */
+  --mm-surface-hover: #26201a; /* hovered row / list item */
+  --mm-surface-active: #2f2720; /* pressed / selected row */
+  --mm-border: rgba(245, 237, 224, 0.22); /* decorative edge and divider (~1.9:1 on the surfaces) */
+  --mm-border-strong: #8f8372; /* a border that identifies a control or marks state (>= 3:1) */
+  --mm-border-hover: #4fa3ba; /* a card/control edge on hover or focus-within */
 
-  /* ----- Text ----- */
-  --mm-text-primary: #f1eef8;
-  --mm-text-secondary: #a9a3c2; /* reserved: today equal to muted; differentiated when a palette is chosen */
-  --mm-text-muted: #a9a3c2; /* metadata, captions, placeholders (>= 4.5:1) */
-  --mm-text-inverse: #1a1a2e; /* reserved: text on a solid light fill */
-  --mm-heading: #f1eef8; /* reserved: headings (today the same as primary text) */
-  --mm-link: #c9b8e8; /* links and small interactive text (>= 4.5:1) */
-  --mm-link-hover: #ece3fa;
+  /* ----- Text (cream, not white) ----- */
+  --mm-text-primary: #f5ede0;
+  --mm-text-secondary: #d2c8b8; /* lede paragraphs, supporting copy */
+  --mm-text-muted: #a89e8e; /* metadata, captions, placeholders (>= 4.5:1) */
+  --mm-text-inverse: #14110e; /* text on a solid light fill */
+  --mm-heading: #faf3e6;
+  --mm-link: #6cbdd1; /* links and small interactive text (>= 4.5:1) */
+  --mm-link-hover: #9ad7e6;
 
-  /* ----- Brand (identity fills — NOT legible as small text on the page) ----- */
-  --mm-brand: #c2185b;
-  --mm-brand-hover: #95135a;
-  --mm-brand-subtle: rgba(194, 24, 91, 0.16); /* reserved: tinted brand background */
-  --mm-on-brand: #ffffff; /* text on a solid brand fill (>= 4.5:1) */
-  --mm-brand-gradient: linear-gradient(135deg, #95135a, #6a3ba8); /* primary button fill */
-  --mm-brand-glow: #6a3ba8; /* ambient colour of the hero's radial glow */
+  /* ----- Brand / heritage fill (the logo's marigold) ----- */
+  --mm-brand: #f1b902; /* a solid identity fill: rules, markers, the rare brand button */
+  --mm-brand-hover: #f8cb3a;
+  --mm-brand-subtle: rgba(241, 185, 2, 0.14); /* tinted heritage background */
+  --mm-on-brand: #1a1308; /* text on the solid brand fill (>= 4.5:1) */
 
-  /* ----- Discovery / interaction (search, links, focus) ----- */
-  --mm-discovery: #c9b8e8; /* reserved: discovery accents; today the same as the link colour */
-  --mm-discovery-hover: #ece3fa; /* reserved */
-  --mm-discovery-subtle: rgba(201, 184, 232, 0.12); /* reserved: tinted discovery background */
-  --mm-on-discovery: #1a1a2e; /* reserved: text on a solid discovery fill */
-  --mm-focus: #c9b8e8; /* keyboard focus ring (>= 3:1) */
+  /* ----- Discovery / interaction (teal-blue) ----- */
+  --mm-discovery: #1f7f99; /* the SOLID action fill: primary buttons, active controls */
+  --mm-discovery-hover: #19697f;
+  --mm-discovery-subtle: rgba(108, 189, 209, 0.14); /* tinted selected/active background */
+  --mm-on-discovery: #ffffff; /* text on the solid discovery fill (>= 4.5:1) */
+  --mm-focus: #6cbdd1; /* keyboard focus ring (>= 3:1) */
 
-  /* ----- Heritage / archive (identity text: eyebrows, group headings, archive badges) ----- */
-  --mm-heritage: #c9b8e8; /* small accent text (>= 4.5:1) */
-  --mm-heritage-subtle: rgba(201, 184, 232, 0.12); /* reserved: tinted archive badge background */
+  /* ----- Heritage / archive (identity TEXT: eyebrows, group headings, archive badges) ----- */
+  --mm-heritage: #f1b902; /* small accent text (>= 4.5:1) */
+  --mm-heritage-subtle: rgba(241, 185, 2, 0.14); /* archive badge background */
 
-  /* ----- Functional (state; independent of the brand) ----- */
+  /* ----- Functional (state; independent of the brand and of discovery) ----- */
   --mm-success: #5cc48a;
   --mm-success-subtle: rgba(92, 196, 138, 0.14);
-  --mm-warning: #f2a65a;
+  --mm-warning: #f2a65a; /* burnt orange: deliberately not the heritage marigold */
   --mm-warning-subtle: rgba(242, 166, 90, 0.14);
   --mm-error: #f2767d;
   --mm-error-subtle: rgba(242, 118, 125, 0.14);
-  --mm-info: #7bb4e8;
-  --mm-info-subtle: rgba(123, 180, 232, 0.14);
+  --mm-info: #8fa8f2; /* a periwinkle: deliberately not the discovery teal-blue */
+  --mm-info-subtle: rgba(143, 168, 242, 0.14);
 
   /* ----- Shape, elevation, focus, motion (shared by Museum and Studio) ----- */
-  --mm-shadow: rgba(0, 0, 0, 0.45); /* shadow colour */
+  --mm-shadow: rgba(0, 0, 0, 0.5); /* shadow colour */
   --mm-shadow-sm: 0 6px 18px var(--mm-shadow);
   --mm-shadow-md: 0 8px 24px var(--mm-shadow);
-  --mm-radius-sm: 0.375rem; /* reserved: Studio controls */
+  --mm-radius-sm: 0.375rem; /* Studio controls */
   --mm-radius-md: 0.85rem; /* tiles and cards in lists */
   --mm-radius-lg: 1rem; /* primary cards and media */
   --mm-radius-pill: 999px;
@@ -83,7 +85,7 @@
   --mm-focus-ring-offset: 3px;
   --mm-transition: 180ms ease;
 
-  /* ----- Spacing scale (reserved: first consumers are Studio primitives; 4px-based) ----- */
+  /* ----- Spacing scale (4px-based) ----- */
   --mm-space-1: 0.25rem;
   --mm-space-2: 0.5rem;
   --mm-space-3: 0.75rem;
@@ -92,41 +94,42 @@
   --mm-space-6: 2rem;
   --mm-space-7: 3rem;
   --mm-space-8: 4rem;
+
+  /* Both surfaces are themed, so the page-level colour scheme (form controls, scrollbars) is declared once, here. */
+  color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-  --mm-background: #faf8fb;
-  --mm-background-elevated: #f3eef9;
+  --mm-background: #faf6ee;
+  --mm-background-elevated: #f3ecdd;
   --mm-surface: #ffffff;
-  --mm-surface-hover: #f3eef9;
-  --mm-surface-active: #ebe3f5;
-  --mm-border: rgba(106, 59, 168, 0.16);
-  --mm-border-strong: #6a3ba8;
-  --mm-border-hover: #8f7ac4; /* deepened from the pale brand lavender for legible contrast on a light surface */
+  --mm-surface-hover: #f6f0e3;
+  --mm-surface-active: #ece3cf;
+  --mm-border: rgba(31, 25, 20, 0.24);
+  --mm-border-strong: #7d7262;
+  --mm-border-hover: #2b8aa5;
 
-  --mm-text-primary: #1a1a2e;
-  --mm-text-secondary: #5b5770;
-  --mm-text-muted: #5b5770;
-  --mm-text-inverse: #faf8fb;
-  --mm-heading: #1a1a2e;
-  --mm-link: #6a3ba8; /* brand Purple, >= 7:1 on the light surfaces */
-  --mm-link-hover: #95135a;
+  --mm-text-primary: #1f1914;
+  --mm-text-secondary: #4a4137;
+  --mm-text-muted: #675d50;
+  --mm-text-inverse: #faf6ee;
+  --mm-heading: #1f1914;
+  --mm-link: #1b6a7f;
+  --mm-link-hover: #14515f;
 
-  --mm-brand: #c2185b;
-  --mm-brand-hover: #95135a;
-  --mm-brand-subtle: rgba(194, 24, 91, 0.1);
-  --mm-on-brand: #ffffff;
-  --mm-brand-gradient: linear-gradient(135deg, #95135a, #6a3ba8);
-  --mm-brand-glow: #6a3ba8;
+  --mm-brand: #f1b902; /* marigold stays a FILL on light; its text role is --mm-heritage (a deep amber) */
+  --mm-brand-hover: #d9a300;
+  --mm-brand-subtle: rgba(241, 185, 2, 0.2);
+  --mm-on-brand: #1a1308;
 
-  --mm-discovery: #6a3ba8;
-  --mm-discovery-hover: #95135a;
-  --mm-discovery-subtle: rgba(106, 59, 168, 0.1);
+  --mm-discovery: #1b6a7f;
+  --mm-discovery-hover: #14515f;
+  --mm-discovery-subtle: rgba(27, 106, 127, 0.1);
   --mm-on-discovery: #ffffff;
-  --mm-focus: #6a3ba8;
+  --mm-focus: #1b6a7f;
 
-  --mm-heritage: #6a3ba8;
-  --mm-heritage-subtle: rgba(106, 59, 168, 0.1);
+  --mm-heritage: #8a5a00;
+  --mm-heritage-subtle: rgba(241, 185, 2, 0.2);
 
   --mm-success: #16703f;
   --mm-success-subtle: rgba(22, 112, 63, 0.14);
@@ -134,8 +137,10 @@
   --mm-warning-subtle: rgba(143, 79, 0, 0.14);
   --mm-error: #b3261e;
   --mm-error-subtle: rgba(179, 38, 30, 0.14);
-  --mm-info: #1d5fa6;
-  --mm-info-subtle: rgba(29, 95, 166, 0.14);
+  --mm-info: #3a4fb0;
+  --mm-info-subtle: rgba(58, 79, 176, 0.14);
 
-  --mm-shadow: rgba(26, 26, 46, 0.12);
+  --mm-shadow: rgba(31, 25, 20, 0.14);
+
+  color-scheme: light;
 }
