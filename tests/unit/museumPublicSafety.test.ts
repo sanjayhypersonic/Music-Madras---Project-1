@@ -178,21 +178,23 @@ function tokens(block: string): Record<string, string> {
 }
 
 describe("Museum colour tokens meet WCAG contrast for their role", () => {
+  // Phase 6J-3A: the tokens moved to the shared app/tokens.css; museum.css now holds none.
   const css = read("app/(museum)/museum.css");
+  const tokenCss = read("app/tokens.css");
   // Anchored to line starts: the stylesheet's header comment mentions :root[data-theme="light"] too.
-  const darkStart = css.search(/^:root\s*\{/m);
-  const lightStart = css.search(/^:root\[data-theme="light"\]\s*\{/m);
-  const darkBlock = css.slice(darkStart, lightStart);
-  const lightBlock = css.slice(lightStart, css.indexOf("}", lightStart));
+  const darkStart = tokenCss.search(/^:root\s*\{/m);
+  const lightStart = tokenCss.search(/^:root\[data-theme="light"\]\s*\{/m);
+  const darkBlock = tokenCss.slice(darkStart, lightStart);
+  const lightBlock = tokenCss.slice(lightStart, tokenCss.indexOf("}", lightStart));
   const dark = tokens(darkBlock);
   const light = tokens(lightBlock);
   const themes = { dark, light: { ...dark, ...light } };
 
   for (const [name, t] of Object.entries(themes)) {
     describe(`${name} theme`, () => {
-      for (const surface of ["mm-bg", "mm-surface", "mm-surface-raised"]) {
+      for (const surface of ["mm-background", "mm-surface", "mm-background-elevated"]) {
         it(`links and small accent text are >= 4.5:1 on ${surface}`, () => {
-          for (const role of ["mm-link", "mm-link-hover", "mm-text-accent"]) {
+          for (const role of ["mm-link", "mm-link-hover", "mm-heritage"]) {
             expect(contrast(t[role], t[surface]), `${role} on ${surface}`).toBeGreaterThanOrEqual(4.5);
           }
         });
@@ -203,29 +205,29 @@ describe("Museum colour tokens meet WCAG contrast for their role", () => {
       }
 
       it("body and muted text are >= 4.5:1 on the page background", () => {
-        expect(contrast(t["mm-text"], t["mm-bg"])).toBeGreaterThanOrEqual(4.5);
-        expect(contrast(t["mm-text-muted"], t["mm-bg"])).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(t["mm-text-primary"], t["mm-background"])).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(t["mm-text-muted"], t["mm-background"])).toBeGreaterThanOrEqual(4.5);
       });
 
       it("white text on the brand fills (buttons) is >= 4.5:1", () => {
-        for (const fill of ["mm-accent", "mm-accent-deep", "mm-accent-secondary"]) {
-          expect(contrast(t["mm-accent-on"], t[fill]), `white on ${fill}`).toBeGreaterThanOrEqual(4.5);
+        for (const fill of ["mm-brand", "mm-brand-hover", "mm-brand-glow"]) {
+          expect(contrast(t["mm-on-brand"], t[fill]), `white on ${fill}`).toBeGreaterThanOrEqual(4.5);
         }
       });
     });
   }
 
   it("the brand palette itself is unchanged", () => {
-    expect(dark["mm-accent"].toLowerCase()).toBe("#c2185b");
-    expect(dark["mm-accent-deep"].toLowerCase()).toBe("#95135a");
-    expect(dark["mm-accent-secondary"].toLowerCase()).toBe("#6a3ba8");
-    expect(dark["mm-accent-tertiary"].toLowerCase()).toBe("#c9b8e8");
-    expect(dark["mm-bg"].toLowerCase()).toBe("#1a1a2e");
+    expect(dark["mm-brand"].toLowerCase()).toBe("#c2185b");
+    expect(dark["mm-brand-hover"].toLowerCase()).toBe("#95135a");
+    expect(dark["mm-brand-glow"].toLowerCase()).toBe("#6a3ba8");
+    expect(dark["mm-border-hover"].toLowerCase()).toBe("#c9b8e8");
+    expect(dark["mm-background"].toLowerCase()).toBe("#1a1a2e");
   });
 
   it("no link or small text rule uses the brand magenta/purple directly as a text colour", () => {
     // Magenta/Purple are fills: on the near-black they are 2.0-2.9:1 as text.
-    const textRules = css.match(/[^{}]+\{[^{}]*\bcolor:\s*var\(--mm-accent(-deep|-secondary)?\)[^{}]*\}/g) ?? [];
+    const textRules = css.match(/[^{}]+\{[^{}]*\bcolor:\s*var\(--mm-brand(-hover|-glow)?\)[^{}]*\}/g) ?? [];
     expect(textRules).toEqual([]);
   });
 

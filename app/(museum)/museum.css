@@ -1,98 +1,34 @@
 /*
- * Phase 6G-2B — Museum-wide design tokens and base editorial styling.
- * Scoped entirely to app/(museum)/** (imported only by its layout, so
- * Next's per-route CSS splitting means Studio never loads this file at
- * all). Dark is the default (no [data-theme] attribute needed); light
- * mode is a full, deliberate override set on :root[data-theme="light"],
- * never a dimmed/inverted version of the same values — matching the
- * brief's "preserve the same visual identity and hierarchy rather than
- * becoming a completely different design."
+ * Museum stylesheet (Phase 6G-2B; tokens moved in Phase 6J-3A).
+ * Scoped entirely to app/(museum)/** (imported only by its layout and the
+ * site-wide not-found page, so Next's per-route CSS splitting means Studio never
+ * loads this file).
  *
- * Brand palette (authoritative, supplied directly — NOT GAIS's own
- * amber/teal/red, which was inspiration for layout/typography only):
- *   Deep Magenta   #95135A
- *   Bright Magenta #C2185B
- *   Purple         #6A3BA8
- *   Lavender       #C9B8E8
- *   Near-black     #1A1A2E
+ * This file contains NO colour values. Every colour, radius, shadow, focus and
+ * motion value comes from the shared semantic tokens in app/tokens.css, so the
+ * Museum's look is changed by changing roles' values there, never by editing
+ * rules here. Dark is the default; light is a full, deliberate override set by
+ * :root[data-theme="light"] in tokens.css — not a dimmed copy of dark.
+ *
+ * Fonts: --mm-font-serif / --mm-font-sans are provided by next/font (see
+ * app/(museum)/fonts.ts) on the .museum-root element; they are used directly.
  */
 
+/* The Museum owns its pages, so it declares the colour scheme for form controls and scrollbars. */
 :root {
-  /* Surfaces — layered, not one flat black (brief: "refined near-black
-     foundation... layers of near-black background, slightly lighter dark
-     surfaces, subtle borders/dividers, restrained shadows"). */
-  --mm-bg: #1a1a2e;
-  --mm-surface: #211f36;
-  --mm-surface-raised: #292640;
-  --mm-border: rgba(201, 184, 232, 0.14);
-  --mm-shadow: rgba(0, 0, 0, 0.45);
-
-  /* Text */
-  --mm-text: #f1eef8;
-  --mm-text-muted: #a9a3c2;
-
-  /* Brand accents */
-  --mm-accent: #c2185b; /* Bright Magenta — primary interactive accent */
-  --mm-accent-deep: #95135a; /* Deep Magenta — hover/pressed */
-  --mm-accent-secondary: #6a3ba8; /* Purple — secondary accent, gradients */
-  --mm-accent-tertiary: #c9b8e8; /* Lavender — soft highlights, focus rings */
-  --mm-accent-on: #ffffff; /* text placed on top of a solid accent fill */
-  --mm-gradient-accent: linear-gradient(135deg, var(--mm-accent-deep), var(--mm-accent-secondary));
-
-  /* Role tokens (Phase 6J-1). The brand colours stay exactly as above; these say which
-     of them may carry TEXT or an indicator, so contrast is a property of the role, not
-     of whichever accent a rule happened to pick. Bright/Deep Magenta and Purple are fills
-     (white text on them passes) — on the near-black they are NOT legible as text (2.0-2.9:1).
-       --mm-link / --mm-text-accent   links and small accent text   >= 4.5:1 on bg and surfaces
-       --mm-link-hover                hover/focus colour of a link   >= 4.5:1
-       --mm-border-strong             a border that marks state      >= 3:1 (non-text) */
-  --mm-link: #c9b8e8; /* 9.35:1 on --mm-bg */
-  --mm-link-hover: #ece3fa;
-  --mm-text-accent: #c9b8e8;
-  --mm-border-strong: #c9b8e8;
-
-  /* Typography */
-  --mm-font-serif: var(--mm-font-serif), "Georgia", serif;
-  --mm-font-sans: var(--mm-font-sans), -apple-system, "Segoe UI", sans-serif;
-
-  /* Motion — restrained, per the quality bar (no excessive animation). */
-  --mm-transition: 180ms ease;
-
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-  --mm-bg: #faf8fb;
-  --mm-surface: #ffffff;
-  --mm-surface-raised: #f3eef9;
-  --mm-border: rgba(106, 59, 168, 0.16);
-  --mm-shadow: rgba(26, 26, 46, 0.12);
-
-  --mm-text: #1a1a2e;
-  --mm-text-muted: #5b5770;
-
-  --mm-accent: #c2185b;
-  --mm-accent-deep: #95135a;
-  --mm-accent-secondary: #6a3ba8;
-  --mm-accent-tertiary: #8f7ac4; /* deepened from the pale brand lavender for legible contrast on a light surface (borders/rings only — see the role tokens for text) */
-  --mm-accent-on: #ffffff;
-
-  /* Phase 6J-1 role tokens, light theme: brand Purple / Deep Magenta, both >= 7:1 on the light surfaces. */
-  --mm-link: #6a3ba8;
-  --mm-link-hover: #95135a;
-  --mm-text-accent: #6a3ba8;
-  --mm-border-strong: #6a3ba8;
-
   color-scheme: light;
 }
-
 /* ---------------------------------------------------------------------
    Base
 --------------------------------------------------------------------- */
 
 .museum-root {
-  background: var(--mm-bg);
-  color: var(--mm-text);
+  background: var(--mm-background);
+  color: var(--mm-text-primary);
   font-family: var(--mm-font-sans);
   line-height: 1.6;
   min-height: 100vh;
@@ -121,7 +57,7 @@
 
 .museum-root p {
   margin: 0 0 1.1em;
-  color: var(--mm-text);
+  color: var(--mm-text-primary);
 }
 
 .museum-root a {
@@ -144,8 +80,8 @@
 }
 
 .museum-root :focus-visible {
-  outline: 2px solid var(--mm-link);
-  outline-offset: 3px;
+  outline: var(--mm-focus-ring-width) solid var(--mm-focus);
+  outline-offset: var(--mm-focus-ring-offset);
   border-radius: 2px;
 }
 
@@ -162,7 +98,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1.5rem;
-  background: color-mix(in srgb, var(--mm-bg) 88%, transparent);
+  background: color-mix(in srgb, var(--mm-background) 88%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--mm-border);
 }
@@ -187,13 +123,13 @@
   border-radius: 50%;
   border: 1px solid var(--mm-border);
   background: var(--mm-surface);
-  color: var(--mm-text);
+  color: var(--mm-text-primary);
   cursor: pointer;
   transition: background-color var(--mm-transition), border-color var(--mm-transition), transform var(--mm-transition);
 }
 
 .museum-theme-toggle:hover {
-  border-color: var(--mm-accent-tertiary);
+  border-color: var(--mm-border-hover);
   transform: translateY(-1px);
 }
 
@@ -238,14 +174,14 @@
    above (both target a <p>). `.museum-root .x` beats that unambiguously —
    see the same fix applied to `.museum-button` further down. */
 .museum-root .museum-eyebrow {
-  color: var(--mm-text-accent);
+  color: var(--mm-heritage);
 }
 
 .museum-card {
   background: var(--mm-surface);
   border: 1px solid var(--mm-border);
-  border-radius: 1rem;
-  box-shadow: 0 8px 24px var(--mm-shadow);
+  border-radius: var(--mm-radius-lg);
+  box-shadow: var(--mm-shadow-md);
   overflow: hidden;
 }
 
@@ -254,8 +190,8 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 1rem;
-  background: var(--mm-surface-raised);
+  border-radius: var(--mm-radius-lg);
+  background: var(--mm-background-elevated);
 }
 
 .museum-media img,
@@ -289,7 +225,7 @@
   font-family: var(--mm-font-serif);
   font-style: italic;
   font-size: 1.1rem;
-  color: var(--mm-text);
+  color: var(--mm-text-primary);
   border-left: 3px solid var(--mm-border-strong);
   padding-left: 1rem;
   margin: 1.5rem 0;
@@ -308,8 +244,8 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1.25rem;
-  border-radius: 999px;
-  background: var(--mm-gradient-accent);
+  border-radius: var(--mm-radius-pill);
+  background: var(--mm-brand-gradient);
   font-weight: 600;
   font-size: 0.95rem;
   border: none;
@@ -319,17 +255,17 @@
 /* Specificity note: plain `.museum-button { color: ... }` loses to the
    higher-specificity `.museum-root a` rule above, which would leave a
    linked button's text in the ordinary link colour instead of
-   --mm-accent-on. `.museum-root a.museum-button` beats that unambiguously. */
+   --mm-on-brand. `.museum-root a.museum-button` beats that unambiguously. */
 .museum-root a.museum-button,
 .museum-button {
-  color: var(--mm-accent-on);
+  color: var(--mm-on-brand);
 }
 
 .museum-button:hover,
 .museum-root a.museum-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px var(--mm-shadow);
-  color: var(--mm-accent-on);
+  box-shadow: var(--mm-shadow-sm);
+  color: var(--mm-on-brand);
 }
 
 .museum-footer {
@@ -350,7 +286,7 @@
   margin: 0 auto;
   padding: 4.5rem 1.5rem 3.5rem;
   text-align: center;
-  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--mm-accent-secondary) 16%, transparent), transparent 70%);
+  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--mm-brand-glow) 16%, transparent), transparent 70%);
 }
 
 .museum-hero__logo {
@@ -402,13 +338,13 @@
 .museum-category-card {
   background: var(--mm-surface);
   border: 1px solid var(--mm-border);
-  border-radius: 0.85rem;
+  border-radius: var(--mm-radius-md);
   padding: 1.5rem;
   transition: border-color var(--mm-transition), transform var(--mm-transition);
 }
 
 .museum-category-card:hover {
-  border-color: var(--mm-accent-tertiary);
+  border-color: var(--mm-border-hover);
   transform: translateY(-2px);
 }
 
@@ -431,12 +367,12 @@
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--mm-text-accent);
+  color: var(--mm-heritage);
 }
 
 .museum-recording-card {
   display: block;
-  border-radius: 0.85rem;
+  border-radius: var(--mm-radius-md);
   overflow: hidden;
   background: var(--mm-surface);
   border: 1px solid var(--mm-border);
@@ -445,23 +381,23 @@
 
 .museum-root a.museum-recording-card,
 .museum-recording-card {
-  color: var(--mm-text);
+  color: var(--mm-text-primary);
 }
 
 .museum-recording-card:hover {
-  border-color: var(--mm-accent-tertiary);
+  border-color: var(--mm-border-hover);
   transform: translateY(-2px);
 }
 
 .museum-media--thumbnail {
   border-radius: 0;
-  background: var(--mm-surface-raised);
+  background: var(--mm-background-elevated);
 }
 
 .museum-media__placeholder {
   position: absolute;
   inset: 0;
-  background: var(--mm-surface-raised);
+  background: var(--mm-background-elevated);
 }
 
 .museum-recording-card__title {
@@ -493,7 +429,7 @@
 .museum-pathways li {
   padding: 0.45rem 1rem;
   border: 1px solid var(--mm-border);
-  border-radius: 999px;
+  border-radius: var(--mm-radius-pill);
   font-size: 0.85rem;
   color: var(--mm-text-muted);
 }
@@ -538,7 +474,7 @@
 }
 
 .museum-breadcrumbs [aria-current="page"] {
-  color: var(--mm-text);
+  color: var(--mm-text-primary);
   font-weight: 600;
 }
 
@@ -592,7 +528,7 @@
 }
 
 .museum-root .museum-group-heading {
-  color: var(--mm-text-accent);
+  color: var(--mm-heritage);
 }
 
 @media (max-width: 40rem) {
@@ -650,10 +586,10 @@
   flex: 1;
   min-width: 12rem;
   padding: 0.65rem 1rem;
-  border-radius: 999px;
+  border-radius: var(--mm-radius-pill);
   border: 1px solid var(--mm-border);
   background: var(--mm-surface);
-  color: var(--mm-text);
+  color: var(--mm-text-primary);
   font-family: var(--mm-font-sans);
   font-size: 0.95rem;
 }
@@ -663,7 +599,7 @@
 }
 
 .museum-search-input:focus-visible {
-  border-color: var(--mm-accent-tertiary);
+  border-color: var(--mm-border-hover);
 }
 
 .museum-filter-pills {
@@ -679,7 +615,7 @@
   display: inline-block;
   padding: 0.45rem 1rem;
   border: 1px solid var(--mm-border);
-  border-radius: 999px;
+  border-radius: var(--mm-radius-pill);
   font-family: var(--mm-font-sans);
   font-size: 0.85rem;
   font-weight: 600;
@@ -688,13 +624,13 @@
 }
 
 .museum-root .museum-filter-pills a:hover {
-  border-color: var(--mm-accent-tertiary);
+  border-color: var(--mm-border-hover);
 }
 
 .museum-root .museum-filter-pills a.museum-filter-pill--active {
   border-color: var(--mm-border-strong);
-  color: var(--mm-text);
-  background: var(--mm-surface-raised);
+  color: var(--mm-text-primary);
+  background: var(--mm-background-elevated);
   /* The active filter is not marked by colour alone. */
   font-weight: 700;
   text-decoration: underline;
@@ -739,7 +675,7 @@
   border-radius: 50%;
   border: 1px solid var(--mm-border);
   background: var(--mm-surface);
-  color: var(--mm-text);
+  color: var(--mm-text-primary);
   cursor: pointer;
 }
 
@@ -763,7 +699,7 @@
     left: 0;
     right: 0;
     padding: 0.5rem 1rem 1rem;
-    background: var(--mm-bg);
+    background: var(--mm-background);
     border-bottom: 1px solid var(--mm-border);
     box-shadow: 0 12px 24px var(--mm-shadow);
   }
@@ -781,7 +717,7 @@
     font-family: var(--mm-font-sans);
     font-size: 1rem;
     font-weight: 600;
-    color: var(--mm-text);
+    color: var(--mm-text-primary);
   }
 
   .museum-root .museum-mobile-nav a:hover,

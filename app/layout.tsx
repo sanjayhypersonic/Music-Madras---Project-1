@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./tokens.css"; // shared semantic design tokens (Phase 6J-3A): the Museum consumes them today; Studio adopts them in a later phase
 import { getSiteOrigin } from "../modules/config/siteOrigin";
 
 // Phase 6G-11 — site-wide favicon/OpenGraph fallback using the existing
