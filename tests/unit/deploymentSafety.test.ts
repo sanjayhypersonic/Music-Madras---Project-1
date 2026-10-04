@@ -1,77 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "fs";
 import path from "path";
-import { checkIntegrationDatabase } from "../integration/setup/databaseGuardRules";
 import { GET as healthGET } from "../../app/api/health/route";
 
-// Phase 6J-1 — build/deployment safety: the integration-test database guard,
-// the health probe, and the environment-variable hygiene of the repository.
+// Phase 6J-1 — build/deployment safety: the health probe and the
+// environment-variable hygiene of the repository. (The integration-test database
+// guard is covered by tests/unit/testDatabaseIsolation.test.ts.)
 
 const root = path.resolve(__dirname, "../..");
 const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");
-
-const PASSWORD = "s3cret-password-never-print";
-const NEON_POOLED = `postgresql://user:${PASSWORD}@ep-abc-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require`;
-const NEON_DIRECT = `postgresql://user:${PASSWORD}@ep-abc.eu-west-2.aws.neon.tech/neondb?sslmode=require`;
-
-describe("integration-test database guard", () => {
-  it("refuses a non-local database that has not been acknowledged by name — and says how to acknowledge it", () => {
-    const verdict = checkIntegrationDatabase({ DATABASE_URL: NEON_POOLED, DIRECT_URL: NEON_DIRECT });
-    expect(verdict.allowed).toBe(false);
-    if (!verdict.allowed) expect(verdict.reason).toContain("ALLOW_INTEGRATION_TESTS_ON_HOST=ep-abc.eu-west-2.aws.neon.tech");
-  });
-
-  it("allows it once the operator names that exact host (pooled and direct endpoints are one database)", () => {
-    const verdict = checkIntegrationDatabase({ DATABASE_URL: NEON_POOLED, DIRECT_URL: NEON_DIRECT, ALLOW_INTEGRATION_TESTS_ON_HOST: "ep-abc.eu-west-2.aws.neon.tech" });
-    expect(verdict).toEqual({ allowed: true, host: "ep-abc.eu-west-2.aws.neon.tech" });
-  });
-
-  it("an acknowledgement for a DIFFERENT host does not unlock it", () => {
-    expect(checkIntegrationDatabase({ DATABASE_URL: NEON_POOLED, DIRECT_URL: NEON_DIRECT, ALLOW_INTEGRATION_TESTS_ON_HOST: "ep-other.eu-west-2.aws.neon.tech" }).allowed).toBe(false);
-  });
-
-  it("always allows a local database without any acknowledgement", () => {
-    expect(checkIntegrationDatabase({ DATABASE_URL: "postgresql://u:p@localhost:5432/mm_test" }).allowed).toBe(true);
-    expect(checkIntegrationDatabase({ DATABASE_URL: "postgresql://u:p@127.0.0.1:5432/mm_test", DIRECT_URL: "postgresql://u:p@127.0.0.1:5432/mm_test" }).allowed).toBe(true);
-  });
-
-  it("refuses in a production environment even if the host is acknowledged", () => {
-    const acknowledged = { DATABASE_URL: NEON_POOLED, DIRECT_URL: NEON_DIRECT, ALLOW_INTEGRATION_TESTS_ON_HOST: "ep-abc.eu-west-2.aws.neon.tech" };
-    expect(checkIntegrationDatabase({ ...acknowledged, NODE_ENV: "production" }).allowed).toBe(false);
-    expect(checkIntegrationDatabase({ ...acknowledged, VERCEL_ENV: "production" }).allowed).toBe(false);
-  });
-
-  it("refuses when DATABASE_URL and DIRECT_URL name two different databases", () => {
-    const verdict = checkIntegrationDatabase({
-      DATABASE_URL: NEON_POOLED,
-      DIRECT_URL: "postgresql://u:p@ep-zzz.eu-west-2.aws.neon.tech/neondb",
-      ALLOW_INTEGRATION_TESTS_ON_HOST: "ep-abc.eu-west-2.aws.neon.tech",
-    });
-    expect(verdict.allowed).toBe(false);
-  });
-
-  it("refuses when there is no (or an unparseable) DATABASE_URL", () => {
-    expect(checkIntegrationDatabase({}).allowed).toBe(false);
-    expect(checkIntegrationDatabase({ DATABASE_URL: "not a url" }).allowed).toBe(false);
-  });
-
-  it("never puts a credential in its message", () => {
-    const refusals = [
-      checkIntegrationDatabase({ DATABASE_URL: NEON_POOLED, DIRECT_URL: NEON_DIRECT }),
-      checkIntegrationDatabase({ DATABASE_URL: NEON_POOLED, DIRECT_URL: "postgresql://u:" + PASSWORD + "@ep-zzz.example.com/db" }),
-    ];
-    for (const verdict of refusals) {
-      expect(verdict.allowed).toBe(false);
-      expect(JSON.stringify(verdict)).not.toContain(PASSWORD);
-    }
-  });
-
-  it("is actually wired into the integration config (not just defined)", () => {
-    const config = read("vitest.integration.config.ts");
-    expect(config).toContain("tests/integration/setup/guardDatabase.ts");
-    expect(read("tests/integration/setup/guardDatabase.ts")).toContain("throw new Error");
-  });
-});
 
 describe("health probe", () => {
   it("answers ok, is never cached, and reveals nothing else", async () => {

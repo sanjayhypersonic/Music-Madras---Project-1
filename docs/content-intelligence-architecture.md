@@ -2756,15 +2756,10 @@ run that `channel-uploads`, `channel-playlists` and one checkpoint per observed
 playlist exist. The final launch synchronization has NOT been run as part of
 this phase.
 
-**Integration tests and the database.** `npm run test:integration` creates and
-deletes rows. It now refuses to start unless the database is local or its host is
-named in `ALLOW_INTEGRATION_TESTS_ON_HOST` (and never in a production
-environment, or when `DATABASE_URL` and `DIRECT_URL` name different databases).
-The only database configured for this project today is the single Neon database
-that Phase 5A documented as the development database; it also holds the real
-synced YouTube catalogue and the Founder account, because no separate test
-database exists. Tests use unique disposable fixtures and clean up after
-themselves, but a dedicated Neon branch for tests is the safer arrangement.
+**Integration tests and the database.** Superseded by section 120: the suite now runs
+only against a dedicated test database (`TEST_DATABASE_URL`) and rejects the real one
+automatically. (Phase 6J-1 had introduced a host-acknowledgement variable as a stopgap;
+it no longer exists.)
 
 **Secrets assessment (not a rotation).** `legacy-prototype/firebase-applet-config.json`
 holds only the standard Firebase web-app client fields (project id, app id, API
@@ -2780,3 +2775,79 @@ type-check and lint. `.gitignore` now ignores every `.env*` file except
 **Deferred (POST-LAUNCH, unchanged by this phase).** Analytics feedback loop,
 Search Console, Studio design-token refactor and broad accessibility pass, AI
 usage quotas, vector search/RAG, public Occasion pages, field-ownership UI.
+
+## 120. Phase 6J-2 - Integration-test database isolation
+
+**The problem.** Until this phase the integration suite ran against the only
+database the project had: the single Neon development database that also holds
+the real synced catalogue (226 YouTube videos, 12 playlists), the Founder account
+and the sync history. Every full run created and deleted rows there and left
+about 50 orphaned `AuditLogEntry` rows behind (`AuditLogEntry` has no FK on
+`entityId`, so a fixture's audit rows survive its deletion). A guard added in
+6J-1 only asked the operator to type the host name.
+
+**Actual architecture (verified, not assumed).** The application reads
+`DATABASE_URL` (pooled) through `@prisma/adapter-pg` in `modules/db/client.ts`;
+Prisma's CLI (`generate`, `migrate deploy`) reads `DIRECT_URL` through
+`prisma.config.ts`; the YouTube run lock reads `DIRECT_URL`. Both files import
+`dotenv/config`, so any process started in the repository root loaded the real
+`.env`. There are 12 migrations; no schema change was made in this phase.
+
+**The invariant.** Running the integration suite never needs, and can never be
+pointed at, the real Music Madras database. This is enforced structurally:
+
+1. `vitest.integration.config.ts` resolves `TEST_DATABASE_URL` (shell, or
+   `.env.test`) when it loads and throws if it is missing - there is no fallback
+   to `DATABASE_URL` and no override flag. A refused run starts no worker.
+2. The target is refused unless: the environment is not production; the database
+   NAME contains a `test` word; it is not on the same server+port as any database
+   configured in the checkout's `.env*` files (a second database on the production
+   Neon endpoint is refused - use a separate branch/server); and, at start-up
+   (`globalSetup`), it carries the marker written by the setup command and has
+   exactly this repository's migrations applied. Rules are pure and unit-tested
+   with synthetic production-like fixtures (`tests/unit/testDatabaseIsolation.test.ts`).
+3. Every worker runs with `DATABASE_URL`/`DIRECT_URL` replaced by the test
+   database, the real `.env` made unreadable (`DOTENV_CONFIG_PATH`), and every
+   external service blanked (YouTube, AI, email, analytics, Google sign-in,
+   Founder bootstrap), so a test can neither reach real data nor spend a real key.
+   `setupFiles` re-checks this in every test file, and an integration test
+   (`tests/integration/testDatabaseIsolation.test.ts`) proves it from inside the
+   running harness. The run prints only the host and database name.
+
+**Isolation model chosen: a local PostgreSQL 17 from the `embedded-postgres`
+dev dependency (exact-pinned), as one way to supply `TEST_DATABASE_URL`.** Reasons:
+no cloud project or credentials were available and creating infrastructure on the
+production Neon project was out of scope; it needs no Docker or admin rights; it
+is real PostgreSQL (advisory locks, ICU ordering, the same Prisma migrations), so
+the suite behaves as it does on Neon; it can be reset in seconds; and a full run
+dropped from about 20 minutes (over the network to Neon) to about 5. A separate
+Neon branch or a CI service container is a drop-in alternative: the contract is
+only `TEST_DATABASE_URL`. The data directory is outside the repository
+(`~/.music-madras/test-postgres`). The same Prisma schema and migrations are used
+- `test:integration:setup` runs `prisma migrate deploy`, giving the CLI only the
+test database - and no production data is copied: tests build their own fixtures.
+
+**Commands.** `npm run test:integration:db:start | db:stop` (optional local
+server), `test:integration:setup` (marks an EMPTY database, applies migrations),
+`test:integration:reset` (refuses an unmarked database; drops the schema and
+re-applies migrations), `test:integration` (safe by default). See
+`tests/integration/README.md` for the procedure, troubleshooting and CI notes.
+
+**Audit-log hygiene.** Test-generated audit rows now exist only in the
+disposable test database, where `reset` clears them; a full run against it left 47
+such rows and the real database none. Application code, the audit model and
+production semantics were not changed to make tests clean. The ~50 historical
+test-generated rows already in the real database were NOT purged (they are
+existing data); they remain and no future run can add to them.
+
+**Parallelism.** Files still run one at a time: several count global tables
+before/after, so concurrent files in one database would interfere. Parallelism
+would need one database per worker - a later optimisation, not needed for safety.
+
+**Remaining risks.** The real database still contains those historical test
+rows and the 6G-era fixture users (phase6g9/6g13/6h5). Anyone who deliberately
+creates a test database whose name and server differ from the real one but which
+is in fact production-shaped is stopped only by the marker, which a person must
+write onto an empty database. CI has not been built; it must supply
+`TEST_DATABASE_URL`. The optional local server is a beta-labelled wrapper around
+stable PostgreSQL binaries and is a dev dependency only.
