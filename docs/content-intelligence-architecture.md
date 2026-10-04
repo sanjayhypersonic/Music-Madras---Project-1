@@ -2851,3 +2851,7 @@ is in fact production-shaped is stopped only by the marker, which a person must
 write onto an empty database. CI has not been built; it must supply
 `TEST_DATABASE_URL`. The optional local server is a beta-labelled wrapper around
 stable PostgreSQL binaries and is a dev dependency only.
+
+## 121. Phase 6J-3B - Visual system implementation (Direction C)
+
+The approved visual direction (black foundation, amber heritage/identity, teal-leaning blue discovery/interaction) is implemented through the shared semantic tokens in `app/tokens.css`: the Museum (`museum.css`, no colour literals) and Studio (`studio.css`, a real shell with logo, sidebar, mobile disclosure, dark/light, element defaults, primitives, a modal confirmation dialog, error / not-found / loading states). Studio's 184 hard-coded colours are gone and tests forbid new ones. No schema, data, behaviour, permission, publication-gating, sync or AI change. `window.confirm` is removed everywhere; the dialog submits the same form through the same Server Action. See `docs/visual-system-evaluation.md` ("Phase 6J-3B: implementation record") for the palette, usage rules, migration numbers, QA matrix and remaining visual debt. `npm run design:evaluate` re-measures every contrast pair; `docs/visual-system/browser-audit.js` audits a rendered page in the browser.

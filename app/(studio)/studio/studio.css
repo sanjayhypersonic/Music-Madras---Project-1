@@ -498,12 +498,6 @@
   border-color: var(--mm-error);
 }
 
-.studio-root .studio-button--quiet {
-  background: transparent;
-  border-color: transparent;
-  color: var(--mm-link);
-}
-
 /* Alerts and notices: a left rule + tinted ground + the state colour for the text (all >= 4.5:1). */
 .studio-alert {
   margin: 0.75rem 0;
@@ -696,18 +690,6 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.6rem;
-}
-
-.studio-visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -197,7 +197,7 @@ export default async function ContentSuggestionDetailPage({
             </>
           )}
           {suggestion.status === "APPROVED" && (
-            <section style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid var(--mm-border)" }}>
+            <section className="studio-panel">
               <h3>Apply to Recording draft</h3>
               {application ? (
                 <p>

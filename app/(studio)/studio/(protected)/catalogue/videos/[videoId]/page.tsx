@@ -78,7 +78,7 @@ export default async function YouTubeVideoManagePage({
         <img src={video.thumbnailUrl} alt="" width={320} />
       )}
 
-      <section style={{ display: "flex", gap: "3rem", margin: "1.5rem 0", padding: "1rem", border: "1px solid var(--mm-border)" }}>
+      <section className="studio-panel" style={{ display: "flex", flexWrap: "wrap", gap: "1rem 3rem" }}>
         <div>
           <h3>YouTube</h3>
           <p>
@@ -105,7 +105,7 @@ export default async function YouTubeVideoManagePage({
         </div>
       </section>
 
-      <section style={{ margin: "1.5rem 0", padding: "1rem", border: "1px solid var(--mm-border)" }}>
+      <section className="studio-panel">
         <h3>Canonical Recording</h3>
         <p style={{ fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>
           YouTube ID: <code>{video.youtubeVideoId}</code> · Published:{" "}
@@ -210,7 +210,7 @@ export default async function YouTubeVideoManagePage({
             This is an editorial preview of approximately how the Museum page will look once published — it is not the
             public page itself.
           </p>
-          <div style={{ border: "1px solid var(--mm-border)", padding: "1rem", maxWidth: "32rem" }}>
+          <div className="studio-panel" style={{ maxWidth: "32rem" }}>
             {video.thumbnailUrl && (
               // eslint-disable-next-line @next/next/no-img-element -- editorial preview, not the public Museum
               <img src={video.thumbnailUrl} alt="" width={320} />
