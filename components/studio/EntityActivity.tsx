@@ -37,7 +37,7 @@ export default async function EntityActivity({
       <h2 style={{ fontSize: "1.1rem" }}>Activity</h2>
       <ul style={{ listStyle: "none", padding: 0 }}>
         {entries.map((entry) => (
-          <li key={entry.id} style={{ borderBottom: "1px solid #eee", padding: "0.4rem 0" }}>
+          <li key={entry.id} style={{ borderBottom: "1px solid var(--mm-border)", padding: "0.4rem 0" }}>
             <Link href={`/studio/audit/${entry.id}`}>{formatAuditActionSummary(entry.action)}</Link>
             {" — "}
             {entry.actor ? entry.actor.name : "System"}, {formatAuditTimestamp(entry.timestamp)}

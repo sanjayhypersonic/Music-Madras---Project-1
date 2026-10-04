@@ -43,7 +43,7 @@ export default async function WorksStepPage({
     <div>
       <h2>Composer / Works</h2>
       <p>The musical works this specific recording features (this drives the &quot;Musical Works&quot; completeness check).</p>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       {context && context.directWorks.length > 0 ? (
         <ul>
@@ -55,14 +55,14 @@ export default async function WorksStepPage({
                   action={detachWorkAction.bind(null, id, recording.currentDraftRevisionId!, work.id)}
                   style={{ display: "inline" }}
                 >
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
           ))}
         </ul>
       ) : (
-        <p>No works attached yet.</p>
+        <p className="studio-empty">No works attached yet.</p>
       )}
 
       {canWrite && (
@@ -86,7 +86,7 @@ export default async function WorksStepPage({
               )}
             </select>
           </label>
-          <button type="submit">Attach work</button>
+          <button type="submit" className="studio-button--primary">Attach work</button>
         </form>
       )}
     </div>

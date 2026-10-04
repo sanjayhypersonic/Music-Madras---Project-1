@@ -36,14 +36,15 @@ export default async function ReviewStepPage({
   return (
     <div>
       <h2>Review &amp; Publish</h2>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       {!completeness ? (
-        <p>No revision to review yet.</p>
+        <p className="studio-empty">No revision to review yet.</p>
       ) : (
         <>
           <p>Readiness: {completeness.readiness}</p>
-          <table>
+          <div className="studio-table-scroll">
+<table>
             <thead>
               <tr>
                 <th style={{ textAlign: "left" }}>Category</th>
@@ -57,7 +58,7 @@ export default async function ReviewStepPage({
                 <tr key={item.category}>
                   <td>{item.category}</td>
                   <td>{item.level}</td>
-                  <td style={{ color: item.status === "MISSING" && item.level === "REQUIRED" ? "#b00020" : undefined }}>
+                  <td style={{ color: item.status === "MISSING" && item.level === "REQUIRED" ? "var(--mm-error)" : undefined }}>
                     {item.status}
                   </td>
                   <td>{item.detail ?? ""}</td>
@@ -65,6 +66,7 @@ export default async function ReviewStepPage({
               ))}
             </tbody>
           </table>
+</div>
         </>
       )}
 
@@ -73,7 +75,7 @@ export default async function ReviewStepPage({
       <div style={{ display: "flex", gap: "1rem", marginTop: "1rem", flexWrap: "wrap" }}>
         {canSubmitForReview && (
           <form action={submitForReviewAction.bind(null, id)}>
-            <ConfirmSubmitButton>Submit for editorial review</ConfirmSubmitButton>
+            <ConfirmSubmitButton tone="primary">Submit for editorial review</ConfirmSubmitButton>
           </form>
         )}
         {canPublish && (
@@ -81,7 +83,7 @@ export default async function ReviewStepPage({
             <ConfirmSubmitButton
               confirmMessage="Publish this recording? The current draft will become the version visitors see on the public Museum."
               pendingLabel="Publishing…"
-            >
+             tone="primary">
               Publish
             </ConfirmSubmitButton>
           </form>
@@ -91,7 +93,7 @@ export default async function ReviewStepPage({
             <ConfirmSubmitButton
               confirmMessage="Unpublish this recording? It will disappear from the public Museum immediately. Its history is kept, and it can be published again later."
               pendingLabel="Unpublishing…"
-            >
+             tone="danger">
               Unpublish
             </ConfirmSubmitButton>
           </form>
@@ -111,7 +113,7 @@ export default async function ReviewStepPage({
             <ConfirmSubmitButton
               confirmMessage="Archive this recording? It will be removed from the public Museum. You can restore it later."
               pendingLabel="Archiving…"
-            >
+             tone="danger">
               Archive
             </ConfirmSubmitButton>
           </form>

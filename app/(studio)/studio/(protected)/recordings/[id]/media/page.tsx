@@ -44,10 +44,10 @@ export default async function MediaStepPage({
         no file-upload infrastructure in this environment yet — provide a hosted URL (e.g. a YouTube link) rather
         than uploading a file.
       </p>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       {media.length === 0 ? (
-        <p>No media attached yet.</p>
+        <p className="studio-empty">No media attached yet.</p>
       ) : (
         <ul>
           {media.map((m) => (
@@ -92,7 +92,7 @@ export default async function MediaStepPage({
             Provider resource ID (e.g. YouTube video ID, optional)
             <input name="providerResourceId" style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Attach media</button>
+          <button type="submit" className="studio-button--primary">Attach media</button>
         </form>
       )}
     </div>

@@ -4,6 +4,7 @@ import { can } from "../../../../../modules/auth/policy";
 import { listSheetMusicRequests } from "../../../../../modules/db/repositories/sheetMusicRequestRepository";
 import { updateRequestStatusAction } from "./actions";
 import type { SheetMusicRequestStatus } from "@prisma/client";
+import { StatusBadge } from "../../../../../components/studio/StatusBadge";
 
 const STATUSES: SheetMusicRequestStatus[] = ["NEW", "IN_REVIEW", "FULFILLED", "DECLINED"];
 
@@ -18,11 +19,12 @@ export default async function SheetMusicPage({ searchParams }: { searchParams: P
   return (
     <div>
       <h1>Sheet Music Requests</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
       {requests.length === 0 ? (
-        <p>No requests yet.</p>
+        <p className="studio-empty">No requests yet.</p>
       ) : (
-        <table>
+        <div className="studio-table-scroll">
+<table>
           <thead>
             <tr>
               <th style={{ textAlign: "left" }}>Requester</th>
@@ -40,7 +42,7 @@ export default async function SheetMusicPage({ searchParams }: { searchParams: P
                 </td>
                 <td>{request.musicalWork?.title ?? request.recording?.slug ?? "—"}</td>
                 <td>{request.intendedUse ?? "—"}</td>
-                <td>{request.status}</td>
+                <td><StatusBadge status={request.status} /></td>
                 {canWrite && (
                   <td>
                     <form action={updateRequestStatusAction.bind(null, request.id)} style={{ display: "flex", gap: "0.5rem" }}>
@@ -51,7 +53,7 @@ export default async function SheetMusicPage({ searchParams }: { searchParams: P
                           </option>
                         ))}
                       </select>
-                      <button type="submit">Save</button>
+                      <button type="submit" className="studio-button--primary">Save</button>
                     </form>
                   </td>
                 )}
@@ -59,6 +61,7 @@ export default async function SheetMusicPage({ searchParams }: { searchParams: P
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

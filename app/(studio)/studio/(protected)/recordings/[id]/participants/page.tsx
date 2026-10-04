@@ -45,7 +45,7 @@ export default async function ParticipantsStepPage({
   return (
     <div>
       <h2>Participants</h2>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <h3>Performers</h3>
       <ul>
@@ -55,7 +55,7 @@ export default async function ParticipantsStepPage({
             {link.role ? ` — ${link.role}` : ""}
             {canWrite && (
               <form action={removePerformerAction.bind(null, id, performanceId, link.artistId)} style={{ display: "inline" }}>
-                <button type="submit">Remove</button>
+                <button type="submit" className="studio-button--danger">Remove</button>
               </form>
             )}
           </li>
@@ -71,7 +71,7 @@ export default async function ParticipantsStepPage({
             ))}
           </select>
           <input name="role" placeholder="Role (e.g. Soloist)" />
-          <button type="submit">Add</button>
+          <button type="submit" className="studio-button--primary">Add</button>
         </form>
       )}
 
@@ -90,7 +90,7 @@ export default async function ParticipantsStepPage({
               </option>
             ))}
           </select>
-          <button type="submit">Add</button>
+          <button type="submit" className="studio-button--primary">Add</button>
         </form>
       )}
 
@@ -109,7 +109,7 @@ export default async function ParticipantsStepPage({
               </option>
             ))}
           </select>
-          <button type="submit">Add</button>
+          <button type="submit" className="studio-button--primary">Add</button>
         </form>
       )}
     </div>

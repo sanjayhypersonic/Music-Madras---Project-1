@@ -14,7 +14,7 @@ function SnapshotBlock({ label, value }: { label: string; value: unknown }) {
   return (
     <div style={{ marginTop: "1rem" }}>
       <h2 style={{ fontSize: "1rem" }}>{label}</h2>
-      <pre style={{ background: "#f5f5f5", padding: "0.75rem", overflowX: "auto", fontSize: "0.85rem" }}>
+      <pre className="studio-pre" style={{ fontSize: "0.85rem" }}>
         {JSON.stringify(value, null, 2)}
       </pre>
     </div>

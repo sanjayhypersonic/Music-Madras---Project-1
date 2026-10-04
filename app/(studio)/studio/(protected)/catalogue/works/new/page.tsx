@@ -21,7 +21,7 @@ export default async function NewMusicalWorkPage({ searchParams }: { searchParam
         <Link href="/studio/catalogue/works">← Musical Works</Link>
       </p>
       <h1>New Musical Work</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       {composers.length === 0 ? (
         <p>
@@ -60,7 +60,7 @@ export default async function NewMusicalWorkPage({ searchParams }: { searchParam
             Notes
             <textarea name="notes" style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Create Musical Work</button>
+          <button type="submit" className="studio-button--primary">Create Musical Work</button>
         </form>
       )}
     </div>

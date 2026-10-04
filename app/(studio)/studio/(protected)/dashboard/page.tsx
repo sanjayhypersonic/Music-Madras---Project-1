@@ -35,7 +35,7 @@ export default async function StudioDashboardPage() {
       <section>
         <h2>Recordings needing attention ({needingAttention.length})</h2>
         {needingAttention.length === 0 ? (
-          <p>Nothing in draft or review right now.</p>
+          <p className="studio-empty">Nothing in draft or review right now.</p>
         ) : (
           <ul>
             {needingAttention.slice(0, 10).map((recording) => (
@@ -66,7 +66,7 @@ export default async function StudioDashboardPage() {
         {!canViewAudit ? (
           <p>Recent activity is visible to Administrators and above.</p>
         ) : recentAuditEntries.length === 0 ? (
-          <p>No audit log entries yet.</p>
+          <p className="studio-empty">No audit log entries yet.</p>
         ) : (
           <ul>
             {recentAuditEntries.map((entry) => (

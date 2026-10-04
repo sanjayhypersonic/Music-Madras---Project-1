@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listProgrammesForStudio } from "../../../../../../modules/db/repositories/programmeRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4G — the Programme catalogue list, mirroring the Composer
 // list's shape exactly (search, active/archived, a cheap direct-relation
@@ -48,20 +49,21 @@ export default async function ProgrammesPage({ searchParams }: { searchParams: P
       {programmes.length === 0 ? (
         <p>{q ? `No programmes match "${q}".` : "No programmes have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Title</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Works</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Title</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th style={{ textAlign: "left" }}>Works</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {programmes.map((programme) => (
               <tr key={programme.id}>
                 <td style={{ padding: "0.4rem 0" }}>{programme.title}</td>
-                <td>{programme.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={programme.archivedAt ? "Archived" : "Active"} /></td>
                 <td>{programme._count.items}</td>
                 <td>
                   <Link href={`/studio/catalogue/programmes/${programme.id}`}>Open</Link>
@@ -70,6 +72,7 @@ export default async function ProgrammesPage({ searchParams }: { searchParams: P
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

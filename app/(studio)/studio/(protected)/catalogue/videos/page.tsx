@@ -44,9 +44,10 @@ export default async function YouTubeVideoCataloguePage({ searchParams }: { sear
           </Link>
         )}
       </form>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="studio-table-scroll">
+<table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
+          <tr style={{ textAlign: "left", borderBottom: "1px solid var(--mm-border)" }}>
             <th>Thumbnail</th>
             <th>Title</th>
             <th>Published</th>
@@ -59,7 +60,7 @@ export default async function YouTubeVideoCataloguePage({ searchParams }: { sear
         </thead>
         <tbody>
           {videos.map((video) => (
-            <tr key={video.id} style={{ borderBottom: "1px solid #eee" }}>
+            <tr key={video.id} style={{ borderBottom: "1px solid var(--mm-border)" }}>
               <td>
                 {video.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- internal Studio table, not the public Museum
@@ -89,6 +90,7 @@ export default async function YouTubeVideoCataloguePage({ searchParams }: { sear
           ))}
         </tbody>
       </table>
+</div>
       {videos.length === 0 && <p>{q ? `No videos match "${q}".` : "No YouTube videos have been synchronized yet."}</p>}
     </div>
   );

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listCollectionsForStudio } from "../../../../../../modules/db/repositories/collectionRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4I — the Collection catalogue list, mirroring the Programme/
 // Performance list's shape exactly (search, active/archived, cheap
@@ -47,23 +48,24 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
       {collections.length === 0 ? (
         <p>{q ? `No collections match "${q}".` : "No collections have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Title</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Publication</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Recordings</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Works</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Title</th>
+              <th style={{ textAlign: "left" }}>Publication</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th style={{ textAlign: "left" }}>Recordings</th>
+              <th style={{ textAlign: "left" }}>Works</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {collections.map((collection) => (
               <tr key={collection.id}>
                 <td style={{ padding: "0.4rem 0" }}>{collection.title}</td>
-                <td>{collection.status}</td>
-                <td>{collection.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={collection.status} /></td>
+                <td><StatusBadge status={collection.archivedAt ? "Archived" : "Active"} /></td>
                 <td>{collection._count.recordingLinks}</td>
                 <td>{collection._count.workLinks}</td>
                 <td>
@@ -73,6 +75,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

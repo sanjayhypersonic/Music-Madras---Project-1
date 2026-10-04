@@ -18,7 +18,7 @@ export default async function NewComposerPage({ searchParams }: { searchParams: 
         <Link href="/studio/catalogue/composers">← Composers</Link>
       </p>
       <h1>New Composer</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createComposerAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>
@@ -41,7 +41,7 @@ export default async function NewComposerPage({ searchParams }: { searchParams: 
           Biography
           <textarea name="biography" style={{ display: "block", width: "100%" }} />
         </label>
-        <button type="submit">Create Composer</button>
+        <button type="submit" className="studio-button--primary">Create Composer</button>
       </form>
     </div>
   );

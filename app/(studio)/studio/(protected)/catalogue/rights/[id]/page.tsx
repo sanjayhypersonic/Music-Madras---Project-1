@@ -31,7 +31,7 @@ export default async function RightsInformationDetailPage({
         <Link href="/studio/catalogue/rights">← Rights Information</Link>
       </p>
       <h1>{rights.holder ?? rights.licenseType ?? "Untitled Rights Information"}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <h2>Edit</h2>
       {canWrite ? (
@@ -51,7 +51,7 @@ export default async function RightsInformationDetailPage({
             Notes
             <textarea name="notes" defaultValue={rights.notes ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this rights information.</p>

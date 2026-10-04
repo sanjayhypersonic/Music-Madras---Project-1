@@ -7,6 +7,7 @@ import { listMusicalWorksForStudio } from "../../../../../../../modules/db/repos
 import { listRecordingsForStudio } from "../../../../../../../modules/db/repositories/recordingRepository";
 import EntityActivity from "../../../../../../../components/studio/EntityActivity";
 import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 import {
   archiveLearningGuideAction,
   attachRecordingAction,
@@ -70,10 +71,10 @@ export default async function LearningGuideDetailPage({
         <Link href="/studio/catalogue/learning-guides">← Learning Guides</Link>
       </p>
       <h1>{guide.title}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Lifecycle: <strong>{guide.archivedAt ? "Archived" : "Active"}</strong>
+        Lifecycle: <strong><StatusBadge status={guide.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Publication: <strong>{guide.status === "PUBLISHED" ? "Published" : "Draft"}</strong>
         <br />
@@ -116,7 +117,7 @@ export default async function LearningGuideDetailPage({
             Content (Markdown)
             <textarea name="contentMarkdown" rows={10} defaultValue={guide.contentMarkdown ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this learning guide.</p>
@@ -128,20 +129,20 @@ export default async function LearningGuideDetailPage({
           {canPublish &&
             (guide.status === "PUBLISHED" ? (
               <form action={unpublishLearningGuideAction.bind(null, guide.id)}>
-                <ConfirmSubmitButton confirmMessage="Unpublish this learning guide? It will disappear from the public Museum." pendingLabel="Unpublishing…">
+                <ConfirmSubmitButton confirmMessage="Unpublish this learning guide? It will disappear from the public Museum." pendingLabel="Unpublishing…" tone="danger">
                   Unpublish
                 </ConfirmSubmitButton>
               </form>
             ) : (
               <form action={publishLearningGuideAction.bind(null, guide.id)}>
-                <ConfirmSubmitButton confirmMessage="Publish this learning guide? It will appear on the public Museum." pendingLabel="Publishing…">
+                <ConfirmSubmitButton confirmMessage="Publish this learning guide? It will appear on the public Museum." pendingLabel="Publishing…" tone="primary">
                   Publish
                 </ConfirmSubmitButton>
               </form>
             ))}
           {!guide.archivedAt ? (
             <form action={archiveLearningGuideAction.bind(null, guide.id)}>
-              <ConfirmSubmitButton confirmMessage="Archive this learning guide? It will be removed from the public Museum." pendingLabel="Archiving…">
+              <ConfirmSubmitButton confirmMessage="Archive this learning guide? It will be removed from the public Museum." pendingLabel="Archiving…" tone="danger">
                 Archive
               </ConfirmSubmitButton>
             </form>
@@ -155,7 +156,7 @@ export default async function LearningGuideDetailPage({
 
       <h2>Musical Works ({guide.workLinks.length})</h2>
       {guide.workLinks.length === 0 ? (
-        <p>No musical works have been attached to this learning guide yet.</p>
+        <p className="studio-empty">No musical works have been attached to this learning guide yet.</p>
       ) : (
         <ul>
           {guide.workLinks.map((link) => (
@@ -164,7 +165,7 @@ export default async function LearningGuideDetailPage({
               {link.musicalWork.archivedAt ? " (archived)" : ""}
               {canWrite && (
                 <form action={detachWorkAction.bind(null, guide.id, link.musicalWorkId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -180,13 +181,13 @@ export default async function LearningGuideDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach work</button>
+          <button type="submit" className="studio-button--primary">Attach work</button>
         </form>
       )}
 
       <h2>Recordings ({guide.recordingLinks.length})</h2>
       {guide.recordingLinks.length === 0 ? (
-        <p>No recordings have been attached to this learning guide yet.</p>
+        <p className="studio-empty">No recordings have been attached to this learning guide yet.</p>
       ) : (
         <ul>
           {guide.recordingLinks.map((link) => (
@@ -194,7 +195,7 @@ export default async function LearningGuideDetailPage({
               {recordingTitle(link.recording)}
               {canWrite && (
                 <form action={detachRecordingAction.bind(null, guide.id, link.recordingId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -210,7 +211,7 @@ export default async function LearningGuideDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach recording</button>
+          <button type="submit" className="studio-button--primary">Attach recording</button>
         </form>
       )}
 

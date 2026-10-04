@@ -5,6 +5,7 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { findOccasionById } from "../../../../../../../modules/db/repositories/occasionRepository";
 import EntityActivity from "../../../../../../../components/studio/EntityActivity";
 import { archiveOccasionAction, restoreOccasionAction, updateOccasionAction } from "./actions";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-12 — the Occasion editorial management view, mirroring the
 // established Composer detail-page pattern exactly.
@@ -35,10 +36,10 @@ export default async function OccasionDetailPage({
         <Link href="/studio/catalogue/occasions">← Occasions</Link>
       </p>
       <h1>{occasion.name}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{occasion.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={occasion.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Slug: <code>{occasion.slug}</code>
       </p>
@@ -57,7 +58,7 @@ export default async function OccasionDetailPage({
             Description
             <textarea name="description" defaultValue={occasion.description ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this occasion.</p>
@@ -67,7 +68,7 @@ export default async function OccasionDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!occasion.archivedAt ? (
             <form action={archiveOccasionAction.bind(null, occasion.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreOccasionAction.bind(null, occasion.id)}>

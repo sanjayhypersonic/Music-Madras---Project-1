@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listLearningGuidesForStudio } from "../../../../../../modules/db/repositories/learningGuideRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-16 — the Learning Guide catalogue list, mirroring the
 // established Occasion list page exactly: every Learning Guide regardless
@@ -49,30 +50,32 @@ export default async function LearningGuidesPage({ searchParams }: { searchParam
       {guides.length === 0 ? (
         <p>{q ? `No learning guides match "${q}".` : "No learning guides have been added yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Title</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Lifecycle</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Publication</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Difficulty</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Title</th>
+              <th style={{ textAlign: "left" }}>Lifecycle</th>
+              <th style={{ textAlign: "left" }}>Publication</th>
+              <th style={{ textAlign: "left" }}>Difficulty</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {guides.map((guide) => (
               <tr key={guide.id}>
-                <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{guide.title}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{guide.archivedAt ? "Archived" : "Active"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{guide.status === "PUBLISHED" ? "Published" : "Draft"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{guide.difficultyLevel ?? "—"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "0.25rem 0" }}>{guide.title}</td>
+                <td><StatusBadge status={guide.archivedAt ? "Archived" : "Active"} /></td>
+                <td>{guide.status === "PUBLISHED" ? "Published" : "Draft"}</td>
+                <td>{guide.difficultyLevel ?? "—"}</td>
+                <td>
                   <Link href={`/studio/catalogue/learning-guides/${guide.id}`}>Manage</Link>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

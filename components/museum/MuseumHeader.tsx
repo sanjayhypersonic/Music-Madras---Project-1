@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ThemeToggle } from "./ThemeToggle";
+import { ThemeToggle } from "../shared/ThemeToggle";
 import { MobileNav } from "./MobileNav";
 import { MUSEUM_NAV_LINKS } from "./museumNavigation";
 
@@ -38,7 +38,7 @@ export function MuseumHeader() {
       </nav>
       <div className="museum-header__actions">
         <MobileNav />
-        <ThemeToggle />
+        <ThemeToggle className="museum-theme-toggle" />
       </div>
     </header>
   );

@@ -6,6 +6,7 @@ import { findProgrammeById } from "../../../../../../../modules/db/repositories/
 import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { listMusicalWorksByComposer } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { listActiveOccasions, listOccasionsForEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 import {
   addProgrammeItemAction,
   archiveProgrammeAction,
@@ -61,10 +62,10 @@ export default async function ProgrammeDetailPage({
         <Link href="/studio/catalogue/programmes">← Programmes</Link>
       </p>
       <h1>{programme.title}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{programme.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={programme.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Slug: <code>{programme.slug}</code>
       </p>
@@ -83,7 +84,7 @@ export default async function ProgrammeDetailPage({
             Notes
             <textarea name="notes" defaultValue={programme.notes ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this programme.</p>
@@ -93,7 +94,7 @@ export default async function ProgrammeDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!programme.archivedAt ? (
             <form action={archiveProgrammeAction.bind(null, programme.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreProgrammeAction.bind(null, programme.id)}>
@@ -105,7 +106,7 @@ export default async function ProgrammeDetailPage({
 
       <h2>Occasions ({attachedOccasions.length})</h2>
       {attachedOccasions.length === 0 ? (
-        <p>No occasions have been attached to this programme yet.</p>
+        <p className="studio-empty">No occasions have been attached to this programme yet.</p>
       ) : (
         <ul>
           {attachedOccasions.map((link) => (
@@ -114,7 +115,7 @@ export default async function ProgrammeDetailPage({
               {link.occasion.archivedAt ? " (archived)" : ""}
               {canWrite && (
                 <form action={detachOccasionAction.bind(null, programme.id, link.occasionId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -130,7 +131,7 @@ export default async function ProgrammeDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach occasion</button>
+          <button type="submit" className="studio-button--primary">Attach occasion</button>
         </form>
       )}
       {activeOccasions.length === 0 && (
@@ -141,7 +142,7 @@ export default async function ProgrammeDetailPage({
 
       <h2>Running order ({programme.items.length})</h2>
       {programme.items.length === 0 ? (
-        <p>No works have been added to this programme yet.</p>
+        <p className="studio-empty">No works have been added to this programme yet.</p>
       ) : (
         <ol>
           {programme.items.map((item, index) => (
@@ -166,7 +167,7 @@ export default async function ProgrammeDetailPage({
                     </form>
                   )}
                   <form action={removeProgrammeItemAction.bind(null, programme.id, item.id)} style={{ display: "inline" }}>
-                    <button type="submit">Remove</button>
+                    <button type="submit" className="studio-button--danger">Remove</button>
                   </form>
                 </>
               )}
@@ -203,7 +204,7 @@ export default async function ProgrammeDetailPage({
           <label>
             <input type="checkbox" name="isEncore" /> Encore
           </label>
-          <button type="submit">Add to programme</button>
+          <button type="submit" className="studio-button--primary">Add to programme</button>
         </form>
       )}
     </div>

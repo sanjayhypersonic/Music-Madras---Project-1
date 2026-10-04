@@ -4,6 +4,7 @@ import { getCurrentStudioSession } from "../../../../../modules/auth/authService
 import { can } from "../../../../../modules/auth/policy";
 import { createDraftRecording, listRecordingsForStudio } from "../../../../../modules/db/repositories/recordingRepository";
 import { slugify } from "../../../../../modules/mmke/slug/slugify";
+import { StatusBadge } from "../../../../../components/studio/StatusBadge";
 
 export default async function RecordingsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await getCurrentStudioSession();
@@ -35,9 +36,10 @@ export default async function RecordingsPage({ searchParams }: { searchParams: P
   return (
     <div>
       <h1>Recordings</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
-      <table>
+      <div className="studio-table-scroll">
+<table>
         <thead>
           <tr>
             <th style={{ textAlign: "left" }}>Title</th>
@@ -55,13 +57,14 @@ export default async function RecordingsPage({ searchParams }: { searchParams: P
                     recording.slug}
                 </Link>
               </td>
-              <td>{recording.status}</td>
+              <td><StatusBadge status={recording.status} /></td>
               <td>{recording.updatedAt.toISOString()}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {recordings.length === 0 && <p>No recordings yet.</p>}
+</div>
+      {recordings.length === 0 && <p className="studio-empty">No recordings yet.</p>}
 
       {canWrite && (
         <>
@@ -71,7 +74,7 @@ export default async function RecordingsPage({ searchParams }: { searchParams: P
               Working title
               <input name="title" required style={{ display: "block", width: "100%" }} />
             </label>
-            <button type="submit">Create draft</button>
+            <button type="submit" className="studio-button--primary">Create draft</button>
           </form>
         </>
       )}

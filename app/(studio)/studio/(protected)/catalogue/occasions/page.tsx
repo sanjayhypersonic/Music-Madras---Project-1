@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listOccasionsForStudio } from "../../../../../../modules/db/repositories/occasionRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-12 — the Occasion catalogue list, mirroring the established
 // Composer list page exactly: every Occasion regardless of archived state
@@ -50,28 +51,30 @@ export default async function OccasionsPage({ searchParams }: { searchParams: Pr
       {occasions.length === 0 ? (
         <p>{q ? `No occasions match "${q}".` : "No occasions have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Description</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Name</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th style={{ textAlign: "left" }}>Description</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {occasions.map((occasion) => (
               <tr key={occasion.id}>
-                <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{occasion.name}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{occasion.archivedAt ? "Archived" : "Active"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{occasion.description ?? "—"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "0.25rem 0" }}>{occasion.name}</td>
+                <td><StatusBadge status={occasion.archivedAt ? "Archived" : "Active"} /></td>
+                <td>{occasion.description ?? "—"}</td>
+                <td>
                   <Link href={`/studio/catalogue/occasions/${occasion.id}`}>Manage</Link>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

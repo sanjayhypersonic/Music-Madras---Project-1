@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listComposersForStudio } from "../../../../../../modules/db/repositories/composerRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4C — the Composer catalogue list. Shows every Composer
 // regardless of archived state (clearly labelled), with a cheap
@@ -50,20 +51,21 @@ export default async function ComposersPage({ searchParams }: { searchParams: Pr
             : "No composers have been added to the Music Madras archive yet."}
         </p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Works</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Name</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th style={{ textAlign: "left" }}>Works</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {composers.map((composer) => (
               <tr key={composer.id}>
                 <td style={{ padding: "0.4rem 0" }}>{composer.name}</td>
-                <td>{composer.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={composer.archivedAt ? "Archived" : "Active"} /></td>
                 <td>{composer._count.works}</td>
                 <td>
                   <Link href={`/studio/catalogue/composers/${composer.id}`}>Open</Link>
@@ -72,6 +74,7 @@ export default async function ComposersPage({ searchParams }: { searchParams: Pr
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

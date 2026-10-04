@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listPerformancesForStudio } from "../../../../../../modules/db/repositories/performanceRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4H — the Performance catalogue list, mirroring the Programme
 // list's shape (search, active/archived, cheap direct-relation counts, a
@@ -45,15 +46,16 @@ export default async function PerformancesPage({ searchParams }: { searchParams:
       {performances.length === 0 ? (
         <p>{q ? `No performances match "${q}".` : "No performances have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Programme</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Venue</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Date</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Participants</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Programme</th>
+              <th style={{ textAlign: "left" }}>Venue</th>
+              <th style={{ textAlign: "left" }}>Date</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th style={{ textAlign: "left" }}>Participants</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -62,7 +64,7 @@ export default async function PerformancesPage({ searchParams }: { searchParams:
                 <td style={{ padding: "0.4rem 0" }}>{performance.programme.title}</td>
                 <td>{performance.venue.name}</td>
                 <td>{performance.performanceDate ? new Date(performance.performanceDate).toLocaleDateString() : "—"}</td>
-                <td>{performance.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={performance.archivedAt ? "Archived" : "Active"} /></td>
                 <td>
                   {performance._count.performers} artists, {performance._count.choirs} choirs, {performance._count.conductors}{" "}
                   conductors
@@ -74,6 +76,7 @@ export default async function PerformancesPage({ searchParams }: { searchParams:
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

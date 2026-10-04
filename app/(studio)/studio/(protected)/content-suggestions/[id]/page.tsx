@@ -73,7 +73,7 @@ export default async function ContentSuggestionDetailPage({
         <Link href="/studio/content-suggestions">← Content Suggestions</Link>
       </p>
       <h1>{suggestion.suggestionType}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
         Target: <strong>{suggestion.targetEntityType}</strong>
@@ -110,12 +110,12 @@ export default async function ContentSuggestionDetailPage({
       </p>
 
       <h2>Proposed content</h2>
-      <p style={{ color: "#666" }}>The original proposal, exactly as generated. Never edited in place — an editor&apos;s revision is recorded separately below.</p>
-      <pre style={{ whiteSpace: "pre-wrap", background: "#f7f7f7", padding: "1rem" }}>{suggestion.proposedContent}</pre>
+      <p style={{ color: "var(--mm-text-muted)" }}>The original proposal, exactly as generated. Never edited in place — an editor&apos;s revision is recorded separately below.</p>
+      <pre className="studio-pre">{suggestion.proposedContent}</pre>
 
       <h2>Evidence ({evidenceRefs.length})</h2>
       {evidenceRefs.length === 0 ? (
-        <p>No evidence references were recorded for this suggestion.</p>
+        <p className="studio-empty">No evidence references were recorded for this suggestion.</p>
       ) : (
         <ul>
           {evidenceRefs.map((ref, index) => (
@@ -145,7 +145,7 @@ export default async function ContentSuggestionDetailPage({
               Note
               <input name="reviewNote" style={{ display: "block", width: "100%" }} />
             </label>
-            <button type="submit">Approve</button>
+            <button type="submit" className="studio-button--primary">Approve</button>
           </form>
 
           <form action={rejectAction.bind(null, suggestion.id)} style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -163,7 +163,7 @@ export default async function ContentSuggestionDetailPage({
               Note
               <input name="reviewNote" style={{ display: "block", width: "100%" }} />
             </label>
-            <button type="submit">Reject</button>
+            <button type="submit" className="studio-button--danger">Reject</button>
           </form>
 
           <form action={requestChangesAction.bind(null, suggestion.id)} style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -172,7 +172,7 @@ export default async function ContentSuggestionDetailPage({
               What needs to change?
               <textarea name="reviewNote" rows={3} required style={{ display: "block", width: "100%" }} />
             </label>
-            <button type="submit">Request changes</button>
+            <button type="submit" className="studio-button--primary">Request changes</button>
           </form>
         </div>
       )}
@@ -193,11 +193,11 @@ export default async function ContentSuggestionDetailPage({
           {suggestion.finalContent && (
             <>
               <h3>Editor&apos;s final content</h3>
-              <pre style={{ whiteSpace: "pre-wrap", background: "#f0f7f0", padding: "1rem" }}>{suggestion.finalContent}</pre>
+              <pre className="studio-pre studio-pre--success">{suggestion.finalContent}</pre>
             </>
           )}
           {suggestion.status === "APPROVED" && (
-            <section style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid #ccc" }}>
+            <section style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid var(--mm-border)" }}>
               <h3>Apply to Recording draft</h3>
               {application ? (
                 <p>
@@ -213,17 +213,17 @@ export default async function ContentSuggestionDetailPage({
                   )}
                 </p>
               ) : !applicableField ? (
-                <p style={{ color: "#666" }}>This suggestion does not target an editorial field that can be applied to a Recording.</p>
+                <p style={{ color: "var(--mm-text-muted)" }}>This suggestion does not target an editorial field that can be applied to a Recording.</p>
               ) : freshness !== "CURRENT" ? (
-                <p style={{ color: "#b00020" }}>
+                <p role="alert" className="studio-alert studio-alert--error">
                   {freshness === "STALE"
                     ? describeApplyRefusalForEditor("CONTENT_SUGGESTION_STALE")
                     : describeApplyRefusalForEditor("FRESHNESS_UNKNOWN")}
                 </p>
               ) : !targetRecording ? (
-                <p style={{ color: "#666" }}>The target Recording could not be found.</p>
+                <p style={{ color: "var(--mm-text-muted)" }}>The target Recording could not be found.</p>
               ) : !canApply ? (
-                <p style={{ color: "#666" }}>You do not have permission to edit this Recording&apos;s draft.</p>
+                <p style={{ color: "var(--mm-text-muted)" }}>You do not have permission to edit this Recording&apos;s draft.</p>
               ) : (
                 <>
                   <p>
@@ -240,7 +240,7 @@ export default async function ContentSuggestionDetailPage({
                     )}
                   </p>
                   <form action={applyToRecordingDraftAction.bind(null, suggestion.id)}>
-                    <button type="submit">Apply to Recording Draft</button>
+                    <button type="submit" className="studio-button--primary">Apply to Recording Draft</button>
                   </form>
                 </>
               )}

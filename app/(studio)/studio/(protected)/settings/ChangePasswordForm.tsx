@@ -22,7 +22,7 @@ export function ChangePasswordForm() {
         Confirm new password
         <input name="confirmPassword" type="password" required minLength={10} style={{ display: "block", width: "100%" }} />
       </label>
-      {state.error && <p style={{ color: "#b00020" }}>{state.error}</p>}
+      {state.error && <p role="alert" className="studio-alert studio-alert--error">{state.error}</p>}
       <button type="submit" disabled={pending}>
         {pending ? "Saving…" : "Change password"}
       </button>

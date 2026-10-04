@@ -22,7 +22,7 @@ export default async function NewPerformancePage({ searchParams }: { searchParam
         <Link href="/studio/catalogue/performances">← Performances</Link>
       </p>
       <h1>New Performance</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       {programmes.length === 0 || venues.length === 0 ? (
         <p>
@@ -62,7 +62,7 @@ export default async function NewPerformancePage({ searchParams }: { searchParam
             Performance date (optional)
             <input type="date" name="performanceDate" style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Create Performance</button>
+          <button type="submit" className="studio-button--primary">Create Performance</button>
         </form>
       )}
     </div>

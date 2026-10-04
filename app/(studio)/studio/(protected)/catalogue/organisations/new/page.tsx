@@ -18,7 +18,7 @@ export default async function NewOrganisationPage({ searchParams }: { searchPara
         <Link href="/studio/catalogue/organisations">← Organisations</Link>
       </p>
       <h1>New Organisation</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createOrganisationAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>
@@ -29,7 +29,7 @@ export default async function NewOrganisationPage({ searchParams }: { searchPara
           Description
           <textarea name="description" style={{ display: "block", width: "100%" }} />
         </label>
-        <button type="submit">Create Organisation</button>
+        <button type="submit" className="studio-button--primary">Create Organisation</button>
       </form>
     </div>
   );

@@ -5,6 +5,7 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { findChoirById } from "../../../../../../../modules/db/repositories/choirRepository";
 import { getChoirRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveChoirAction, restoreChoirAction, updateChoirAction } from "./actions";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4F — the Choir editorial management view, mirroring the
 // Artist detail page's shape. No public /choirs/[slug] route exists yet.
@@ -36,10 +37,10 @@ export default async function ChoirDetailPage({
         <Link href="/studio/catalogue/choirs">← Choirs</Link>
       </p>
       <h1>{choir.name}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{choir.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={choir.archivedAt ? "Archived" : "Active"} /></strong>
       </p>
 
       <h2>Edit</h2>
@@ -60,7 +61,7 @@ export default async function ChoirDetailPage({
             Description
             <textarea name="description" defaultValue={choir.description ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this choir.</p>
@@ -70,7 +71,7 @@ export default async function ChoirDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!choir.archivedAt ? (
             <form action={archiveChoirAction.bind(null, choir.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreChoirAction.bind(null, choir.id)}>
@@ -94,7 +95,7 @@ export default async function ChoirDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No performances linked yet.</p>
+        <p className="studio-empty">No performances linked yet.</p>
       )}
 
       <p>
@@ -107,7 +108,7 @@ export default async function ChoirDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No published recordings yet.</p>
+        <p className="studio-empty">No published recordings yet.</p>
       )}
 
       <p>
@@ -124,7 +125,7 @@ export default async function ChoirDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No publicly visible videos yet.</p>
+        <p className="studio-empty">No publicly visible videos yet.</p>
       )}
     </div>
   );

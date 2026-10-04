@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { RecordingSteps } from "../../../../../../components/studio/RecordingSteps";
 import {
   findRecordingById,
   getRecordingRevisionCompletenessReport,
@@ -55,20 +56,9 @@ export default async function RecordingWorkflowLayout({
       <h1>
         {title} <small style={{ fontWeight: "normal" }}>({phase})</small>
       </h1>
-      <div style={{ display: "flex", gap: "2rem" }}>
-        <nav style={{ minWidth: "12rem", flexShrink: 0 }}>
-          <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-            {STEPS.map((step) => (
-              <li key={step.slug}>
-                <Link href={`/studio/recordings/${id}/${step.slug}`}>{step.label}</Link>
-              </li>
-            ))}
-          </ul>
-          <hr />
-          <Link href={`/studio/recordings/${id}/preview`}>Preview</Link>
-        </nav>
-        <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
-      </div>
-    </div>
+      <div className="studio-steps-layout">
+        <RecordingSteps recordingId={id} steps={STEPS} />
+        <div className="studio-steps-layout__content">{children}</div>
+      </div>    </div>
   );
 }

@@ -5,6 +5,7 @@ import { listStudioUsers } from "../../../../../modules/db/repositories/studioUs
 import { assignableRoles, roleRank } from "../../../../../modules/auth/userManagementRules";
 import { ConfirmSubmitButton } from "../../../../../components/studio/ConfirmSubmitButton";
 import { inviteUserAction, disableUserAction, reactivateUserAction, changeRoleAction } from "./actions";
+import { StatusBadge } from "../../../../../components/studio/StatusBadge";
 
 // Phase 6J-1: the controls shown here mirror the server rules in
 // modules/auth/userManagementRules.ts (a courtesy only — the repositories
@@ -27,9 +28,10 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   return (
     <div>
       <h1>Users</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
-      <table>
+      <div className="studio-table-scroll">
+<table>
         <thead>
           <tr>
             <th style={{ textAlign: "left" }}>Name</th>
@@ -57,7 +59,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                           </option>
                         ))}
                       </select>
-                      <ConfirmSubmitButton confirmMessage={`Change ${user.name}'s role? Their permissions change immediately.`} pendingLabel="Saving…">
+                      <ConfirmSubmitButton confirmMessage={`Change ${user.name}'s role? Their permissions change immediately.`} pendingLabel="Saving…" tone="primary">
                         Save
                       </ConfirmSubmitButton>
                     </form>
@@ -65,10 +67,10 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     user.role
                   )}
                 </td>
-                <td>{user.status}</td>
+                <td><StatusBadge status={user.status} /></td>
                 <td>
                   {!manageable ? (
-                    <span style={{ color: "#666" }}>{isSelf ? "This is you" : user.role === "FOUNDER" ? "Protected" : "—"}</span>
+                    <span style={{ color: "var(--mm-text-muted)" }}>{isSelf ? "This is you" : user.role === "FOUNDER" ? "Protected" : "—"}</span>
                   ) : user.status === "DISABLED" ? (
                     <form action={reactivateUserAction.bind(null, user.id)}>
                       <ConfirmSubmitButton confirmMessage={`Reactivate ${user.name}? They will be able to sign in again.`} pendingLabel="Reactivating…">
@@ -76,13 +78,13 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                       </ConfirmSubmitButton>
                     </form>
                   ) : user.status === "INVITED" ? (
-                    <span style={{ color: "#666" }}>Invitation pending</span>
+                    <span style={{ color: "var(--mm-text-muted)" }}>Invitation pending</span>
                   ) : (
                     <form action={disableUserAction.bind(null, user.id)}>
                       <ConfirmSubmitButton
                         confirmMessage={`Disable ${user.name}? They will be signed out immediately and cannot sign in until reactivated.`}
                         pendingLabel="Disabling…"
-                      >
+                       tone="danger">
                         Disable
                       </ConfirmSubmitButton>
                     </form>
@@ -93,6 +95,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           })}
         </tbody>
       </table>
+</div>
 
       <h2>Invite a user</h2>
       {grantable.length === 0 ? (
@@ -117,7 +120,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               ))}
             </select>
           </label>
-          <ConfirmSubmitButton pendingLabel="Sending…">Send invitation</ConfirmSubmitButton>
+          <ConfirmSubmitButton pendingLabel="Sending…" tone="primary">Send invitation</ConfirmSubmitButton>
         </form>
       )}
       <p>The invitation is sent by email. The link works once and expires after 72 hours.</p>

@@ -29,7 +29,7 @@ export default async function ProgrammeStepPage({
     <div>
       <h2>Programme</h2>
       <p>The concert programme this recording belongs to — a real, ordered running order, not free text.</p>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form method="get" style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", maxWidth: "28rem" }}>
         <label style={{ flex: 1 }}>
@@ -61,7 +61,7 @@ export default async function ProgrammeStepPage({
               Notes
               <textarea name="notes" style={{ display: "block", width: "100%" }} />
             </label>
-            <button type="submit">Create programme</button>
+            <button type="submit" className="studio-button--primary">Create programme</button>
           </form>
         </>
       )}
@@ -70,7 +70,7 @@ export default async function ProgrammeStepPage({
         <div style={{ marginTop: "1.5rem" }}>
           <h3>{selectedProgramme.title} — running order</h3>
           {selectedProgramme.items.length === 0 ? (
-            <p>No items yet.</p>
+            <p className="studio-empty">No items yet.</p>
           ) : (
             <ol>
               {selectedProgramme.items.map((item) => (
@@ -83,7 +83,7 @@ export default async function ProgrammeStepPage({
                       action={removeProgrammeItemAction.bind(null, id, selectedProgramme.id, item.id)}
                       style={{ display: "inline" }}
                     >
-                      <button type="submit">Remove</button>
+                      <button type="submit" className="studio-button--danger">Remove</button>
                     </form>
                   )}
                 </li>
@@ -119,7 +119,7 @@ export default async function ProgrammeStepPage({
               <label>
                 <input type="checkbox" name="isEncore" /> Encore
               </label>
-              <button type="submit">Add to programme</button>
+              <button type="submit" className="studio-button--primary">Add to programme</button>
             </form>
           )}
         </div>

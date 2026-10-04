@@ -24,7 +24,7 @@ export default async function NewVenuePage({ searchParams }: { searchParams: Pro
         <Link href="/studio/catalogue/venues">← Venues</Link>
       </p>
       <h1>New Venue</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createVenueAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>
@@ -64,7 +64,7 @@ export default async function NewVenuePage({ searchParams }: { searchParams: Pro
             ))}
           </select>
         </label>
-        <button type="submit">Create Venue</button>
+        <button type="submit" className="studio-button--primary">Create Venue</button>
       </form>
     </div>
   );

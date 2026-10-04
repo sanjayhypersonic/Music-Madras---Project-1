@@ -48,7 +48,7 @@ export default async function SourceDetailPage({
         <Link href="/studio/catalogue/sources">← Sources</Link>
       </p>
       <h1>{source.title ?? source.url ?? "Untitled Source"}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <h2>AI evidence approval</h2>
       <p>
@@ -65,17 +65,17 @@ export default async function SourceDetailPage({
         <div style={{ display: "flex", gap: "0.5rem" }}>
           {canApproveSource(source.approvalState) && (
             <form action={approveSourceAction.bind(null, source.id)}>
-              <button type="submit">Approve</button>
+              <button type="submit" className="studio-button--primary">Approve</button>
             </form>
           )}
           {canRejectSource(source.approvalState) && (
             <form action={rejectSourceAction.bind(null, source.id)}>
-              <button type="submit">Reject</button>
+              <button type="submit" className="studio-button--danger">Reject</button>
             </form>
           )}
           {canDisableSource(source.approvalState) && (
             <form action={disableSourceAction.bind(null, source.id)}>
-              <button type="submit">Disable</button>
+              <button type="submit" className="studio-button--danger">Disable</button>
             </form>
           )}
         </div>
@@ -122,7 +122,7 @@ export default async function SourceDetailPage({
             Publisher
             <input name="publisher" defaultValue={source.publisher ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this source.</p>
@@ -130,7 +130,7 @@ export default async function SourceDetailPage({
 
       <h2>Citations ({citations.length})</h2>
       {citations.length === 0 ? (
-        <p>No citations have been added for this source yet.</p>
+        <p className="studio-empty">No citations have been added for this source yet.</p>
       ) : (
         <ul>
           {citations.map((citation) => (
@@ -141,7 +141,7 @@ export default async function SourceDetailPage({
                   style={{ display: "flex", gap: "0.5rem", maxWidth: "32rem" }}
                 >
                   <textarea name="text" defaultValue={citation.text ?? ""} style={{ flex: 1 }} />
-                  <button type="submit">Save</button>
+                  <button type="submit" className="studio-button--primary">Save</button>
                 </form>
               ) : (
                 <p>{citation.text}</p>
@@ -156,7 +156,7 @@ export default async function SourceDetailPage({
             New citation text
             <textarea name="text" required style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Add citation</button>
+          <button type="submit" className="studio-button--primary">Add citation</button>
         </form>
       )}
     </div>

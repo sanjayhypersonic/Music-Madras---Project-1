@@ -29,7 +29,7 @@ export default async function VenueStepPage({
         Ensure the church or venue for this recording&apos;s performance exists — you will select it in the
         Performance step next.
       </p>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <ul>
         {venues.map((venue) => (
@@ -39,7 +39,7 @@ export default async function VenueStepPage({
           </li>
         ))}
       </ul>
-      {venues.length === 0 && <p>No venues yet.</p>}
+      {venues.length === 0 && <p className="studio-empty">No venues yet.</p>}
 
       {canWrite && (
         <form
@@ -68,7 +68,7 @@ export default async function VenueStepPage({
             Country
             <input name="country" style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Add venue</button>
+          <button type="submit" className="studio-button--primary">Add venue</button>
         </form>
       )}
     </div>

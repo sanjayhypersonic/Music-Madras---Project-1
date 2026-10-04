@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listVenuesForStudio } from "../../../../../../modules/db/repositories/venueRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4E — the Venue catalogue list, mirroring the Composer list's
 // shape exactly (search, active/archived, Organisation joined, a
@@ -44,14 +45,15 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
       {venues.length === 0 ? (
         <p>{q ? `No venues match "${q}".` : "No venues have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Type</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Organisation</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Name</th>
+              <th style={{ textAlign: "left" }}>Type</th>
+              <th style={{ textAlign: "left" }}>Organisation</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -63,7 +65,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
                 </td>
                 <td>{venue.type}</td>
                 <td>{venue.organisation?.name ?? "—"}</td>
-                <td>{venue.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={venue.archivedAt ? "Archived" : "Active"} /></td>
                 <td>
                   <Link href={`/studio/catalogue/venues/${venue.id}`}>Open</Link>
                 </td>
@@ -71,6 +73,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

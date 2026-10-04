@@ -18,7 +18,7 @@ export default async function NewConductorPage({ searchParams }: { searchParams:
         <Link href="/studio/catalogue/conductors">← Conductors</Link>
       </p>
       <h1>New Conductor</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createConductorAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>
@@ -29,7 +29,7 @@ export default async function NewConductorPage({ searchParams }: { searchParams:
           Biography
           <textarea name="biography" style={{ display: "block", width: "100%" }} />
         </label>
-        <button type="submit">Create Conductor</button>
+        <button type="submit" className="studio-button--primary">Create Conductor</button>
       </form>
     </div>
   );

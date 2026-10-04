@@ -7,6 +7,7 @@ import { getComposerRelatedContent } from "../../../../../../../modules/db/repos
 import { listSources, listSourcesForEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { listRightsForEntity, listRightsInformation } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
 import EntityActivity from "../../../../../../../components/studio/EntityActivity";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 import {
   archiveComposerAction,
   attachRightsAction,
@@ -58,10 +59,10 @@ export default async function ComposerDetailPage({
         <Link href="/studio/catalogue/composers">← Composers</Link>
       </p>
       <h1>{composer.name}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{composer.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={composer.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Slug: <code>{composer.slug}</code>
         {!composer.archivedAt && (
@@ -100,7 +101,7 @@ export default async function ComposerDetailPage({
             Biography
             <textarea name="biography" defaultValue={composer.biography ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this composer.</p>
@@ -110,7 +111,7 @@ export default async function ComposerDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!composer.archivedAt ? (
             <form action={archiveComposerAction.bind(null, composer.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreComposerAction.bind(null, composer.id)}>
@@ -122,7 +123,7 @@ export default async function ComposerDetailPage({
 
       <h2>Sources ({attachedSources.length})</h2>
       {attachedSources.length === 0 ? (
-        <p>No sources have been attached to this composer yet.</p>
+        <p className="studio-empty">No sources have been attached to this composer yet.</p>
       ) : (
         <ul>
           {attachedSources.map((link) => (
@@ -130,7 +131,7 @@ export default async function ComposerDetailPage({
               {link.source.title ?? link.source.url ?? "Untitled Source"}
               {canWrite && (
                 <form action={detachSourceAction.bind(null, composer.id, link.sourceId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -146,13 +147,13 @@ export default async function ComposerDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach source</button>
+          <button type="submit" className="studio-button--primary">Attach source</button>
         </form>
       )}
 
       <h2>Rights Information ({attachedRights.length})</h2>
       {attachedRights.length === 0 ? (
-        <p>No rights information has been attached to this composer yet.</p>
+        <p className="studio-empty">No rights information has been attached to this composer yet.</p>
       ) : (
         <ul>
           {attachedRights.map((link) => (
@@ -160,7 +161,7 @@ export default async function ComposerDetailPage({
               {link.rightsInformation.holder ?? link.rightsInformation.licenseType ?? "Untitled Rights Information"}
               {canWrite && (
                 <form action={detachRightsAction.bind(null, composer.id, link.rightsInformationId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -176,7 +177,7 @@ export default async function ComposerDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach rights information</button>
+          <button type="submit" className="studio-button--primary">Attach rights information</button>
         </form>
       )}
 
@@ -193,7 +194,7 @@ export default async function ComposerDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No musical works linked yet.</p>
+        <p className="studio-empty">No musical works linked yet.</p>
       )}
 
       <p>
@@ -209,7 +210,7 @@ export default async function ComposerDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No performances linked yet.</p>
+        <p className="studio-empty">No performances linked yet.</p>
       )}
 
       <p>
@@ -222,7 +223,7 @@ export default async function ComposerDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No published recordings yet.</p>
+        <p className="studio-empty">No published recordings yet.</p>
       )}
 
       <p>
@@ -239,7 +240,7 @@ export default async function ComposerDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No publicly visible videos yet.</p>
+        <p className="studio-empty">No publicly visible videos yet.</p>
       )}
 
       <p>

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listConductorsForStudio } from "../../../../../../modules/db/repositories/conductorRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4F — the Conductor catalogue list, mirroring the Artist list's shape exactly.
 
@@ -42,19 +43,20 @@ export default async function ConductorsPage({ searchParams }: { searchParams: P
       {conductors.length === 0 ? (
         <p>{q ? `No conductors match "${q}".` : "No conductors have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Name</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {conductors.map((conductor) => (
               <tr key={conductor.id}>
                 <td style={{ padding: "0.4rem 0" }}>{conductor.name}</td>
-                <td>{conductor.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={conductor.archivedAt ? "Archived" : "Active"} /></td>
                 <td>
                   <Link href={`/studio/catalogue/conductors/${conductor.id}`}>Open</Link>
                 </td>
@@ -62,6 +64,7 @@ export default async function ConductorsPage({ searchParams }: { searchParams: P
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

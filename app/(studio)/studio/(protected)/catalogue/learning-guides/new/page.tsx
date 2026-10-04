@@ -18,7 +18,7 @@ export default async function NewLearningGuidePage({ searchParams }: { searchPar
         <Link href="/studio/catalogue/learning-guides">← Learning Guides</Link>
       </p>
       <h1>New Learning Guide</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createLearningGuideAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "32rem" }}>
         <label>
@@ -37,7 +37,7 @@ export default async function NewLearningGuidePage({ searchParams }: { searchPar
           Content (Markdown, optional)
           <textarea name="contentMarkdown" rows={10} style={{ display: "block", width: "100%" }} />
         </label>
-        <button type="submit">Create Learning Guide</button>
+        <button type="submit" className="studio-button--primary">Create Learning Guide</button>
       </form>
     </div>
   );

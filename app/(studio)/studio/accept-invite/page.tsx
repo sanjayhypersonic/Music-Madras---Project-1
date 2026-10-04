@@ -24,7 +24,7 @@ function AcceptInviteForm() {
   }
 
   return (
-    <div style={{ maxWidth: "24rem" }}>
+    <div className="studio-auth">
       <h1>Activate your Studio account</h1>
       <p>Choose a password to finish setting up your account.</p>
       <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -43,7 +43,7 @@ function AcceptInviteForm() {
             style={{ display: "block", width: "100%" }}
           />
         </label>
-        {state.error && <p style={{ color: "#b00020" }}>{state.error}</p>}
+        {state.error && <p role="alert" className="studio-alert studio-alert--error">{state.error}</p>}
         <button type="submit" disabled={pending}>
           {pending ? "Activating…" : "Activate account"}
         </button>

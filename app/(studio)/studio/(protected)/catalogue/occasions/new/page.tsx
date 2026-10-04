@@ -18,7 +18,7 @@ export default async function NewOccasionPage({ searchParams }: { searchParams: 
         <Link href="/studio/catalogue/occasions">← Occasions</Link>
       </p>
       <h1>New Occasion</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createOccasionAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>
@@ -29,7 +29,7 @@ export default async function NewOccasionPage({ searchParams }: { searchParams: 
           Description (optional)
           <textarea name="description" style={{ display: "block", width: "100%" }} />
         </label>
-        <button type="submit">Create Occasion</button>
+        <button type="submit" className="studio-button--primary">Create Occasion</button>
       </form>
     </div>
   );

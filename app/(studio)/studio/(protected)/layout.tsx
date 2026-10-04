@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { StudioNav } from "../../../../components/studio/StudioNav";
 import { getCurrentStudioSession, signOutCurrentUser } from "../../../../modules/auth/authService";
 import { can, canManageUsers } from "../../../../modules/auth/policy";
 
-// The authentication + account-status gate for every real Studio screen
+// Phase 6J-3B: the layout is a sidebar + content grid; StudioNav (client) adds the\n// current-page marker and the mobile disclosure, with the account block and the\n// sign-out Server Action passed in as server-rendered children.\n//\n// The authentication + account-status gate for every real Studio screen
 // (brief §2/§3: "no fake functionality" also means no page that merely
 // *looks* protected — this runs server-side, on every request, because
 // the session strategy is "database" (ADR §7), not a JWT the client could
@@ -44,26 +44,21 @@ export default async function ProtectedStudioLayout({ children }: { children: Re
   navLinks.push({ href: "/studio/settings", label: "Settings" });
 
   return (
-    <div style={{ display: "flex", gap: "2rem" }}>
-      <nav aria-label="Studio" style={{ minWidth: "12rem", flexShrink: 0 }}>
-        <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {navLinks.map((link) => (
-            <li key={link.href}>
-              <Link href={link.href}>{link.label}</Link>
-            </li>
-          ))}
-        </ul>
-        <hr />
-        <p style={{ fontSize: "0.85rem" }}>
-          Signed in as {name} ({email})
-          <br />
-          Role: {role}
-        </p>
-        <form action={signOut}>
-          <button type="submit">Sign out</button>
-        </form>
-      </nav>
-      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    <div className="studio-layout">
+      <StudioNav links={navLinks}>
+        <div className="studio-account">
+          <p>
+            <span className="studio-account__name">{name}</span>
+            <br />
+            {email}
+            <br />
+            Role: {role}
+          </p>
+          <form action={signOut}>
+            <button type="submit">Sign out</button>
+          </form>
+        </div>
+      </StudioNav>
+      <div className="studio-layout__content">{children}</div>
     </div>
-  );
-}
+  );}

@@ -9,6 +9,7 @@ import { listActiveArtists } from "../../../../../../../modules/db/repositories/
 import { listActiveChoirs } from "../../../../../../../modules/db/repositories/choirRepository";
 import { listActiveConductors } from "../../../../../../../modules/db/repositories/conductorRepository";
 import { listActiveOccasions, listOccasionsForEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 import {
   addArtistAction,
   addChoirAction,
@@ -75,10 +76,10 @@ export default async function PerformanceDetailPage({
       <h1>
         {performance.programme.title} at {performance.venue.name}
       </h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{performance.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={performance.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Programme: <Link href={`/studio/catalogue/programmes/${performance.programme.id}`}>{performance.programme.title}</Link>
         <br />
@@ -117,7 +118,7 @@ export default async function PerformanceDetailPage({
             Performance date
             <input type="date" name="performanceDate" defaultValue={performanceDateValue} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this performance.</p>
@@ -127,7 +128,7 @@ export default async function PerformanceDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!performance.archivedAt ? (
             <form action={archivePerformanceAction.bind(null, performance.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restorePerformanceAction.bind(null, performance.id)}>
@@ -139,7 +140,7 @@ export default async function PerformanceDetailPage({
 
       <h2>Occasions ({attachedOccasions.length})</h2>
       {attachedOccasions.length === 0 ? (
-        <p>No occasions have been attached to this performance yet.</p>
+        <p className="studio-empty">No occasions have been attached to this performance yet.</p>
       ) : (
         <ul>
           {attachedOccasions.map((link) => (
@@ -148,7 +149,7 @@ export default async function PerformanceDetailPage({
               {link.occasion.archivedAt ? " (archived)" : ""}
               {canWrite && (
                 <form action={detachOccasionAction.bind(null, performance.id, link.occasionId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -164,13 +165,13 @@ export default async function PerformanceDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach occasion</button>
+          <button type="submit" className="studio-button--primary">Attach occasion</button>
         </form>
       )}
 
       <h2>Artists ({performance.performers.length})</h2>
       {performance.performers.length === 0 ? (
-        <p>No artists have been added to this performance yet.</p>
+        <p className="studio-empty">No artists have been added to this performance yet.</p>
       ) : (
         <ul>
           {performance.performers.map((link) => (
@@ -179,7 +180,7 @@ export default async function PerformanceDetailPage({
               {link.role ? ` — ${link.role}` : ""}
               {canWrite && (
                 <form action={removeArtistAction.bind(null, performance.id, link.artistId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -205,13 +206,13 @@ export default async function PerformanceDetailPage({
             Role (optional)
             <input name="role" placeholder="e.g. Soloist" style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Add artist</button>
+          <button type="submit" className="studio-button--primary">Add artist</button>
         </form>
       )}
 
       <h2>Choirs ({performance.choirs.length})</h2>
       {performance.choirs.length === 0 ? (
-        <p>No choirs have been added to this performance yet.</p>
+        <p className="studio-empty">No choirs have been added to this performance yet.</p>
       ) : (
         <ul>
           {performance.choirs.map((link) => (
@@ -219,7 +220,7 @@ export default async function PerformanceDetailPage({
               {link.choir.name}
               {canWrite && (
                 <form action={removeChoirAction.bind(null, performance.id, link.choirId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -235,13 +236,13 @@ export default async function PerformanceDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Add choir</button>
+          <button type="submit" className="studio-button--primary">Add choir</button>
         </form>
       )}
 
       <h2>Conductors ({performance.conductors.length})</h2>
       {performance.conductors.length === 0 ? (
-        <p>No conductors have been added to this performance yet.</p>
+        <p className="studio-empty">No conductors have been added to this performance yet.</p>
       ) : (
         <ul>
           {performance.conductors.map((link) => (
@@ -249,7 +250,7 @@ export default async function PerformanceDetailPage({
               {link.conductor.name}
               {canWrite && (
                 <form action={removeConductorAction.bind(null, performance.id, link.conductorId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -265,7 +266,7 @@ export default async function PerformanceDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Add conductor</button>
+          <button type="submit" className="studio-button--primary">Add conductor</button>
         </form>
       )}
     </div>

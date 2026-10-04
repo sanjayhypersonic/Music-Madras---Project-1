@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listOrganisationsForStudio } from "../../../../../../modules/db/repositories/organisationRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4E — the Organisation catalogue list, mirroring the Composer
 // list's shape exactly (search, active/archived, a cheap direct-relation
@@ -44,20 +45,21 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
       {organisations.length === 0 ? (
         <p>{q ? `No organisations match "${q}".` : "No organisations have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Venues</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Name</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th style={{ textAlign: "left" }}>Venues</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {organisations.map((organisation) => (
               <tr key={organisation.id}>
                 <td style={{ padding: "0.4rem 0" }}>{organisation.name}</td>
-                <td>{organisation.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={organisation.archivedAt ? "Archived" : "Active"} /></td>
                 <td>{organisation._count.venues}</td>
                 <td>
                   <Link href={`/studio/catalogue/organisations/${organisation.id}`}>Open</Link>
@@ -66,6 +68,7 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

@@ -6,6 +6,7 @@ import { listActiveComposers, findComposerById } from "../../../../../../../modu
 import { findMusicalWorkDetailForStudio } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { listSources, listSourcesForEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { listRightsForEntity, listRightsInformation } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 import {
   archiveWorkAction,
   attachRightsAction,
@@ -61,10 +62,10 @@ export default async function MusicalWorkDetailPage({
         <Link href="/studio/catalogue/works">← Musical Works</Link>
       </p>
       <h1>{work.title}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{work.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={work.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Slug: <code>{work.slug}</code>
         <br />
@@ -110,7 +111,7 @@ export default async function MusicalWorkDetailPage({
             Notes
             <textarea name="notes" defaultValue={work.notes ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this musical work.</p>
@@ -120,7 +121,7 @@ export default async function MusicalWorkDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!work.archivedAt ? (
             <form action={archiveWorkAction.bind(null, work.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreWorkAction.bind(null, work.id)}>
@@ -132,7 +133,7 @@ export default async function MusicalWorkDetailPage({
 
       <h2>Sources ({attachedSources.length})</h2>
       {attachedSources.length === 0 ? (
-        <p>No sources have been attached to this work yet.</p>
+        <p className="studio-empty">No sources have been attached to this work yet.</p>
       ) : (
         <ul>
           {attachedSources.map((link) => (
@@ -140,7 +141,7 @@ export default async function MusicalWorkDetailPage({
               {link.source.title ?? link.source.url ?? "Untitled Source"}
               {canWrite && (
                 <form action={detachSourceAction.bind(null, work.id, link.sourceId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -156,13 +157,13 @@ export default async function MusicalWorkDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach source</button>
+          <button type="submit" className="studio-button--primary">Attach source</button>
         </form>
       )}
 
       <h2>Rights Information ({attachedRights.length})</h2>
       {attachedRights.length === 0 ? (
-        <p>No rights information has been attached to this work yet.</p>
+        <p className="studio-empty">No rights information has been attached to this work yet.</p>
       ) : (
         <ul>
           {attachedRights.map((link) => (
@@ -170,7 +171,7 @@ export default async function MusicalWorkDetailPage({
               {link.rightsInformation.holder ?? link.rightsInformation.licenseType ?? "Untitled Rights Information"}
               {canWrite && (
                 <form action={detachRightsAction.bind(null, work.id, link.rightsInformationId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -186,7 +187,7 @@ export default async function MusicalWorkDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach rights information</button>
+          <button type="submit" className="studio-button--primary">Attach rights information</button>
         </form>
       )}
 

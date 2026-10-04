@@ -11,7 +11,7 @@
  * :root[data-theme="light"] in tokens.css — not a dimmed copy of dark.
  *
  * Fonts: --mm-font-serif / --mm-font-sans are provided by next/font (see
- * app/(museum)/fonts.ts) on the .museum-root element; they are used directly.
+ * app/fonts.ts) on the .museum-root element; they are used directly.
  */
 
 /* ---------------------------------------------------------------------

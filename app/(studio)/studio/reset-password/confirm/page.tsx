@@ -24,7 +24,7 @@ function ConfirmResetForm() {
   }
 
   return (
-    <div style={{ maxWidth: "24rem" }}>
+    <div className="studio-auth">
       <h1>Choose a new password</h1>
       <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <input type="hidden" name="token" value={token} />
@@ -42,7 +42,7 @@ function ConfirmResetForm() {
             style={{ display: "block", width: "100%" }}
           />
         </label>
-        {state.error && <p style={{ color: "#b00020" }}>{state.error}</p>}
+        {state.error && <p role="alert" className="studio-alert studio-alert--error">{state.error}</p>}
         <button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Save new password"}
         </button>

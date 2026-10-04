@@ -22,7 +22,7 @@ export default async function PreviewStepPage({ params }: { params: Promise<{ id
   const context = openRevisionId ? await getCanonicalContextForRevision(openRevisionId) : null;
 
   if (!context) {
-    return <p>Nothing to preview yet.</p>;
+    return <p className="studio-empty">Nothing to preview yet.</p>;
   }
 
   const primaryVideo = context.mediaResources.find((m) => m.role === "PRIMARY_VIDEO");
@@ -30,15 +30,16 @@ export default async function PreviewStepPage({ params }: { params: Promise<{ id
   return (
     <div
       style={{
-        background: "#fff",
-        border: "1px solid #ccc",
+        background: "var(--mm-surface)",
+        color: "var(--mm-text-primary)",
+        border: "1px solid var(--mm-border)",
         borderRadius: "0.5rem",
         padding: "2rem",
         maxWidth: "40rem",
         fontFamily: "Georgia, serif",
       }}
     >
-      <p style={{ fontFamily: "system-ui, sans-serif", fontSize: "0.8rem", color: "#888" }}>
+      <p style={{ fontFamily: "system-ui, sans-serif", fontSize: "0.8rem", color: "var(--mm-text-muted)" }}>
         Studio preview — a working view of this revision, not the live public page. The published page can look different.
       </p>
       <h1>{context.revision.title ?? "Untitled recording"}</h1>

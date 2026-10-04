@@ -136,33 +136,35 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
       </form>
 
       {items.length === 0 ? (
-        <p>No audit log entries match these filters.</p>
+        <p className="studio-empty">No audit log entries match these filters.</p>
       ) : (
         <>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr>
-                <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Date/time</th>
-                <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Actor</th>
-                <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Action</th>
-                <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Entity type</th>
-                <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Entity</th>
+                <th style={{ textAlign: "left" }}>Date/time</th>
+                <th style={{ textAlign: "left" }}>Actor</th>
+                <th style={{ textAlign: "left" }}>Action</th>
+                <th style={{ textAlign: "left" }}>Entity type</th>
+                <th style={{ textAlign: "left" }}>Entity</th>
               </tr>
             </thead>
             <tbody>
               {items.map((entry) => (
                 <tr key={entry.id}>
-                  <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{formatAuditTimestamp(entry.timestamp)}</td>
-                  <td style={{ borderBottom: "1px solid #eee" }}>{entry.actor ? entry.actor.name : "System"}</td>
-                  <td style={{ borderBottom: "1px solid #eee" }}>{formatAuditActionSummary(entry.action)}</td>
-                  <td style={{ borderBottom: "1px solid #eee" }}>{entry.entityType}</td>
-                  <td style={{ borderBottom: "1px solid #eee" }}>
+                  <td style={{ padding: "0.25rem 0" }}>{formatAuditTimestamp(entry.timestamp)}</td>
+                  <td>{entry.actor ? entry.actor.name : "System"}</td>
+                  <td>{formatAuditActionSummary(entry.action)}</td>
+                  <td>{entry.entityType}</td>
+                  <td>
                     <Link href={`/studio/audit/${entry.id}`}>{deriveAuditEntityLabel(entry)}</Link>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+</div>
 
           <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
             {page > 1 ? <Link href={buildAuditHref({ ...params, page: String(page - 1) })}>&larr; Previous</Link> : <span />}

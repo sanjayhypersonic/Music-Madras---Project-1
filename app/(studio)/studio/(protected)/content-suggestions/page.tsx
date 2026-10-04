@@ -91,15 +91,15 @@ export default async function ContentSuggestionsPage({ searchParams }: { searchP
         Proposed editorial changes awaiting human review. A suggestion never becomes canonical or public on its own — see{" "}
         <Link href="/studio/audit">the audit log</Link> for the full history of every decision made here.
       </p>
-      {params.error && <p style={{ color: "#b00020" }}>{decodeURIComponent(params.error)}</p>}
+      {params.error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(params.error)}</p>}
 
       <h2>Generate an editorial suggestion</h2>
-      <p style={{ fontSize: "0.9rem", color: "#666" }}>
+      <p style={{ fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>
         This produces an AI-generated <strong>draft</strong> requiring editorial review — it is never automatically approved or published, and it
         never modifies the canonical Recording.
       </p>
       {eligibleRecordings.length === 0 ? (
-        <p>No published recordings are eligible for editorial generation yet.</p>
+        <p className="studio-empty">No published recordings are eligible for editorial generation yet.</p>
       ) : (
         <form action={generateEditorialSuggestionAction} style={{ display: "flex", gap: "0.5rem", maxWidth: "32rem", marginBottom: "1.5rem" }}>
           <select name="recordingId" required style={{ flex: 1 }}>
@@ -113,7 +113,7 @@ export default async function ContentSuggestionsPage({ searchParams }: { searchP
               );
             })}
           </select>
-          <button type="submit">Generate editorial suggestion</button>
+          <button type="submit" className="studio-button--primary">Generate editorial suggestion</button>
         </form>
       )}
 
@@ -146,36 +146,38 @@ export default async function ContentSuggestionsPage({ searchParams }: { searchP
       </form>
 
       {suggestions.length === 0 ? (
-        <p>No Content Suggestions match these filters.</p>
+        <p className="studio-empty">No Content Suggestions match these filters.</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Created</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Type</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Target</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Reviewer</th>
+              <th style={{ textAlign: "left" }}>Created</th>
+              <th style={{ textAlign: "left" }}>Type</th>
+              <th style={{ textAlign: "left" }}>Target</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th style={{ textAlign: "left" }}>Reviewer</th>
             </tr>
           </thead>
           <tbody>
             {suggestions.map((suggestion) => (
               <tr key={suggestion.id}>
-                <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{formatAuditTimestamp(suggestion.createdAt)}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{suggestion.suggestionType}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "0.25rem 0" }}>{formatAuditTimestamp(suggestion.createdAt)}</td>
+                <td>{suggestion.suggestionType}</td>
+                <td>
                   {suggestion.targetEntityType === "RECORDING"
                     ? `Recording — ${recordingTitles.get(suggestion.targetEntityId) ?? "(Recording no longer available)"}`
                     : suggestion.targetEntityType}
                 </td>
-                <td style={{ borderBottom: "1px solid #eee" }}>
+                <td>
                   <Link href={`/studio/content-suggestions/${suggestion.id}`}>{suggestion.status}</Link>
                 </td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{suggestion.reviewedBy ? suggestion.reviewedBy.name : "—"}</td>
+                <td>{suggestion.reviewedBy ? suggestion.reviewedBy.name : "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

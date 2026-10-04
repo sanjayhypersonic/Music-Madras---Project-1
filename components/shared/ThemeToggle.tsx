@@ -1,21 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { THEME_STORAGE_KEY } from "./themeScript";
 
-// Phase 6G-2B — persisted dark/light toggle for the Museum. Reads/writes
+// Phase 6G-2B — persisted dark/light toggle (Museum; Phase 6J-3B: shared with Studio, which\n// reads the same preference, so a visitor/editor chooses a theme once). Reads/writes
 // document.documentElement's data-theme attribute directly (set once,
 // before paint, by the inline script in the Museum layout) rather than
 // owning its own separate state source — this component only ever
 // reflects and flips that single source of truth.
 
-const STORAGE_KEY = "musicmadras-theme";
+const STORAGE_KEY = THEME_STORAGE_KEY;
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className: string }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   // Intentional exception to react-hooks/set-state-in-effect: the actual
   // theme is set on <html> by an inline script that runs before this
-  // component hydrates (see app/(museum)/layout.tsx), specifically so a
+  // component hydrates (see components/shared/themeScript.ts), specifically so a
   // returning light-mode visitor never sees a flash of dark. That value
   // is only readable from the DOM, not knowable during SSR, so a
   // one-time post-mount read-and-correct is exactly what this case is
@@ -41,7 +42,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="museum-theme-toggle"
+      className={className}
       aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
       title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
     >

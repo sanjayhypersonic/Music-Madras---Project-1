@@ -45,30 +45,32 @@ export default async function SourcesPage({ searchParams }: { searchParams: Prom
       {sources.length === 0 ? (
         <p>{q ? `No sources match "${q}".` : "No sources have been added yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Title</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Publisher</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>URL</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>AI evidence approval</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Title</th>
+              <th style={{ textAlign: "left" }}>Publisher</th>
+              <th style={{ textAlign: "left" }}>URL</th>
+              <th style={{ textAlign: "left" }}>AI evidence approval</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {sources.map((source) => (
               <tr key={source.id}>
-                <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{source.title ?? "—"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{source.publisher ?? "—"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{source.url ?? "—"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{source.approvalState}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "0.25rem 0" }}>{source.title ?? "—"}</td>
+                <td>{source.publisher ?? "—"}</td>
+                <td>{source.url ?? "—"}</td>
+                <td>{source.approvalState}</td>
+                <td>
                   <Link href={`/studio/catalogue/sources/${source.id}`}>Manage</Link>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

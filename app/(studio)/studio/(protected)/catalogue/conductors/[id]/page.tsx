@@ -5,6 +5,7 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { findConductorById } from "../../../../../../../modules/db/repositories/conductorRepository";
 import { getConductorRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveConductorAction, restoreConductorAction, updateConductorAction } from "./actions";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4F — the Conductor editorial management view, mirroring the
 // Artist/Choir detail pages' shape. No public /conductors/[slug] route
@@ -37,10 +38,10 @@ export default async function ConductorDetailPage({
         <Link href="/studio/catalogue/conductors">← Conductors</Link>
       </p>
       <h1>{conductor.name}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{conductor.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={conductor.archivedAt ? "Archived" : "Active"} /></strong>
       </p>
 
       <h2>Edit</h2>
@@ -57,7 +58,7 @@ export default async function ConductorDetailPage({
             Biography
             <textarea name="biography" defaultValue={conductor.biography ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this conductor.</p>
@@ -67,7 +68,7 @@ export default async function ConductorDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!conductor.archivedAt ? (
             <form action={archiveConductorAction.bind(null, conductor.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreConductorAction.bind(null, conductor.id)}>
@@ -91,7 +92,7 @@ export default async function ConductorDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No performances linked yet.</p>
+        <p className="studio-empty">No performances linked yet.</p>
       )}
 
       <p>
@@ -104,7 +105,7 @@ export default async function ConductorDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No published recordings yet.</p>
+        <p className="studio-empty">No published recordings yet.</p>
       )}
 
       <p>
@@ -121,7 +122,7 @@ export default async function ConductorDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No publicly visible videos yet.</p>
+        <p className="studio-empty">No publicly visible videos yet.</p>
       )}
     </div>
   );

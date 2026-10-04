@@ -4,7 +4,7 @@
 //   - every visible text element whose colour against its REAL rendered background
 //     (alpha-composited through its ancestors) is below WCAG AA (4.5:1, or 3:1 for
 //     large text), plus input placeholders;
-//   - horizontal page overflow (the page must never scroll sideways);
+//   - horizontal page overflow against the DEVICE width (the page must never scroll sideways);
 //   - interactive elements with a touch target smaller than 24x24 CSS px (WCAG 2.2).
 // It reads the page only; it changes nothing.
 (() => {
@@ -92,13 +92,15 @@
     .map(describe);
   const de = document.documentElement;
   settle.remove();
+  // On a phone the browser widens the layout viewport to fit wide content, so innerWidth can lie; the device width is the truth.
+  const deviceWidth = Math.min(innerWidth, screen.width || innerWidth);
   return {
     url: location.pathname + location.search,
     theme: de.getAttribute("data-theme") || "dark",
-    viewport: innerWidth,
+    viewport: deviceWidth,
     textChecked: checked,
     contrastFailures: contrastFailures.concat(placeholderFailures),
-    horizontalOverflow: de.scrollWidth > innerWidth + 1 ? { scrollWidth: de.scrollWidth, innerWidth } : false,
+    horizontalOverflow: de.scrollWidth > deviceWidth + 1 ? { scrollWidth: de.scrollWidth, deviceWidth } : false,
     smallTouchTargets: smallTargets,
   };
 })();

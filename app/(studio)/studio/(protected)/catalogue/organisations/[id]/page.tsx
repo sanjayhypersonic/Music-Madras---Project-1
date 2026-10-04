@@ -6,6 +6,7 @@ import { findOrganisationById } from "../../../../../../../modules/db/repositori
 import { listVenuesByOrganisation } from "../../../../../../../modules/db/repositories/venueRepository";
 import EntityActivity from "../../../../../../../components/studio/EntityActivity";
 import { archiveOrganisationAction, restoreOrganisationAction, updateOrganisationAction } from "./actions";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4E — the Organisation editorial management view.
 // Phase 6G-14: Organisation now has a slug and a public
@@ -39,10 +40,10 @@ export default async function OrganisationDetailPage({
         <Link href="/studio/catalogue/organisations">← Organisations</Link>
       </p>
       <h1>{organisation.name}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{organisation.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={organisation.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Slug: <code>{organisation.slug}</code>
         {!organisation.archivedAt && (
@@ -69,7 +70,7 @@ export default async function OrganisationDetailPage({
             Description
             <textarea name="description" defaultValue={organisation.description ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this organisation.</p>
@@ -79,7 +80,7 @@ export default async function OrganisationDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!organisation.archivedAt ? (
             <form action={archiveOrganisationAction.bind(null, organisation.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreOrganisationAction.bind(null, organisation.id)}>
@@ -100,7 +101,7 @@ export default async function OrganisationDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No venues linked to this organisation yet.</p>
+        <p className="studio-empty">No venues linked to this organisation yet.</p>
       )}
 
       <EntityActivity entityType="Organisation" entityId={organisation.id} role={session.user.role} />

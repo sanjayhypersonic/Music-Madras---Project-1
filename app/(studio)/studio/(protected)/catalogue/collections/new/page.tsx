@@ -18,7 +18,7 @@ export default async function NewCollectionPage({ searchParams }: { searchParams
         <Link href="/studio/catalogue/collections">← Collections</Link>
       </p>
       <h1>New Collection</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createCollectionAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>
@@ -29,7 +29,7 @@ export default async function NewCollectionPage({ searchParams }: { searchParams
           Description
           <textarea name="description" style={{ display: "block", width: "100%" }} />
         </label>
-        <button type="submit">Create Collection</button>
+        <button type="submit" className="studio-button--primary">Create Collection</button>
       </form>
       <p>New collections start as DRAFT — publish them from the collection once it has recordings.</p>
     </div>

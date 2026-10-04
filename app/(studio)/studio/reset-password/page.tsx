@@ -13,7 +13,7 @@ export default function RequestPasswordResetPage() {
   }
 
   return (
-    <div style={{ maxWidth: "24rem" }}>
+    <div className="studio-auth">
       <h1>Reset your password</h1>
       <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <label>

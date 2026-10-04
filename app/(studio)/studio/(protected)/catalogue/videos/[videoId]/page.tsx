@@ -71,14 +71,14 @@ export default async function YouTubeVideoManagePage({
         <Link href="/studio/catalogue/videos">← YouTube Video Catalogue</Link>
       </p>
       <h1>{video.title ?? "(untitled video)"}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       {video.thumbnailUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- internal Studio page, not the public Museum
         <img src={video.thumbnailUrl} alt="" width={320} />
       )}
 
-      <section style={{ display: "flex", gap: "3rem", margin: "1.5rem 0", padding: "1rem", border: "1px solid #ccc" }}>
+      <section style={{ display: "flex", gap: "3rem", margin: "1.5rem 0", padding: "1rem", border: "1px solid var(--mm-border)" }}>
         <div>
           <h3>YouTube</h3>
           <p>
@@ -105,9 +105,9 @@ export default async function YouTubeVideoManagePage({
         </div>
       </section>
 
-      <section style={{ margin: "1.5rem 0", padding: "1rem", border: "1px solid #ccc" }}>
+      <section style={{ margin: "1.5rem 0", padding: "1rem", border: "1px solid var(--mm-border)" }}>
         <h3>Canonical Recording</h3>
-        <p style={{ fontSize: "0.9rem", color: "#666" }}>
+        <p style={{ fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>
           YouTube ID: <code>{video.youtubeVideoId}</code> · Published:{" "}
           {video.publishedAt ? new Date(video.publishedAt).toLocaleDateString() : "—"} · Duration: {durationLabel} · Visibility:{" "}
           {video.privacyStatus ?? "unknown"}
@@ -127,14 +127,14 @@ export default async function YouTubeVideoManagePage({
                 generated, and nothing becomes public.
               </p>
               <form action={createRecordingFromVideoAction.bind(null, videoId)}>
-                <button type="submit">Create Recording from this YouTube Video</button>
+                <button type="submit" className="studio-button--primary">Create Recording from this YouTube Video</button>
               </form>
             </>
           ) : (
             <p>This video is not currently available in the synchronized catalogue, so a Recording cannot be created from it.</p>
           )
         ) : (
-          <p>No Recording is linked to this video, and you do not have permission to create one.</p>
+          <p className="studio-empty">No Recording is linked to this video, and you do not have permission to create one.</p>
         )}
       </section>
 
@@ -142,7 +142,7 @@ export default async function YouTubeVideoManagePage({
         <>
           {canWrite ? (
             <form action={createCataloguePageAction.bind(null, videoId)}>
-              <button type="submit">Create Catalogue Page</button>
+              <button type="submit" className="studio-button--primary">Create Catalogue Page</button>
             </form>
           ) : (
             <p>You do not have permission to create a catalogue page for this video.</p>
@@ -153,7 +153,7 @@ export default async function YouTubeVideoManagePage({
       {page && (
         <>
           {isUnlisted && (
-            <section style={{ margin: "1rem 0", padding: "1rem", border: "1px dashed #b8860b", background: "#fffaf0" }}>
+            <section className="studio-notice">
               <h3>Unlisted — {isApprovedUnlisted ? "approved for public Museum exposure" : "not approved for public Museum exposure"}</h3>
               <p>
                 This video is unlisted on YouTube — requires approval for public Museum exposure. Publishing this catalogue
@@ -162,18 +162,18 @@ export default async function YouTubeVideoManagePage({
               {canPublish &&
                 (isApprovedUnlisted ? (
                   <form action={revokeUnlistedApprovalAction.bind(null, videoId, page.id)}>
-                    <ConfirmSubmitButton confirmMessage="Revoke approval? This unlisted video will no longer be shown on the public Museum." pendingLabel="Revoking…">
+                    <ConfirmSubmitButton confirmMessage="Revoke approval? This unlisted video will no longer be shown on the public Museum." pendingLabel="Revoking…" tone="danger">
                       Revoke Public Museum Approval
                     </ConfirmSubmitButton>
                   </form>
                 ) : (
                   <form action={approveUnlistedPublicationAction.bind(null, videoId, page.id)}>
-                    <ConfirmSubmitButton confirmMessage="Approve this unlisted video for the public Museum? Anyone will be able to find and watch it there." pendingLabel="Approving…">
+                    <ConfirmSubmitButton confirmMessage="Approve this unlisted video for the public Museum? Anyone will be able to find and watch it there." pendingLabel="Approving…" tone="primary">
                       Approve for Public Museum
                     </ConfirmSubmitButton>
                   </form>
                 ))}
-              {!canPublish && <p style={{ fontSize: "0.9rem", color: "#666" }}>Only an Administrator can approve or revoke public exposure.</p>}
+              {!canPublish && <p style={{ fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>Only an Administrator can approve or revoke public exposure.</p>}
             </section>
           )}
 
@@ -199,7 +199,7 @@ export default async function YouTubeVideoManagePage({
                   style={{ display: "block", width: "100%" }}
                 />
               </label>
-              <button type="submit">Save editorial fields</button>
+              <button type="submit" className="studio-button--primary">Save editorial fields</button>
             </form>
           ) : (
             <p>You do not have permission to edit this catalogue page.</p>
@@ -210,7 +210,7 @@ export default async function YouTubeVideoManagePage({
             This is an editorial preview of approximately how the Museum page will look once published — it is not the
             public page itself.
           </p>
-          <div style={{ border: "1px solid #ccc", padding: "1rem", maxWidth: "32rem" }}>
+          <div style={{ border: "1px solid var(--mm-border)", padding: "1rem", maxWidth: "32rem" }}>
             {video.thumbnailUrl && (
               // eslint-disable-next-line @next/next/no-img-element -- editorial preview, not the public Museum
               <img src={video.thumbnailUrl} alt="" width={320} />
@@ -227,21 +227,21 @@ export default async function YouTubeVideoManagePage({
             <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
               {canPublish && !page.archivedAt && canPublishVideoPage({ status: page.status, archivedAt: page.archivedAt }) && (
                 <form action={publishVideoPageAction.bind(null, videoId, page.id)}>
-                  <ConfirmSubmitButton confirmMessage="Publish this catalogue page? It will appear on the public Museum if the video itself is eligible." pendingLabel="Publishing…">
+                  <ConfirmSubmitButton confirmMessage="Publish this catalogue page? It will appear on the public Museum if the video itself is eligible." pendingLabel="Publishing…" tone="primary">
                     Publish
                   </ConfirmSubmitButton>
                 </form>
               )}
               {canPublish && !page.archivedAt && canUnpublishVideoPage({ status: page.status, archivedAt: page.archivedAt }) && (
                 <form action={unpublishVideoPageAction.bind(null, videoId, page.id)}>
-                  <ConfirmSubmitButton confirmMessage="Unpublish this catalogue page? It will disappear from the public Museum." pendingLabel="Unpublishing…">
+                  <ConfirmSubmitButton confirmMessage="Unpublish this catalogue page? It will disappear from the public Museum." pendingLabel="Unpublishing…" tone="danger">
                     Unpublish
                   </ConfirmSubmitButton>
                 </form>
               )}
               {!page.archivedAt && (
                 <form action={archiveVideoPageAction.bind(null, videoId, page.id)}>
-                  <ConfirmSubmitButton confirmMessage="Archive this catalogue page? It will be removed from the public Museum." pendingLabel="Archiving…">
+                  <ConfirmSubmitButton confirmMessage="Archive this catalogue page? It will be removed from the public Museum." pendingLabel="Archiving…" tone="danger">
                     Archive
                   </ConfirmSubmitButton>
                 </form>

@@ -8,6 +8,7 @@ import { listActiveComposers } from "../../../../../../../modules/db/repositorie
 import { listMusicalWorksByComposer } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { listActiveOccasions, listOccasionsForEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
 import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 import {
   addRecordingAction,
   addWorkAction,
@@ -84,12 +85,12 @@ export default async function CollectionDetailPage({
         <Link href="/studio/catalogue/collections">← Collections</Link>
       </p>
       <h1>{collection.title}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
         Publication: <strong>{collection.status}</strong>
         <br />
-        Status: <strong>{collection.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={collection.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Slug: <code>{collection.slug}</code>
       </p>
@@ -108,7 +109,7 @@ export default async function CollectionDetailPage({
             Description
             <textarea name="description" defaultValue={collection.description ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this collection.</p>
@@ -120,20 +121,20 @@ export default async function CollectionDetailPage({
           {canPublish &&
             (collection.status === "DRAFT" ? (
               <form action={publishCollectionAction.bind(null, collection.id)}>
-                <ConfirmSubmitButton confirmMessage="Publish this collection? It will appear on the public Museum." pendingLabel="Publishing…">
+                <ConfirmSubmitButton confirmMessage="Publish this collection? It will appear on the public Museum." pendingLabel="Publishing…" tone="primary">
                   Publish
                 </ConfirmSubmitButton>
               </form>
             ) : (
               <form action={unpublishCollectionAction.bind(null, collection.id)}>
-                <ConfirmSubmitButton confirmMessage="Unpublish this collection? It will disappear from the public Museum." pendingLabel="Unpublishing…">
+                <ConfirmSubmitButton confirmMessage="Unpublish this collection? It will disappear from the public Museum." pendingLabel="Unpublishing…" tone="danger">
                   Unpublish
                 </ConfirmSubmitButton>
               </form>
             ))}
           {!collection.archivedAt ? (
             <form action={archiveCollectionAction.bind(null, collection.id)}>
-              <ConfirmSubmitButton confirmMessage="Archive this collection? It will be removed from the public Museum." pendingLabel="Archiving…">
+              <ConfirmSubmitButton confirmMessage="Archive this collection? It will be removed from the public Museum." pendingLabel="Archiving…" tone="danger">
                 Archive
               </ConfirmSubmitButton>
             </form>
@@ -147,7 +148,7 @@ export default async function CollectionDetailPage({
 
       <h2>Occasions ({attachedOccasions.length})</h2>
       {attachedOccasions.length === 0 ? (
-        <p>No occasions have been attached to this collection yet.</p>
+        <p className="studio-empty">No occasions have been attached to this collection yet.</p>
       ) : (
         <ul>
           {attachedOccasions.map((link) => (
@@ -156,7 +157,7 @@ export default async function CollectionDetailPage({
               {link.occasion.archivedAt ? " (archived)" : ""}
               {canWrite && (
                 <form action={detachOccasionAction.bind(null, collection.id, link.occasionId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -172,13 +173,13 @@ export default async function CollectionDetailPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach occasion</button>
+          <button type="submit" className="studio-button--primary">Attach occasion</button>
         </form>
       )}
 
       <h2>Recordings ({collection.recordingLinks.length})</h2>
       {collection.recordingLinks.length === 0 ? (
-        <p>No recordings have been added to this collection yet.</p>
+        <p className="studio-empty">No recordings have been added to this collection yet.</p>
       ) : (
         <ol>
           {collection.recordingLinks.map((link, index) => (
@@ -201,7 +202,7 @@ export default async function CollectionDetailPage({
                     </form>
                   )}
                   <form action={removeRecordingAction.bind(null, collection.id, link.recordingId)} style={{ display: "inline" }}>
-                    <button type="submit">Remove</button>
+                    <button type="submit" className="studio-button--danger">Remove</button>
                   </form>
                 </>
               )}
@@ -224,13 +225,13 @@ export default async function CollectionDetailPage({
               ))}
             </select>
           </label>
-          <button type="submit">Add recording</button>
+          <button type="submit" className="studio-button--primary">Add recording</button>
         </form>
       )}
 
       <h2>Musical Works ({collection.workLinks.length})</h2>
       {collection.workLinks.length === 0 ? (
-        <p>No musical works have been added to this collection yet.</p>
+        <p className="studio-empty">No musical works have been added to this collection yet.</p>
       ) : (
         <ol>
           {collection.workLinks.map((link, index) => (
@@ -253,7 +254,7 @@ export default async function CollectionDetailPage({
                     </form>
                   )}
                   <form action={removeWorkAction.bind(null, collection.id, link.musicalWorkId)} style={{ display: "inline" }}>
-                    <button type="submit">Remove</button>
+                    <button type="submit" className="studio-button--danger">Remove</button>
                   </form>
                 </>
               )}
@@ -282,7 +283,7 @@ export default async function CollectionDetailPage({
               )}
             </select>
           </label>
-          <button type="submit">Add work</button>
+          <button type="submit" className="studio-button--primary">Add work</button>
         </form>
       )}
     </div>

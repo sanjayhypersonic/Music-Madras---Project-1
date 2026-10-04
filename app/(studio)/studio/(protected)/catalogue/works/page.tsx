@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listMusicalWorksForStudio } from "../../../../../../modules/db/repositories/musicalWorkRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4C — the Musical Work catalogue list, mirroring the Composer
 // list's shape exactly (search, active/archived, cheap direct-relation
@@ -44,15 +45,16 @@ export default async function MusicalWorksPage({ searchParams }: { searchParams:
       {works.length === 0 ? (
         <p>{q ? `No musical works match "${q}".` : "No musical works have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Title</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Composer</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Programme items</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Recordings</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Title</th>
+              <th style={{ textAlign: "left" }}>Composer</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th style={{ textAlign: "left" }}>Programme items</th>
+              <th style={{ textAlign: "left" }}>Recordings</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -60,7 +62,7 @@ export default async function MusicalWorksPage({ searchParams }: { searchParams:
               <tr key={work.id}>
                 <td style={{ padding: "0.4rem 0" }}>{work.title}</td>
                 <td>{work.composer.name}</td>
-                <td>{work.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={work.archivedAt ? "Archived" : "Active"} /></td>
                 <td>{work._count.programmeItems}</td>
                 <td>{work._count.recordingRevisionLinks}</td>
                 <td>
@@ -70,6 +72,7 @@ export default async function MusicalWorksPage({ searchParams }: { searchParams:
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

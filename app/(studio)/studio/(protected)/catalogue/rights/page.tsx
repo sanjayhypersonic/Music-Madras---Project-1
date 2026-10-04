@@ -47,26 +47,28 @@ export default async function RightsPage({ searchParams }: { searchParams: Promi
       {records.length === 0 ? (
         <p>{q ? `No rights information matches "${q}".` : "No rights information has been added yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Holder</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Licence Type</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Holder</th>
+              <th style={{ textAlign: "left" }}>Licence Type</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {records.map((rights) => (
               <tr key={rights.id}>
-                <td style={{ borderBottom: "1px solid #eee", padding: "0.25rem 0" }}>{rights.holder ?? "—"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>{rights.licenseType ?? "—"}</td>
-                <td style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "0.25rem 0" }}>{rights.holder ?? "—"}</td>
+                <td>{rights.licenseType ?? "—"}</td>
+                <td>
                   <Link href={`/studio/catalogue/rights/${rights.id}`}>Manage</Link>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

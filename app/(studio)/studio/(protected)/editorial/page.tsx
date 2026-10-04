@@ -31,8 +31,8 @@ import { generateEditorialSuggestionAction } from "../content-suggestions/genera
 // its existing permission, enforced server-side by that action. Filters and
 // the page number live in the URL, so a filtered view is a shareable link.
 
-const cell = { borderBottom: "1px solid #eee", padding: "0.4rem 0.5rem 0.4rem 0", verticalAlign: "top" } as const;
-const head = { textAlign: "left", borderBottom: "1px solid #ccc", paddingRight: "0.5rem" } as const;
+const cell = { borderBottom: "1px solid var(--mm-border)", padding: "0.4rem 0.5rem 0.4rem 0", verticalAlign: "top" } as const;
+const head = { textAlign: "left", borderBottom: "1px solid var(--mm-border)", paddingRight: "0.5rem" } as const;
 
 interface QueueSearchParams {
   state?: string;
@@ -90,7 +90,7 @@ function RowAction({ row, canGenerate, returnTo }: { row: EditorialQueueRow; can
             );
         }
       })}
-      {row.blockedReason && <span style={{ fontSize: "0.85rem", color: "#666" }}>{row.blockedReason}</span>}
+      {row.blockedReason && <span style={{ fontSize: "0.85rem", color: "var(--mm-text-muted)" }}>{row.blockedReason}</span>}
     </div>
   );
 }
@@ -98,7 +98,7 @@ function RowAction({ row, canGenerate, returnTo }: { row: EditorialQueueRow; can
 function RowDetail({ row }: { row: EditorialQueueRow }) {
   if (row.state === "NEEDS_ENRICHMENT" || row.state === "READY_FOR_GENERATION") {
     return (
-      <div style={{ fontSize: "0.85rem", color: "#555" }}>
+      <div style={{ fontSize: "0.85rem", color: "var(--mm-text-secondary)" }}>
         {row.readiness && <div>Readiness: {row.readiness}</div>}
         <div>{row.gaps.length > 0 ? `Missing: ${row.gaps.join(", ")}` : row.state === "NEEDS_ENRICHMENT" ? "No gaps — publish it to enable generation." : "No gaps."}</div>
       </div>
@@ -106,7 +106,7 @@ function RowDetail({ row }: { row: EditorialQueueRow }) {
   }
   if (row.state === "CHANGES_REQUESTED" && (row.reviewNote || row.reviewerName)) {
     return (
-      <div style={{ fontSize: "0.85rem", color: "#555" }}>
+      <div style={{ fontSize: "0.85rem", color: "var(--mm-text-secondary)" }}>
         {row.reviewerName ?? "A reviewer"}
         {row.reviewedAt ? `, ${formatAuditTimestamp(row.reviewedAt)}` : ""}
         {row.reviewNote ? `: “${row.reviewNote}”` : ""}
@@ -172,7 +172,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
         What needs an editor, or an explicit action, next. Everything here is derived from the Recordings and Content Suggestions themselves — nothing
         is assigned, scored, or published automatically.
       </p>
-      {params.error && <p style={{ color: "#b00020" }}>{decodeURIComponent(params.error)}</p>}
+      {params.error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(params.error)}</p>}
 
       <h2>Queue</h2>
       <ul style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1.25rem", listStyle: "none", padding: 0 }}>
@@ -222,7 +222,8 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
         <p>{state && !q && !yt && !field ? EDITORIAL_QUEUE_EMPTY_MESSAGES[state] : filtered ? "No queue items match these filters." : "The queue is empty — nothing needs attention."}</p>
       ) : (
         <>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr>
                 <th style={head}>Recording</th>
@@ -249,7 +250,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
                     {row.suggestionStatus ? (
                       <>
                         {row.suggestionStatus}
-                        <div style={{ fontSize: "0.85rem", color: "#555" }}>{row.suggestionType}</div>
+                        <div style={{ fontSize: "0.85rem", color: "var(--mm-text-secondary)" }}>{row.suggestionType}</div>
                       </>
                     ) : row.generationStatus ? (
                       `Generation ${row.generationStatus}`
@@ -266,6 +267,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
               ))}
             </tbody>
           </table>
+</div>
           <p style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
             {queue.page > 1 ? <Link href={queueHref({ state, q, yt, field, page: queue.page - 1 })}>← Previous</Link> : <span />}
             <span>
@@ -298,7 +300,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
           </section>
         );
       })}
-      {recordings.length === 0 && <p>No recordings yet.</p>}
+      {recordings.length === 0 && <p className="studio-empty">No recordings yet.</p>}
     </div>
   );
 }

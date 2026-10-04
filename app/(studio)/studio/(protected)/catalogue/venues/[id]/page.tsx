@@ -7,6 +7,7 @@ import { findOrganisationById, listActiveOrganisations } from "../../../../../..
 import { getVenueRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveVenueAction, restoreVenueAction, updateVenueAction } from "./actions";
 import type { VenueType } from "@prisma/client";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 
 const VENUE_TYPES: VenueType[] = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"];
 
@@ -50,10 +51,10 @@ export default async function VenueDetailPage({
         <Link href="/studio/catalogue/venues">← Venues</Link>
       </p>
       <h1>{venue.name}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{venue.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={venue.archivedAt ? "Archived" : "Active"} /></strong>
         <br />
         Slug: <code>{venue.slug}</code>
         <br />
@@ -104,7 +105,7 @@ export default async function VenueDetailPage({
               ))}
             </select>
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this venue.</p>
@@ -114,7 +115,7 @@ export default async function VenueDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!venue.archivedAt ? (
             <form action={archiveVenueAction.bind(null, venue.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreVenueAction.bind(null, venue.id)}>
@@ -138,7 +139,7 @@ export default async function VenueDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No performances linked yet.</p>
+        <p className="studio-empty">No performances linked yet.</p>
       )}
 
       <p>
@@ -151,7 +152,7 @@ export default async function VenueDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No published recordings yet.</p>
+        <p className="studio-empty">No published recordings yet.</p>
       )}
 
       <p>
@@ -168,7 +169,7 @@ export default async function VenueDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No publicly visible videos yet.</p>
+        <p className="studio-empty">No publicly visible videos yet.</p>
       )}
 
       <p>

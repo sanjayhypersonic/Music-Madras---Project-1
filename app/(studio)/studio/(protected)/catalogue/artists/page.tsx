@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import { listArtistsForStudio } from "../../../../../../modules/db/repositories/artistRepository";
+import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4F — the Artist catalogue list, mirroring the Organisation
 // list's shape exactly (search, active/archived, a separate /new route
@@ -44,13 +45,14 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
       {artists.length === 0 ? (
         <p>{q ? `No artists match "${q}".` : "No artists have been added to the Music Madras archive yet."}</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <div className="studio-table-scroll">
+<table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Instrument</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Status</th>
-              <th style={{ borderBottom: "1px solid #ccc" }}></th>
+              <th style={{ textAlign: "left" }}>Name</th>
+              <th style={{ textAlign: "left" }}>Instrument</th>
+              <th style={{ textAlign: "left" }}>Status</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -58,7 +60,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
               <tr key={artist.id}>
                 <td style={{ padding: "0.4rem 0" }}>{artist.name}</td>
                 <td>{artist.instrument ?? "—"}</td>
-                <td>{artist.archivedAt ? "Archived" : "Active"}</td>
+                <td><StatusBadge status={artist.archivedAt ? "Archived" : "Active"} /></td>
                 <td>
                   <Link href={`/studio/catalogue/artists/${artist.id}`}>Open</Link>
                 </td>
@@ -66,6 +68,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

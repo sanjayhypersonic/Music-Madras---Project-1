@@ -58,7 +58,7 @@ export default async function PerformanceStepPage({
     <div>
       <h2>Performance</h2>
       <p>Link this recording to the specific concert it was captured at.</p>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
       {(programmes.length === 0 || venues.length === 0) && (
         <p>
           You need at least one Programme and one Venue first — see the previous two steps.
@@ -94,7 +94,7 @@ export default async function PerformanceStepPage({
             Performance date (optional)
             <input type="date" name="performanceDate" style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Create performance</button>
+          <button type="submit" className="studio-button--primary">Create performance</button>
         </form>
       )}
     </div>

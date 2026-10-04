@@ -10,7 +10,7 @@ export default function StudioSignInPage() {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
 
   return (
-    <div style={{ maxWidth: "24rem" }}>
+    <div className="studio-auth">
       <h1>Sign in</h1>
       <p>Music Madras Studio is invite-only. There is no self-registration.</p>
       <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -28,7 +28,7 @@ export default function StudioSignInPage() {
             style={{ display: "block", width: "100%" }}
           />
         </label>
-        {state.error && <p style={{ color: "#b00020" }}>{state.error}</p>}
+        {state.error && <p role="alert" className="studio-alert studio-alert--error">{state.error}</p>}
         <button type="submit" disabled={pending}>
           {pending ? "Signing in…" : "Sign in"}
         </button>

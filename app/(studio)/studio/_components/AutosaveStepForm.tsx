@@ -102,7 +102,7 @@ export function AutosaveStepForm({ recordingId, initialUpdatedAt, initialValues,
           )}
         </label>
       ))}
-      <p role="status" style={{ color: status === "error" ? "#b00020" : "#555", fontSize: "0.85rem" }}>
+      <p role="status" style={{ color: status === "error" ? "var(--mm-error)" : "var(--mm-text-secondary)", fontSize: "0.85rem" }}>
         {statusLabel[status]}
       </p>
     </div>

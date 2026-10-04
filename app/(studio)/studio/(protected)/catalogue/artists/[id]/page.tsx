@@ -5,6 +5,7 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { findArtistById } from "../../../../../../../modules/db/repositories/artistRepository";
 import { getArtistRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveArtistAction, restoreArtistAction, updateArtistAction } from "./actions";
+import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 
 // Phase 6G-4F — the Artist editorial management view, mirroring the
 // Venue/Organisation detail pages' shape. No public /artists/[slug]
@@ -38,10 +39,10 @@ export default async function ArtistDetailPage({
         <Link href="/studio/catalogue/artists">← Artists</Link>
       </p>
       <h1>{artist.name}</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <p>
-        Status: <strong>{artist.archivedAt ? "Archived" : "Active"}</strong>
+        Status: <strong><StatusBadge status={artist.archivedAt ? "Archived" : "Active"} /></strong>
       </p>
 
       <h2>Edit</h2>
@@ -62,7 +63,7 @@ export default async function ArtistDetailPage({
             Biography
             <textarea name="biography" defaultValue={artist.biography ?? ""} style={{ display: "block", width: "100%" }} />
           </label>
-          <button type="submit">Save</button>
+          <button type="submit" className="studio-button--primary">Save</button>
         </form>
       ) : (
         <p>You do not have permission to edit this artist.</p>
@@ -72,7 +73,7 @@ export default async function ArtistDetailPage({
         <div style={{ marginTop: "1rem" }}>
           {!artist.archivedAt ? (
             <form action={archiveArtistAction.bind(null, artist.id)}>
-              <button type="submit">Archive</button>
+              <button type="submit" className="studio-button--danger">Archive</button>
             </form>
           ) : (
             <form action={restoreArtistAction.bind(null, artist.id)}>
@@ -96,7 +97,7 @@ export default async function ArtistDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No performances linked yet.</p>
+        <p className="studio-empty">No performances linked yet.</p>
       )}
 
       <p>
@@ -109,7 +110,7 @@ export default async function ArtistDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No published recordings yet.</p>
+        <p className="studio-empty">No published recordings yet.</p>
       )}
 
       <p>
@@ -126,7 +127,7 @@ export default async function ArtistDetailPage({
           ))}
         </ul>
       ) : (
-        <p>No publicly visible videos yet.</p>
+        <p className="studio-empty">No publicly visible videos yet.</p>
       )}
     </div>
   );

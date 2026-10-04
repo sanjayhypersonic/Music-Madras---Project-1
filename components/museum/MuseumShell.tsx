@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { museumSans, museumSerif } from "../../app/(museum)/fonts";
+import { sansFont, serifFont } from "../../app/fonts";
+import { THEME_INIT_SCRIPT } from "../shared/themeScript";
 import { MuseumHeader } from "./MuseumHeader";
 import { MuseumFooter } from "./MuseumFooter";
 
@@ -10,24 +11,13 @@ import { MuseumFooter } from "./MuseumFooter";
 // still imported by each file that renders this (layout and not-found), so
 // Studio never loads it.
 //
-// Dark is the default: museum.css's :root already holds the dark values. The
+// Dark is the default: tokens.css's :root already holds the dark values. The
 // inline script only CORRECTS that for a returning visitor who chose light,
 // synchronously and before this content paints (see ThemeToggle).
 
-const THEME_INIT_SCRIPT = `
-(function () {
-  try {
-    var stored = window.localStorage.getItem("musicmadras-theme");
-    if (stored === "light") {
-      document.documentElement.setAttribute("data-theme", "light");
-    }
-  } catch (e) {}
-})();
-`;
-
 export function MuseumShell({ children }: { children: ReactNode }) {
   return (
-    <div className={`museum-root ${museumSerif.variable} ${museumSans.variable}`}>
+    <div className={`museum-root ${serifFont.variable} ${sansFont.variable}`}>
       <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       <MuseumHeader />
       <main>{children}</main>

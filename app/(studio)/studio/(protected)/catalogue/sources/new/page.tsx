@@ -18,7 +18,7 @@ export default async function NewSourcePage({ searchParams }: { searchParams: Pr
         <Link href="/studio/catalogue/sources">← Sources</Link>
       </p>
       <h1>New Source</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createSourceAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>
@@ -33,7 +33,7 @@ export default async function NewSourcePage({ searchParams }: { searchParams: Pr
           Publisher (optional)
           <input name="publisher" style={{ display: "block", width: "100%" }} />
         </label>
-        <button type="submit">Create Source</button>
+        <button type="submit" className="studio-button--primary">Create Source</button>
       </form>
     </div>
   );

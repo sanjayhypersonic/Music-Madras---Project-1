@@ -1,0 +1,717 @@
+/*
+ * Studio stylesheet (Phase 6J-3B). Imported only by the Studio layout, so the
+ * public Museum never loads it (and Studio never loads museum.css).
+ *
+ * Studio is the professional, information-dense operating environment of the same
+ * Music Madras system as the Museum: the same semantic tokens (app/tokens.css),
+ * the same Inter, none of the Museum's editorial display. This file contains NO
+ * colour literal: every colour is a role.
+ *
+ * How it is organised:
+ *   1. the shell (header, sidebar, mobile navigation);
+ *   2. element defaults, scoped to .studio-root, so every existing page's native
+ *      buttons, inputs, selects, textareas, tables and links are themed without
+ *      per-page edits — these use :where() so a class always wins;
+ *   3. the small set of classes pages opt into: buttons, alerts, badges, notices,
+ *      empty states, table scroll, pre blocks, dialog, state pages.
+ * Dark is the default; light is the full override in tokens.css (shared with the
+ * Museum, same stored preference).
+ */
+
+.studio-root {
+  min-height: 100vh;
+  background: var(--mm-background);
+  color: var(--mm-text-primary);
+  font-family: var(--mm-font-sans), -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ---------------------------------------------------------------------
+   1. Shell
+--------------------------------------------------------------------- */
+
+.studio-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.6rem 1.25rem;
+  background: var(--mm-surface);
+  border-bottom: 1px solid var(--mm-border);
+}
+
+.studio-root .studio-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--mm-text-primary);
+  text-decoration: none;
+}
+
+/* The approved logo, shown as-is (it is circular already; the radius only matches the Museum header). */
+.studio-header__logo {
+  display: block;
+  border-radius: 50%;
+}
+
+/* "Studio" is an identity marker: heritage amber, small caps — the same treatment as the Museum's eyebrow. */
+.studio-header__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mm-heritage);
+}
+
+.studio-header__spacer {
+  flex: 1;
+}
+
+.studio-root .studio-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--mm-border-strong);
+  background: var(--mm-surface);
+  color: var(--mm-text-primary);
+  cursor: pointer;
+}
+
+.studio-root .studio-icon-button:hover {
+  border-color: var(--mm-border-hover);
+  background: var(--mm-surface-hover);
+}
+
+.studio-main {
+  padding: 1.5rem 1.25rem 3.5rem;
+}
+
+.studio-layout {
+  display: grid;
+  grid-template-columns: 14.5rem minmax(0, 1fr);
+  gap: 2rem;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.studio-layout__content {
+  min-width: 0; /* lets wide tables scroll inside their container instead of widening the page */
+}
+
+.studio-sidebar {
+  position: sticky;
+  top: 4.75rem;
+  align-self: start;
+}
+
+.studio-nav__toggle {
+  display: none;
+}
+
+.studio-nav__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.studio-root .studio-nav__list a {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--mm-radius-sm);
+  color: var(--mm-text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.studio-root .studio-nav__list a:hover {
+  background: var(--mm-surface-hover);
+  color: var(--mm-text-primary);
+}
+
+.studio-root .studio-nav__list a[aria-current="page"] {
+  background: var(--mm-discovery-subtle);
+  color: var(--mm-link);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--mm-link);
+}
+
+.studio-account {
+  margin-top: 1rem;
+  padding: 0.85rem 0.75rem 0;
+  border-top: 1px solid var(--mm-border);
+  font-size: 0.8125rem;
+  color: var(--mm-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.studio-account p {
+  margin: 0 0 0.6rem;
+}
+
+.studio-account__name {
+  color: var(--mm-text-primary);
+  font-weight: 600;
+}
+
+/* Below 48rem the sidebar becomes a disclosure at the top of the content: it never takes the viewport. */
+@media (max-width: 48rem) {
+  .studio-main {
+    padding: 1rem 1rem 3rem;
+  }
+
+  .studio-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .studio-sidebar {
+    position: static;
+  }
+
+  .studio-nav__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .studio-nav__panel[data-open="false"] {
+    display: none;
+  }
+
+  .studio-nav__panel {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: var(--mm-surface);
+    border: 1px solid var(--mm-border);
+    border-radius: var(--mm-radius-md);
+  }
+
+  .studio-root .studio-nav__list a {
+    padding: 0.7rem 0.75rem; /* comfortable touch targets */
+  }
+}
+
+/* The Recording workflow: a step list beside the form, wrapping into chips above it on a narrow screen. */
+.studio-steps-layout {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.studio-steps-layout__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.studio-steps {
+  flex: 0 0 13rem;
+}
+
+.studio-steps__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.studio-root .studio-steps__list a {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--mm-radius-sm);
+  color: var(--mm-text-secondary);
+  text-decoration: none;
+}
+
+.studio-root .studio-steps__list a:hover {
+  background: var(--mm-surface-hover);
+  color: var(--mm-text-primary);
+}
+
+.studio-root .studio-steps__list a[aria-current="page"] {
+  background: var(--mm-discovery-subtle);
+  color: var(--mm-link);
+  font-weight: 600;
+}
+
+.studio-steps__preview {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--mm-border);
+}
+
+@media (max-width: 48rem) {
+  .studio-steps-layout {
+    flex-direction: column;
+    align-items: stretch; /* a column of items must fill the width, or wide content widens the whole page */
+    gap: 1rem;
+  }
+
+  .studio-steps {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .studio-steps__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .studio-root .studio-steps__list a {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--mm-border);
+    border-radius: var(--mm-radius-pill);
+  }
+
+  .studio-steps__preview {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   2. Element defaults (scoped; :where keeps specificity at .studio-root only)
+--------------------------------------------------------------------- */
+
+.studio-root :where(h1, h2, h3, h4) {
+  color: var(--mm-heading);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+}
+
+.studio-root :where(h1) {
+  margin: 0 0 1rem;
+  font-size: 1.65rem;
+}
+
+.studio-root :where(h2) {
+  margin: 1.6rem 0 0.6rem;
+  font-size: 1.2rem;
+}
+
+.studio-root :where(h3) {
+  margin: 1.25rem 0 0.4rem;
+  font-size: 1rem;
+}
+
+.studio-root :where(p) {
+  margin: 0.6rem 0;
+}
+
+.studio-root :where(a) {
+  color: var(--mm-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.studio-root :where(a:hover) {
+  color: var(--mm-link-hover);
+}
+
+.studio-root :where(hr) {
+  border: 0;
+  border-top: 1px solid var(--mm-border);
+  margin: 1rem 0;
+}
+
+.studio-root :where(code, pre, kbd, samp) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.studio-root :where(code) {
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  background: var(--mm-background-elevated);
+}
+
+.studio-root :where(fieldset) {
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-md);
+  padding: 0.75rem 1rem;
+}
+
+/* A link beside a form control (e.g. "Clear" next to "Filter") gets a comfortable target. */
+.studio-root :where(form) a {
+  display: inline-block;
+  padding: 0.4rem 0.25rem;
+}
+
+.studio-root :where(details > summary) {
+  cursor: pointer;
+}
+
+.studio-root :where(label) {
+  color: var(--mm-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.studio-root :where(input:not([type="checkbox"], [type="radio"], [type="submit"], [type="button"], [type="range"], [type="file"]), select, textarea) {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin-top: 0.2rem;
+  padding: 0.5rem 0.65rem;
+  min-height: 2.25rem;
+  background: var(--mm-surface);
+  color: var(--mm-text-primary);
+  border: 1px solid var(--mm-border-strong);
+  border-radius: var(--mm-radius-sm);
+  font: inherit;
+  font-size: 0.9375rem;
+}
+
+.studio-root :where(textarea) {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.studio-root :where(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--mm-discovery);
+  width: 1rem;
+  height: 1rem;
+  vertical-align: middle;
+}
+
+.studio-root :where(input, select, textarea)::placeholder {
+  color: var(--mm-text-muted);
+  opacity: 1;
+}
+
+.studio-root :where(input, select, textarea):disabled {
+  background: var(--mm-background-elevated);
+  color: var(--mm-text-muted);
+  border-color: var(--mm-border);
+  cursor: not-allowed;
+}
+
+.studio-root :where(button) {
+  min-height: 2.25rem;
+  padding: 0.45rem 1rem;
+  background: var(--mm-surface);
+  color: var(--mm-text-primary);
+  border: 1px solid var(--mm-border-strong);
+  border-radius: var(--mm-radius-sm);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--mm-transition), border-color var(--mm-transition);
+}
+
+.studio-root :where(button:hover) {
+  background: var(--mm-surface-hover);
+  border-color: var(--mm-border-hover);
+}
+
+.studio-root :where(button:active) {
+  background: var(--mm-surface-active);
+}
+
+.studio-root :where(button:disabled, button[aria-disabled="true"]) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.studio-root :focus-visible {
+  outline: var(--mm-focus-ring-width) solid var(--mm-focus);
+  outline-offset: 2px;
+}
+
+/* Tables: row dividers are visible (they were 1.07:1), headers are quiet, wide tables scroll inside .studio-table-scroll. */
+.studio-root :where(table) {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.studio-root :where(th) {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--mm-text-secondary);
+  border-bottom: 1px solid var(--mm-border-strong);
+  white-space: nowrap;
+}
+
+.studio-root :where(td) {
+  padding: 0.55rem 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--mm-border);
+}
+
+.studio-root :where(tbody tr:hover) {
+  background: var(--mm-surface-hover);
+}
+
+.studio-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------------------------------------------------------------------
+   3. Classes pages opt into
+--------------------------------------------------------------------- */
+
+/* Buttons: the default <button> above is the secondary (outline) style. */
+.studio-root .studio-button--primary {
+  background: var(--mm-discovery);
+  border-color: var(--mm-discovery);
+  color: var(--mm-on-discovery);
+}
+
+.studio-root .studio-button--primary:hover {
+  background: var(--mm-discovery-hover);
+  border-color: var(--mm-discovery-hover);
+}
+
+/* A destructive or withdrawing action: outlined in the error colour (never the brand amber). */
+.studio-root .studio-button--danger {
+  background: transparent;
+  border-color: var(--mm-error);
+  color: var(--mm-error);
+}
+
+.studio-root .studio-button--danger:hover {
+  background: var(--mm-error-subtle);
+  border-color: var(--mm-error);
+}
+
+.studio-root .studio-button--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--mm-link);
+}
+
+/* Alerts and notices: a left rule + tinted ground + the state colour for the text (all >= 4.5:1). */
+.studio-alert {
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.85rem;
+  border-left: 3px solid currentColor;
+  border-radius: var(--mm-radius-sm);
+  background: var(--mm-background-elevated);
+}
+
+.studio-root .studio-alert--error {
+  color: var(--mm-error);
+  background: var(--mm-error-subtle);
+}
+
+.studio-root .studio-alert--success {
+  color: var(--mm-success);
+  background: var(--mm-success-subtle);
+}
+
+.studio-root .studio-alert--warning {
+  color: var(--mm-warning);
+  background: var(--mm-warning-subtle);
+}
+
+.studio-root .studio-alert--info {
+  color: var(--mm-info);
+  background: var(--mm-info-subtle);
+}
+
+/* A bordered panel that calls for attention (e.g. "unlisted — needs approval"). */
+.studio-notice {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--mm-warning);
+  border-radius: var(--mm-radius-md);
+  background: var(--mm-warning-subtle);
+}
+
+.studio-panel {
+  margin: 1.25rem 0;
+  padding: 1rem;
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-md);
+}
+
+/* Status badge: text + tint, never colour alone (the word is always there). */
+.studio-badge {
+  display: inline-block;
+  padding: 0.12rem 0.55rem;
+  border-radius: var(--mm-radius-pill);
+  background: var(--mm-background-elevated);
+  color: var(--mm-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.studio-root .studio-badge--success {
+  background: var(--mm-success-subtle);
+  color: var(--mm-success);
+}
+
+.studio-root .studio-badge--warning {
+  background: var(--mm-warning-subtle);
+  color: var(--mm-warning);
+}
+
+.studio-root .studio-badge--error {
+  background: var(--mm-error-subtle);
+  color: var(--mm-error);
+}
+
+.studio-root .studio-badge--info {
+  background: var(--mm-info-subtle);
+  color: var(--mm-info);
+}
+
+/* Heritage: archive / canonical markers. */
+.studio-root .studio-badge--heritage {
+  background: var(--mm-heritage-subtle);
+  color: var(--mm-heritage);
+}
+
+.studio-root .studio-badge--discovery {
+  background: var(--mm-discovery-subtle);
+  color: var(--mm-link);
+}
+
+.studio-empty {
+  margin: 1rem 0;
+  padding: 1.5rem 1rem;
+  border: 1px dashed var(--mm-border-strong);
+  border-radius: var(--mm-radius-md);
+  color: var(--mm-text-secondary);
+  text-align: center;
+}
+
+.studio-muted {
+  color: var(--mm-text-muted);
+  font-size: 0.85rem;
+}
+
+.studio-root .studio-pre {
+  margin: 0.5rem 0;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  background: var(--mm-background-elevated);
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-sm);
+}
+
+.studio-root .studio-pre--success {
+  background: var(--mm-success-subtle);
+}
+
+/* Auth and state pages */
+.studio-auth {
+  max-width: 26rem;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-lg);
+  box-shadow: var(--mm-shadow-md);
+}
+
+.studio-auth form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.studio-auth input {
+  display: block;
+  width: 100%;
+}
+
+.studio-state {
+  max-width: 34rem;
+  margin: 3rem auto;
+  text-align: center;
+}
+
+.studio-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+/* The loading state: quiet, announced, no decoration. */
+.studio-loading {
+  margin: 3rem auto;
+  text-align: center;
+  color: var(--mm-text-muted);
+}
+
+/* The confirmation dialog (components/studio/ConfirmSubmitButton). <dialog> gives focus containment and Esc for free. */
+.studio-dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.25rem 1rem;
+  background: var(--mm-background-elevated);
+  color: var(--mm-text-primary);
+  border: 1px solid var(--mm-border-strong);
+  border-radius: var(--mm-radius-md);
+  box-shadow: var(--mm-shadow-md);
+}
+
+.studio-dialog::backdrop {
+  background: color-mix(in srgb, var(--mm-background) 72%, transparent);
+}
+
+.studio-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.studio-dialog p {
+  margin: 0 0 1.1rem;
+  color: var(--mm-text-secondary);
+}
+
+.studio-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.studio-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-root * {
+    transition: none !important;
+  }
+}

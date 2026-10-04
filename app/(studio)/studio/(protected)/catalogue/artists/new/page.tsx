@@ -18,7 +18,7 @@ export default async function NewArtistPage({ searchParams }: { searchParams: Pr
         <Link href="/studio/catalogue/artists">← Artists</Link>
       </p>
       <h1>New Artist</h1>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <form action={createArtistAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>
@@ -33,7 +33,7 @@ export default async function NewArtistPage({ searchParams }: { searchParams: Pr
           Biography
           <textarea name="biography" style={{ display: "block", width: "100%" }} />
         </label>
-        <button type="submit">Create Artist</button>
+        <button type="submit" className="studio-button--primary">Create Artist</button>
       </form>
     </div>
   );

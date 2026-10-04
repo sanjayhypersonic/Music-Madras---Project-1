@@ -55,10 +55,10 @@ export default async function RelationshipsStepPage({
     <div>
       <h2>Relationships</h2>
       <p>The canonical relationships this recording resolves through — derived, not re-entered.</p>
-      {error && <p style={{ color: "#b00020" }}>{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       {!context ? (
-        <p>No revision to inspect yet.</p>
+        <p className="studio-empty">No revision to inspect yet.</p>
       ) : (
         <ul>
           <li>Composers: {context.composers.map((c) => c.name).join(", ") || "none yet"}</li>
@@ -84,14 +84,14 @@ export default async function RelationshipsStepPage({
               </option>
             ))}
           </select>
-          <button type="submit">Add to collection</button>
+          <button type="submit" className="studio-button--primary">Add to collection</button>
         </form>
       )}
-      {collections.length === 0 && <p>No collections exist yet.</p>}
+      {collections.length === 0 && <p className="studio-empty">No collections exist yet.</p>}
 
       <h3>Occasions</h3>
       {attachedOccasions.length === 0 ? (
-        <p>No occasions have been attached to this recording yet.</p>
+        <p className="studio-empty">No occasions have been attached to this recording yet.</p>
       ) : (
         <ul>
           {attachedOccasions.map((link) => (
@@ -100,7 +100,7 @@ export default async function RelationshipsStepPage({
               {link.occasion.archivedAt ? " (archived)" : ""}
               {canWrite && (
                 <form action={detachOccasionAction.bind(null, id, link.occasionId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -116,14 +116,14 @@ export default async function RelationshipsStepPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach occasion</button>
+          <button type="submit" className="studio-button--primary">Attach occasion</button>
         </form>
       )}
-      {activeOccasions.length === 0 && <p>No occasions exist yet.</p>}
+      {activeOccasions.length === 0 && <p className="studio-empty">No occasions exist yet.</p>}
 
       <h3>Sources</h3>
       {attachedSources.length === 0 ? (
-        <p>No sources have been attached to this recording yet.</p>
+        <p className="studio-empty">No sources have been attached to this recording yet.</p>
       ) : (
         <ul>
           {attachedSources.map((link) => (
@@ -131,7 +131,7 @@ export default async function RelationshipsStepPage({
               {link.source.title ?? link.source.url ?? "Untitled Source"}
               {canWrite && (
                 <form action={detachSourceAction.bind(null, id, link.sourceId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -147,13 +147,13 @@ export default async function RelationshipsStepPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach source</button>
+          <button type="submit" className="studio-button--primary">Attach source</button>
         </form>
       )}
 
       <h3>Rights Information</h3>
       {attachedRights.length === 0 ? (
-        <p>No rights information has been attached to this recording yet.</p>
+        <p className="studio-empty">No rights information has been attached to this recording yet.</p>
       ) : (
         <ul>
           {attachedRights.map((link) => (
@@ -161,7 +161,7 @@ export default async function RelationshipsStepPage({
               {link.rightsInformation.holder ?? link.rightsInformation.licenseType ?? "Untitled Rights Information"}
               {canWrite && (
                 <form action={detachRightsAction.bind(null, id, link.rightsInformationId)} style={{ display: "inline" }}>
-                  <button type="submit">Remove</button>
+                  <button type="submit" className="studio-button--danger">Remove</button>
                 </form>
               )}
             </li>
@@ -177,7 +177,7 @@ export default async function RelationshipsStepPage({
               </option>
             ))}
           </select>
-          <button type="submit">Attach rights information</button>
+          <button type="submit" className="studio-button--primary">Attach rights information</button>
         </form>
       )}
     </div>
