@@ -13,7 +13,7 @@ import {
   submitRecordingForReview,
   unpublishRecording,
 } from "../../../../../../../modules/db/repositories/recordingRepository";
-import { isReadyToPublish } from "../../../../../../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
+import { isReadyToPublish, listMissingRequiredCategories } from "../../../../../../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
 import { describeEditableDraftRefusal } from "../../../../../../../modules/publishing/editableDraftRefusal";
 
 // Phase 6J-1 — the lifecycle actions of the Review & Publish step.
@@ -57,7 +57,9 @@ export async function publishAction(recordingId: string, expectedDraftRevisionId
 
   const completeness = await getRecordingRevisionCompletenessReport(draft.revisionId);
   if (!completeness || !isReadyToPublish(completeness.report)) {
-    back(recordingId, "This recording is not ready to publish.");
+    // Say WHAT is missing (e.g. a Music Madras title), not just that something is.
+    const missing = completeness ? listMissingRequiredCategories(completeness.report).map((item) => item.category) : [];
+    back(recordingId, `This recording is not ready to publish.${missing.length > 0 ? ` Still required: ${missing.join(", ")}.` : ""}`);
   }
 
   try {

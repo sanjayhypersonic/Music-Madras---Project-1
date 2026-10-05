@@ -37,6 +37,12 @@ export function checkRecordingRevisionCompleteness(
       category: "Identity",
       level: "REQUIRED",
       status: input.title && input.title.trim().length > 0 ? "COMPLETE" : "MISSING",
+      // Phase 6J-5: a Recording started from a YouTube video begins untitled; its YouTube title is
+      // metadata, not the canonical title, so the editor must choose one explicitly.
+      detail:
+        input.title && input.title.trim().length > 0
+          ? undefined
+          : "A Music Madras title is required. The YouTube title is kept separately as YouTube metadata and is not used as the Recording title.",
     },
     {
       category: "Musical Works",
@@ -80,6 +86,11 @@ export function checkRecordingRevisionCompleteness(
       status: input.hasEducationalContent ? "COMPLETE" : "MISSING",
     },
   ];
+}
+
+/** The REQUIRED categories that are still MISSING, in report order — what an editor must still provide. */
+export function listMissingRequiredCategories(report: CompletenessReportItem[]): CompletenessReportItem[] {
+  return report.filter((item) => item.level === "REQUIRED" && item.status === "MISSING");
 }
 
 /**

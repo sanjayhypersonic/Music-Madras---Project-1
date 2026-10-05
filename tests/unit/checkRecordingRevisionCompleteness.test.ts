@@ -3,6 +3,7 @@ import {
   checkRecordingRevisionCompleteness,
   computeRecordingReadiness,
   isReadyToPublish,
+  listMissingRequiredCategories,
   type RecordingRevisionCompletenessInput,
 } from "../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
 
@@ -117,5 +118,37 @@ describe("computeRecordingReadiness (brief §12 — named categories, not a perc
   it("is still PUBLISHABLE when only the OPTIONAL category is missing", () => {
     const report = checkRecordingRevisionCompleteness({ ...completeInput, hasEducationalContent: false });
     expect(computeRecordingReadiness(report)).toBe("PUBLISHABLE");
+  });
+});
+
+describe("the Identity row (Phase 6J-5: a Music Madras title must be chosen explicitly)", () => {
+  it("states what is required when the title is missing, and that the YouTube title is not used", () => {
+    for (const title of [null, "", "   "]) {
+      const identity = checkRecordingRevisionCompleteness({ ...completeInput, title }).find((i) => i.category === "Identity")!;
+      expect(identity).toMatchObject({ level: "REQUIRED", status: "MISSING" });
+      expect(identity.detail).toMatch(/Music Madras title is required/);
+      expect(identity.detail).toMatch(/YouTube title is kept separately/);
+    }
+  });
+
+  it("has no detail once a title exists", () => {
+    const identity = checkRecordingRevisionCompleteness(completeInput).find((i) => i.category === "Identity")!;
+    expect(identity.status).toBe("COMPLETE");
+    expect(identity.detail).toBeUndefined();
+  });
+
+  it("an untitled recording is not ready to publish, whatever else is complete", () => {
+    expect(isReadyToPublish(checkRecordingRevisionCompleteness({ ...completeInput, title: null }))).toBe(false);
+  });
+});
+
+describe("listMissingRequiredCategories", () => {
+  it("lists only REQUIRED categories that are MISSING, in report order", () => {
+    const report = checkRecordingRevisionCompleteness({ ...completeInput, title: null, linkedWorkCount: 0, hasSeoMetaTitle: false, hasPerformance: false });
+    expect(listMissingRequiredCategories(report).map((i) => i.category)).toEqual(["Identity", "Musical Works"]);
+  });
+
+  it("is empty when every REQUIRED category is COMPLETE", () => {
+    expect(listMissingRequiredCategories(checkRecordingRevisionCompleteness({ ...completeInput, hasSeoMetaTitle: false }))).toEqual([]);
   });
 });

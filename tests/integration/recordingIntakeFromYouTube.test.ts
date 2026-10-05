@@ -134,7 +134,8 @@ describe("A. createRecordingFromYouTubeVideo — what is created", () => {
     const revision = await prisma.recordingRevision.findUniqueOrThrow({ where: { id: recording.currentDraftRevisionId! } });
     expect(revision.revisionStatus).toBe("DRAFT");
     expect(revision.revisionNumber).toBe(1);
-    expect(revision.title).toBe(video.title); // the YouTube title is only the editable working title
+    expect(revision.title).toBeNull(); // Phase 6J-5: the YouTube title is metadata, not the canonical title — the editor must choose one
+    expect((await prisma.youTubeVideo.findUniqueOrThrow({ where: { id: video.id } })).title).toBe(video.title); // …and the YouTube record keeps it, unchanged
     expect(revision.description).toBeNull(); // the YouTube description is NOT copied into the revision
 
     const media = await prisma.mediaResource.findMany({ where: { recordingRevisionId: revision.id } });

@@ -46,7 +46,8 @@ export default async function RecordingWorkflowLayout({
     hasOpenDraft: recording.currentDraftRevisionId !== null,
   });
 
-  const title = recording.currentDraftRevision?.title ?? recording.currentPublishedRevision?.title ?? recording.slug;
+  // An untitled recording (a fresh intake draft has no Music Madras title yet) is shown as such, not by its URL slug.
+  const title = recording.currentDraftRevision?.title || recording.currentPublishedRevision?.title || "Untitled recording";
 
   return (
     <div>

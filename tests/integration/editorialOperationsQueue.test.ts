@@ -473,7 +473,7 @@ describe("C. Recording titles resolved from canonical relationships", () => {
   it("resolves published title, else draft title, else slug — and omits unknown ids", async () => {
     const titles = await getRecordingDisplayTitles([W.review.id, W.enrich.id, randomUUID()]);
     expect(titles.get(W.review.id)).toBe(`Handel Messiah ${TOKEN}`);
-    expect(titles.get(W.enrich.id)).toBe(W.enrich.videoTitle); // draft title, copied from the video by intake
+    expect(titles.get(W.enrich.id)).toBe(W.enrich.slug); // Phase 6J-5: intake leaves the draft untitled (the YouTube title is not the Recording title), so the slug is the fallback
     expect(titles.size).toBe(2);
     expect((await getRecordingDisplayTitles([])).size).toBe(0);
 
@@ -494,7 +494,7 @@ describe("D. Efficiency — no N+1", () => {
 
     queries.length = 0;
     const rows = await listEditorialQueueRows();
-    expect(rows.filter((r) => r.recordingTitle.includes(`${TOKEN} extra`)).length).toBe(3);
+    expect(rows.filter((r) => r.youtubeTitle?.includes(`${TOKEN} extra`)).length).toBe(3); // untitled drafts: identified by their YouTube title column
     expect(queries.length).toBe(before);
   }, T);
 

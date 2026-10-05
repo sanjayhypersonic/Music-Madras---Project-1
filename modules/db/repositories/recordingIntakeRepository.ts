@@ -64,6 +64,19 @@ export function findRecordingLinkedToYouTubeVideo(youtubeVideoId: string): Promi
   return findLinkedRecordingWith(prisma, youtubeVideoId);
 }
 
+/**
+ * Phase 6J-5: the synced YouTube video behind a revision's PRIMARY_VIDEO, for display only — the Source step
+ * shows its (unmodified) YouTube title as a reference next to the editor's own Music Madras title.
+ */
+export async function findPrimaryYouTubeVideoForRevision(revisionId: string): Promise<{ youtubeVideoId: string; title: string | null } | null> {
+  const media = await prisma.mediaResource.findFirst({
+    where: { recordingRevisionId: revisionId, provider: "YOUTUBE", role: "PRIMARY_VIDEO", youtubeVideoId: { not: null } },
+    orderBy: { createdAt: "asc" },
+    select: { youtubeVideo: { select: { youtubeVideoId: true, title: true } } },
+  });
+  return media?.youtubeVideo ?? null;
+}
+
 /** Batched version for the Studio video catalogue list — one query, not one per row. */
 export async function listRecordingLinksForYouTubeVideos(youtubeVideoIds: string[]): Promise<Map<string, LinkedRecordingSummary>> {
   const links = new Map<string, LinkedRecordingSummary>();
@@ -122,13 +135,17 @@ export async function createRecordingFromYouTubeVideo(input: {
         return { ok: false, reason: "ALREADY_LINKED", existing } as const;
       }
 
-      // The YouTube title is only an editable DRAFT working title — it is
-      // never asserted to be the canonical musical-work title.
-      const title = video.title?.trim() || undefined;
-      const slugBase = slugify(title ?? "").slice(0, 80).replace(/-+$/g, "") || "youtube-video";
+      // Phase 6J-5: the YouTube title is YouTube metadata — it is NOT copied into the revision.
+      // It may carry SEO wording, branding, emoji or upload-specific text, so it is never the
+      // canonical Music Madras title. The revision starts untitled; the Identity requirement
+      // (REQUIRED for publication) then makes an editor choose the canonical title explicitly,
+      // while the YouTube title stays available, unchanged, through the linked YouTubeVideo
+      // (RecordingContext media; the Source step shows it as a reference).
+      // Only the URL slug is seeded from it (a slug is immutable once set).
+      const slugBase = slugify(video.title?.trim() ?? "").slice(0, 80).replace(/-+$/g, "") || "youtube-video";
       const slug = `${slugBase}-${video.id.slice(0, 8)}`;
 
-      const recording = await createDraftRecording({ slug, title, actorId: input.actorId }, tx);
+      const recording = await createDraftRecording({ slug, actorId: input.actorId }, tx);
       const draftRevisionId = recording.currentDraftRevision!.id;
 
       const mediaResource = await attachMediaToRevision(

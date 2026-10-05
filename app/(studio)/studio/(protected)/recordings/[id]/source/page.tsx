@@ -3,6 +3,7 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { findRecordingById } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { AutosaveStepForm } from "../../../../_components/AutosaveStepForm";
+import { findPrimaryYouTubeVideoForRevision } from "../../../../../../../modules/db/repositories/recordingIntakeRepository";
 import { saveSourceStep } from "./actions";
 import { startNewDraftAction } from "../draftActions";
 
@@ -38,10 +39,26 @@ export default async function SourceStepPage({ params }: { params: Promise<{ id:
     );
   }
 
+  const youtubeVideo = await findPrimaryYouTubeVideoForRevision(recording.currentDraftRevision.id);
+  const hasTitle = Boolean(recording.currentDraftRevision.title?.trim());
+
   return (
     <div>
       <h2>Source</h2>
-      <p>The working title and description for this recording&apos;s current draft.</p>
+      <p>The Music Madras title and description for this recording&apos;s current draft.</p>
+      {youtubeVideo && (
+        <div className="studio-panel">
+          <p>
+            <strong>YouTube title</strong> (reference only — it is YouTube&apos;s metadata and is never changed here):
+          </p>
+          <p>{youtubeVideo.title ?? "(untitled video)"}</p>
+          <p className="studio-muted">
+            {hasTitle
+              ? "The Title below is the canonical Music Madras title."
+              : "A Music Madras title is required before this recording can be published. Enter the canonical title below — it is not taken from YouTube."}
+          </p>
+        </div>
+      )}
       <AutosaveStepForm
         recordingId={id}
         initialUpdatedAt={recording.currentDraftRevision.updatedAt.toISOString()}
