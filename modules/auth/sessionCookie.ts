@@ -11,7 +11,14 @@
 // so nothing about how Auth.js itself sets or reads this cookie for the
 // optional Google OAuth path changes.
 
-const useSecureCookies = (process.env.AUTH_URL ?? "").startsWith("https://");
+// Phase 6J-5: Secure is on whenever AUTH_URL is https OR the app runs in production. It used to depend on
+// AUTH_URL alone, so a production deployment that left AUTH_URL unset (or http) silently issued a
+// non-Secure session cookie. Production is HTTPS-only (HSTS is set), so Secure is always correct there.
+export function shouldUseSecureCookies(env: { AUTH_URL?: string; NODE_ENV?: string }): boolean {
+  return (env.AUTH_URL ?? "").startsWith("https://") || env.NODE_ENV === "production";
+}
+
+const useSecureCookies = shouldUseSecureCookies(process.env);
 
 export const SESSION_COOKIE_NAME = `${useSecureCookies ? "__Secure-" : ""}authjs.session-token`;
 
