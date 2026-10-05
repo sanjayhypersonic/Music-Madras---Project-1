@@ -183,16 +183,72 @@ export async function createSuggestion(input: CreateSuggestionInput): Promise<Co
   return suggestion;
 }
 
+type ReviewTransitionTarget = "EDITOR_REVIEW" | "APPROVED" | "REJECTED" | "CHANGES_REQUESTED";
+
+/**
+ * Phase 6J-5 — a review transition the lifecycle (or a concurrent reviewer) refuses is audited and
+ * reported, never silently dropped. The audit entry names the attempted target, the actual current
+ * status and why, so an ambiguous editorial decision can always be reconstructed.
+ */
+async function refuseReviewTransition(
+  suggestionId: string,
+  statusSeen: ContentSuggestion["status"],
+  target: ReviewTransitionTarget,
+  actorId: string,
+  reason: "INVALID_STATE" | "CONCURRENT_UPDATE",
+  message: string
+): Promise<never> {
+  await writeAuditLog({
+    actorId,
+    action: "CONTENT_SUGGESTION_TRANSITION_REFUSED",
+    entityType: "ContentSuggestion",
+    entityId: suggestionId,
+    beforeSnapshot: { status: statusSeen },
+    afterSnapshot: { attempted: target, reason },
+  });
+  throw new Error(message);
+}
+
+/**
+ * Phase 6J-5 — the review decision is an atomic compare-and-set on the status the reviewer saw: the
+ * UPDATE only matches while the suggestion is still in that status, so of two reviewers acting on the
+ * same state exactly one wins and the other is refused (and audited) — never two decisions, never a
+ * last-write-wins overwrite of an approval by a rejection. No new column or infrastructure.
+ */
+async function transitionReviewStatus(
+  before: ContentSuggestion,
+  target: ReviewTransitionTarget,
+  actorId: string,
+  data: Prisma.ContentSuggestionUncheckedUpdateManyInput
+): Promise<ContentSuggestion> {
+  const result = await prisma.contentSuggestion.updateMany({
+    where: { id: before.id, status: before.status },
+    data: { ...data, status: target },
+  });
+  if (result.count !== 1) {
+    const current = await prisma.contentSuggestion.findUnique({ where: { id: before.id }, select: { status: true } });
+    return refuseReviewTransition(
+      before.id,
+      current?.status ?? before.status,
+      target,
+      actorId,
+      "CONCURRENT_UPDATE",
+      `ContentSuggestion ${before.id} was changed by someone else (now ${current?.status ?? "missing"}); it can no longer move to ${target}.`
+    );
+  }
+  return prisma.contentSuggestion.findUniqueOrThrow({ where: { id: before.id } });
+}
+
 export async function submitSuggestionForReview(id: string, actorId: string): Promise<ContentSuggestion> {
   const before = await prisma.contentSuggestion.findUnique({ where: { id } });
   if (!before) {
     throw new Error(`ContentSuggestion ${id} does not exist.`);
   }
   if (!canSubmitContentSuggestionForReview(before.status)) {
-    throw new Error(`ContentSuggestion ${id} cannot move to EDITOR_REVIEW from its current status (${before.status}).`);
+    return refuseReviewTransition(id, before.status, "EDITOR_REVIEW", actorId, "INVALID_STATE", `ContentSuggestion ${id} cannot move to EDITOR_REVIEW from its current status (${before.status}).`);
   }
 
-  const updated = await prisma.contentSuggestion.update({ where: { id }, data: { status: "EDITOR_REVIEW" } });
+  const updated = await transitionReviewStatus(before, "EDITOR_REVIEW", actorId, {});
 
   await writeAuditLog({
     actorId,
@@ -224,23 +280,19 @@ export async function approveContentSuggestion(id: string, actorId: string, inpu
     throw new Error(`ContentSuggestion ${id} does not exist.`);
   }
   if (!canApproveContentSuggestion(before.status)) {
-    throw new Error(`ContentSuggestion ${id} cannot be approved from its current status (${before.status}).`);
+    return refuseReviewTransition(id, before.status, "APPROVED", actorId, "INVALID_STATE", `ContentSuggestion ${id} cannot be approved from its current status (${before.status}).`);
   }
 
   const hasEdit = Boolean(input.finalContent && input.finalContent.trim().length > 0);
   const reviewDecision: ContentSuggestionReviewDecision = hasEdit ? "EDIT_AND_ACCEPT" : "ACCEPT";
   const reviewedAt = new Date();
 
-  const updated = await prisma.contentSuggestion.update({
-    where: { id },
-    data: {
-      status: "APPROVED",
-      reviewDecision,
-      reviewedById: actorId,
-      reviewedAt,
-      reviewNote: input.reviewNote ?? null,
-      finalContent: hasEdit ? input.finalContent : null,
-    },
+  const updated = await transitionReviewStatus(before, "APPROVED", actorId, {
+    reviewDecision,
+    reviewedById: actorId,
+    reviewedAt,
+    reviewNote: input.reviewNote ?? null,
+    finalContent: hasEdit ? input.finalContent : null,
   });
 
   await writeAuditLog({
@@ -267,15 +319,17 @@ export async function rejectContentSuggestion(
     throw new Error(`ContentSuggestion ${id} does not exist.`);
   }
   if (!canRejectContentSuggestion(before.status)) {
-    throw new Error(`ContentSuggestion ${id} cannot be rejected from its current status (${before.status}).`);
+    return refuseReviewTransition(id, before.status, "REJECTED", actorId, "INVALID_STATE", `ContentSuggestion ${id} cannot be rejected from its current status (${before.status}).`);
   }
 
   const reviewDecision = `REJECT_${input.reason}` as ContentSuggestionReviewDecision;
   const reviewedAt = new Date();
 
-  const updated = await prisma.contentSuggestion.update({
-    where: { id },
-    data: { status: "REJECTED", reviewDecision, reviewedById: actorId, reviewedAt, reviewNote: input.reviewNote ?? null },
+  const updated = await transitionReviewStatus(before, "REJECTED", actorId, {
+    reviewDecision,
+    reviewedById: actorId,
+    reviewedAt,
+    reviewNote: input.reviewNote ?? null,
   });
 
   await writeAuditLog({
@@ -296,12 +350,13 @@ export async function requestContentSuggestionChanges(id: string, actorId: strin
     throw new Error(`ContentSuggestion ${id} does not exist.`);
   }
   if (!canRequestContentSuggestionChanges(before.status)) {
-    throw new Error(`ContentSuggestion ${id} cannot move to CHANGES_REQUESTED from its current status (${before.status}).`);
+    return refuseReviewTransition(id, before.status, "CHANGES_REQUESTED", actorId, "INVALID_STATE", `ContentSuggestion ${id} cannot move to CHANGES_REQUESTED from its current status (${before.status}).`);
   }
 
-  const updated = await prisma.contentSuggestion.update({
-    where: { id },
-    data: { status: "CHANGES_REQUESTED", reviewedById: actorId, reviewedAt: new Date(), reviewNote },
+  const updated = await transitionReviewStatus(before, "CHANGES_REQUESTED", actorId, {
+    reviewedById: actorId,
+    reviewedAt: new Date(),
+    reviewNote,
   });
 
   await writeAuditLog({
