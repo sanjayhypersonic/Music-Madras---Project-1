@@ -26,6 +26,9 @@ export function describeGenerationFailureForEditor(result: Extract<GenerateRecor
           return "Editorial generation could not be completed.";
       }
     }
+    if (result.reason === "RECORDING_NOT_PUBLISHED") {
+      return "This Recording is not currently published, so editorial generation is not available for it. Publish it first.";
+    }
     // result.reason === "GENERATION_ALREADY_IN_PROGRESS"
     return "An editorial suggestion is already being generated for this Recording. Please wait for it to finish before requesting another.";
   }

@@ -47,6 +47,7 @@ export type GenerateRecordingEditorialSuggestionResult =
   | { ok: true; generationRequest: ContentGenerationRequest; suggestion: ContentSuggestion }
   | { ok: false; generationRequest: null; reason: "RECORDING_CONTEXT_UNAVAILABLE"; contextReason: Exclude<RecordingContextResult, { ok: true }>["reason"] }
   | { ok: false; generationRequest: null; reason: "GENERATION_ALREADY_IN_PROGRESS" }
+  | { ok: false; generationRequest: null; reason: "RECORDING_NOT_PUBLISHED" }
   | { ok: false; generationRequest: ContentGenerationRequest; reason: string };
 
 /**
@@ -66,6 +67,16 @@ export async function generateRecordingEditorialSuggestion(
   const contextResult = await getRecordingContext(input.recordingId, mode);
   if (!contextResult.ok) {
     return { ok: false, generationRequest: null, reason: "RECORDING_CONTEXT_UNAVAILABLE", contextReason: contextResult.reason };
+  }
+
+  // Phase 6J-5 — eligibility is the CURRENT lifecycle state, not the mere existence of a published revision.
+  // An unpublished Recording keeps its last published revision as history (the pointer is retained), so the
+  // context above still resolves for it; but it is not publicly published, and the Studio generation form
+  // and the Editorial Queue already offer generation for currently-published Recordings only
+  // (isRecordingPublished). The gateway enforces the same rule itself so a forged or stale request cannot
+  // get around the UI. DRAFT-mode context (never used by a Studio caller) is not subject to this rule.
+  if (mode === "PUBLISHED" && contextResult.context.identity.status !== "PUBLISHED") {
+    return { ok: false, generationRequest: null, reason: "RECORDING_NOT_PUBLISHED" };
   }
 
   // Duplicate-generation guard (brief: "do not create uncontrolled duplicate

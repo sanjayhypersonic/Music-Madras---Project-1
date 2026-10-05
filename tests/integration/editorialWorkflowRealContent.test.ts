@@ -35,7 +35,7 @@ import { addRecordingToCollection, createCollection, publishCollection } from ".
 import { approveUnlistedPublication, createDraftVideoPage, findPublicVideoPagesByYouTubeVideoIds, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { buildRecordingJsonLd } from "../../modules/mmke/recordingPage/buildRecordingJsonLd";
 import { getRecordingContext } from "../../modules/db/repositories/recordingContextRepository";
-import { getPublicRecordingPageData, getPublicWorkPageData, getComposerEntityPageData } from "../../modules/db/repositories/entityRelationshipsRepository";
+import { getPublicCollectionPageData, getPublicRecordingPageData, getPublicWorkPageData, getComposerEntityPageData } from "../../modules/db/repositories/entityRelationshipsRepository";
 import { searchRecordings, searchComposers } from "../../modules/db/repositories/archiveSearchRepository";
 import { listPublicRecordingSitemapEntries, listPublicComposerSitemapEntries, listPublicVenueSitemapEntries } from "../../modules/db/repositories/sitemapRepository";
 import { createSource, approveSource, attachSourceToEntity } from "../../modules/db/repositories/sourceRepository";
@@ -48,7 +48,8 @@ import { RECORDING_CONTEXT_SOURCE_MAP } from "../../modules/mmke/contentIntellig
 import { checkContentSuggestionFreshness } from "../../modules/db/repositories/contentSuggestionRepository";
 import { findContentSuggestionApplication } from "../../modules/db/repositories/contentSuggestionApplicationRepository";
 import { getEditorialOperationsQueue } from "../../modules/db/repositories/editorialQueueRepository";
-import { findRecordingLinkedToYouTubeVideo } from "../../modules/db/repositories/recordingIntakeRepository";
+import { findPublishedRecordingSlugForYouTubeVideo } from "../../modules/db/repositories/mediaResourceRepository";
+import { findPrimaryYouTubeVideoForRevision, findRecordingLinkedToYouTubeVideo } from "../../modules/db/repositories/recordingIntakeRepository";
 import { createRecordingFromVideoAction } from "../../app/(studio)/studio/(protected)/catalogue/videos/[videoId]/actions";
 import { publishAction, unpublishAction, restoreAction, archiveAction, submitForReviewAction } from "../../app/(studio)/studio/(protected)/recordings/[id]/review/actions";
 import { startNewDraftAction } from "../../app/(studio)/studio/(protected)/recordings/[id]/draftActions";
@@ -249,6 +250,13 @@ describe("1. real synchronized YouTube data", () => {
       expect(row.description).toBe(v.description);
       expect(row.privacyStatus).toBe(v.privacyStatus);
     }
+    // Phase 6J-5: non-ASCII text survives export -> JSON -> database intact (an earlier "mojibake" was only
+    // PowerShell's default ANSI decoding of a correct UTF-8 file when printing it).
+    const mozart = await prisma.youTubeVideo.findUniqueOrThrow({ where: { youtubeVideoId: REAL_VIDEO.MOZART_VERDI } });
+    const promiseVideo = await prisma.youTubeVideo.findUniqueOrThrow({ where: { youtubeVideoId: REAL_VIDEO.PROMISE } });
+    expect(mozart.description).toContain("Mozart (Don Giovanni): Là chi darem la mano");
+    expect(promiseVideo.description).toContain("🎼 Work: Dancing Into the Promise!");
+    for (const v of REAL_FIXTURES.videos) expect(v.description ?? "").not.toMatch(/Ã|â€|ðŸ/);
     // the case coverage the workflow depends on
     expect(realVideo(REAL_VIDEO.NO_DESCRIPTION).description ?? "").toBe("");
     expect(realVideo(REAL_VIDEO.UNLISTED).privacyStatus).toBe("unlisted");
@@ -272,8 +280,8 @@ describe("2. recording intake from a real synced video", () => {
     expect(recording.status).toBe("DRAFT");
     expect(recording.currentPublishedRevisionId).toBeNull();
     expect(recording.currentDraftRevision!.revisionStatus).toBe("DRAFT");
-    // the YouTube title is only an EDITABLE working title — never asserted to be a canonical title
-    expect(recording.currentDraftRevision!.title).toBe(realVideo(REAL_VIDEO.DINGIRI).title!.trim());
+    // Phase 6J-5: the YouTube title is metadata, never the canonical title — the draft starts untitled
+    expect(recording.currentDraftRevision!.title).toBeNull();
 
     const media = await prisma.mediaResource.findMany({ where: { recordingRevisionId: recording.currentDraftRevisionId! } });
     expect(media).toHaveLength(1);
@@ -346,6 +354,28 @@ describe("2. recording intake from a real synced video", () => {
 const promiseEntities = {} as { composerId: string; workId: string; workSlug: string; venueId: string; venueSlug: string; choirId: string; conductorId: string; performanceId: string; composerSlug: string };
 
 describe("3. canonical enrichment and readiness (PROMISE video — its own description names work, composer, choir, conductor, venue)", () => {
+  it("a fresh intake draft has NO Music Madras title: Identity is MISSING and publication names it (the raw YouTube title is never the Recording title)", async () => {
+    const row = await recordingRow(promise.recordingId);
+    expect(row.currentDraftRevision!.title).toBeNull();
+    const result = (await getRecordingRevisionCompletenessReport(row.currentDraftRevisionId!))!;
+    const identity = result.report.find((i) => i.category === "Identity")!;
+    expect(identity).toMatchObject({ level: "REQUIRED", status: "MISSING" });
+    expect(identity.detail).toMatch(/Music Madras title is required/);
+    expect(identity.detail).toMatch(/YouTube title is kept separately/);
+
+    asRole("ADMINISTRATOR");
+    const path = await redirectOf(() => publishAction(promise.recordingId, row.currentDraftRevisionId!));
+    expect(path).toMatch(/not ready to publish\. Still required: Identity, Musical Works\./);
+    expect((await recordingRow(promise.recordingId)).currentPublishedRevisionId).toBeNull();
+
+    // the YouTube title is untouched and still reaches the context as YouTube metadata
+    const ctx = await getRecordingContext(promise.recordingId, "DRAFT");
+    if (!ctx.ok) throw new Error("expected a draft context");
+    expect(ctx.context.media[0].title).toBe(realVideo(REAL_VIDEO.PROMISE).title);
+    expect(ctx.context.identity.title ?? null).toBeNull();
+    expect(await findPrimaryYouTubeVideoForRevision(row.currentDraftRevisionId!)).toEqual({ youtubeVideoId: REAL_VIDEO.PROMISE, title: realVideo(REAL_VIDEO.PROMISE).title });
+  }, T);
+
   it("a draft with no works yet is INCOMPLETE; its Media row reports the CURRENT state (the 6J-4 media-readiness bug)", async () => {
     const row = await recordingRow(promise.recordingId);
     const result = (await getRecordingRevisionCompletenessReport(row.currentDraftRevisionId!))!;
@@ -595,6 +625,9 @@ describe("4. publish through the Studio workflow", () => {
     const videos = (await getPublicRecordingPageData(promise.slug))!.videos;
     expect(videos).toHaveLength(1); // the video is public on YouTube, so its published page is public
     expect(videos[0].thumbnailUrl).toBe(realVideo(REAL_VIDEO.PROMISE).thumbnailUrl);
+    // baselines for the unpublish checks later: the public collection lists the recording, and the video page links to it
+    expect((await getPublicCollectionPageData(slug("collection")))!.recordings.map((r) => r.slug)).toEqual([promise.slug]);
+    expect(await findPublishedRecordingSlugForYouTubeVideo(videoIds.get(REAL_VIDEO.PROMISE)!)).toBe(promise.slug);
   }, T);
 
   it("YouTube is authoritative for privacy: an UNLISTED video's published page stays private until a human explicitly approves it", async () => {
@@ -959,9 +992,36 @@ describe("8. unpublish and republish", () => {
     // …but the canonical records still exist
     expect(await prisma.composer.count({ where: { id: promiseEntities.composerId } })).toBe(1);
     expect(await prisma.musicalWork.count({ where: { id: promiseEntities.workId } })).toBe(1);
-    // the playlist-backed Collection no longer lists it
+    // the playlist-backed Collection no longer lists it (the link row itself is kept), and the public video page
+    // no longer points to a Recording — a historical published revision never makes a Recording visible
     expect(await prisma.collectionRecording.count({ where: { recordingId: promise.recordingId } })).toBe(1);
+    expect((await getPublicCollectionPageData(slug("collection")))!.recordings).toEqual([]);
+    expect(await findPublishedRecordingSlugForYouTubeVideo(videoIds.get(REAL_VIDEO.PROMISE)!)).toBeNull();
+    expect((await getPublicRecordingPageData(promise.slug))).toBeNull();
+    expect(await findPublicVideoPagesByYouTubeVideoIds([videoIds.get(REAL_VIDEO.PROMISE)!])).toHaveLength(1); // the video's OWN page is independent of the Recording
     expect(await auditActions("Recording", [promise.recordingId])).toContain("RECORDING_UNPUBLISHED");
+  }, T);
+
+  it("AI eligibility follows the CURRENT state: an unpublished Recording keeps its published revision as history but cannot be generated for", async () => {
+    const row = await recordingRow(promise.recordingId);
+    expect(row.status).toBe("DRAFT");
+    expect(row.currentPublishedRevisionId).not.toBeNull(); // the historical revision is retained…
+    const requestsBefore = await prisma.contentGenerationRequest.count({ where: { targetEntityId: promise.recordingId } });
+
+    // …and the context for it is still readable (history), but generation is refused by the gateway itself
+    expect((await getRecordingContext(promise.recordingId, "PUBLISHED")).ok).toBe(true);
+    expect(await generate(promise.recordingId)).toEqual({ ok: false, generationRequest: null, reason: "RECORDING_NOT_PUBLISHED" });
+    asRole("EDITOR");
+    const path = await redirectOf(() => generateEditorialSuggestionAction(form({ recordingId: promise.recordingId })));
+    expect(path).toMatch(/^\/studio\/content-suggestions\?error=.*not%20currently%20published|^\/studio\/content-suggestions\?error=.*not currently published/);
+    expect(await prisma.contentGenerationRequest.count({ where: { targetEntityId: promise.recordingId } })).toBe(requestsBefore); // no request row, no provider call
+
+    // the Editorial Queue agrees: it is not offered for generation, it needs enrichment again
+    const generating = await getEditorialOperationsQueue({ pageSize: 200 });
+    expect(generating.rows.filter((r) => r.recordingId === promise.recordingId).map((r) => r.state)).not.toContain("READY_FOR_GENERATION");
+    expect((await getEditorialOperationsQueue({ state: "NEEDS_ENRICHMENT", pageSize: 200 })).rows.some((r) => r.recordingId === promise.recordingId)).toBe(true);
+    // earlier suggestions (history) are untouched
+    expect(await prisma.contentSuggestion.count({ where: { targetEntityId: promise.recordingId } })).toBeGreaterThan(0);
   }, T);
 
   it("publishing again immediately is refused (nothing to publish) — and 'submit for review' no longer pretends there is a draft", async () => {
@@ -1033,6 +1093,8 @@ describe("8. unpublish and republish", () => {
     expect((await listPublicRecordingSitemapEntries()).map((e) => e.slug)).toContain(promise.slug);
     expect(await getComposerEntityPageData(promiseEntities.composerSlug)).not.toBeNull();
     expect(data.videos).toHaveLength(1);
+    expect((await getPublicCollectionPageData(slug("collection")))!.recordings.map((r) => r.slug)).toEqual([promise.slug]);
+    expect(await findPublishedRecordingSlugForYouTubeVideo(videoIds.get(REAL_VIDEO.PROMISE)!)).toBe(promise.slug);
 
     const audit = await auditActions("Recording", [promise.recordingId]);
     expect(audit.filter((a) => a === "RECORDING_PUBLISHED")).toHaveLength(3);

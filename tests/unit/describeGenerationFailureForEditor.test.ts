@@ -29,6 +29,11 @@ describe("describeGenerationFailureForEditor", () => {
     expect(describeGenerationFailureForEditor(result)).toContain("already being generated");
   });
 
+  it("describes a Recording that is not currently published (Phase 6J-5), without technical detail", () => {
+    const result: Failure = { ok: false, generationRequest: null, reason: "RECORDING_NOT_PUBLISHED" };
+    expect(describeGenerationFailureForEditor(result)).toBe("This Recording is not currently published, so editorial generation is not available for it. Publish it first.");
+  });
+
   it("maps a CONFIGURATION provider failure to the brief's exact suggested wording", () => {
     const result: Failure = { ok: false, generationRequest: {} as never, reason: "CONFIGURATION: ANTHROPIC_API_KEY is not set." };
     expect(describeGenerationFailureForEditor(result)).toBe("AI provider configuration is unavailable.");
