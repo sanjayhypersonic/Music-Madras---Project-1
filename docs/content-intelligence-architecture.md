@@ -2440,6 +2440,8 @@ behavior.
 
 ## 116. Phase 6I-1 — Recording intake from a synced YouTube video
 
+> Phase 6J-5 (section 123) changed one point below: intake no longer copies the YouTube title into the revision as a working title; the revision starts untitled and the editor must choose a Music Madras title.
+
 The Phase 6I pre-flight audit found 226 synced `YouTubeVideo` rows and zero
 Recordings, and that no Studio path set `MediaResource.youtubeVideoId` — the
 one link `RecordingContext` needs to see a video's title and description
@@ -2873,3 +2875,40 @@ The editorial lifecycle was proven end to end on REAL synchronized YouTube metad
 **Also hardened.** Suggestion review actions (submit / approve / reject / request changes) now report a refused transition on the page instead of throwing a raw error (apply already did).
 
 **Observations (not changed).** Review transitions are check-then-update (two reviewers racing could both succeed on the same suggestion); AI generation eligibility follows the published pointer, so an unpublished Recording that retains a published revision can still be generated for; the ACJ venue type has no better enum value than CONCERT_HALL; the Performance model requires a Programme, so a Programme titled after the work is created when the source names none.
+
+## 123. Phase 6J-5 - Pre-launch production readiness and final-sync preparation
+
+The final YouTube synchronization was NOT run. `docs/final-youtube-sync-runbook.md` is the launch-gate procedure.
+
+**Title policy (supersedes the "working title" wording in section 116).** A YouTube title is YouTube metadata and may carry SEO wording, branding, emoji or upload-specific text, so it is never the canonical Music Madras title. Intake no longer copies it into the revision: a Recording started from a video begins untitled, the existing REQUIRED Identity check is therefore MISSING until an editor enters a Music Madras title (its detail says so), the Review step hides Publish and the publish action names what is still required, and the Source step shows the YouTube title (read-only, unchanged) as a reference. The YouTube title stays in `YouTubeVideo` and in the Recording Context as YOUTUBE_METADATA. No schema change; the real database has no Recordings, so nothing needed migrating. A title an editor types deliberately, even one equal to the YouTube title, is accepted (an explicit act). The URL slug is still seeded from the YouTube title at intake and is immutable once set: a product-owner decision, see the report.
+
+**Review concurrency.** Submit / approve / reject / request-changes were check-then-update. Each is now an atomic compare-and-set on the status the reviewer saw (`updateMany ... where status = seen`), so of two reviewers acting on the same state exactly one wins. A refused transition (invalid state or lost race) is audited as `CONTENT_SUGGESTION_TRANSITION_REFUSED` (attempted target, current status, reason) and the Studio actions report it on the page. No new column or infrastructure; mutation-verified (without the status guard the race tests fail).
+
+**AI eligibility.** The Studio generation form and the Editorial Queue already offered generation only for currently published Recordings (`isRecordingPublished`); the gateway did not, so a forged or stale request for an unpublished Recording that retains its published revision as history could still generate. The gateway now enforces the same rule (`RECORDING_NOT_PUBLISHED`, no request row, no provider call). Historical published revision data and earlier suggestions are untouched; republishing makes the Recording eligible again.
+
+**Encoding.** The reported odd characters were PowerShell's default ANSI decoding of a correct UTF-8 file. Verified correct through the real database (Prisma export), the fixture JSON (no BOM, U+00E0, U+1F3BC, U+200B), the test database, the server HTML response (`text/html; charset=utf-8`) and the browser DOM. A regression assertion keeps it so. No product code changed.
+
+**YouTube sync engine (reviewed; two real defects fixed).** (1) A video or playlist flagged NOT_OBSERVED was never restored, so a single false flag in the one final run would be permanent (public gate and intake both require OBSERVED); observed videos and playlists are now restored with a recorded transition. (2) A successful-but-empty or truncated response could flag the whole catalogue; the engine now refuses to flag when no video was observed while videos are known, or when more than half of a catalogue of 10+ would be flagged: nothing is flagged and the run is PARTIAL. Also: the checkpoint's `lastFullCompletionAt` is no longer erased by a PARTIAL write, and the preflight refuses a `DIRECT_URL` that names a different database than `DATABASE_URL`. Still manual by design: a reconciliation MISMATCH exits 0 and must be read; there is no production-versus-test target guard (read the printed host).
+
+**Session cookie.** Secure (and the `__Secure-` prefix) depended on `AUTH_URL` alone; it is now also on whenever `NODE_ENV` is production.
+
+### Publication readiness matrix (what the gate actually requires)
+
+| Item | Level | Enforced by | Why |
+|---|---|---|---|
+| Music Madras title (Identity) | REQUIRED | completeness + publish action | the canonical name; never taken from YouTube |
+| At least one Musical Work | REQUIRED | completeness | the archive's unit of knowledge; a recording of nothing is not archival |
+| PRIMARY_VIDEO media | REQUIRED | completeness | a Recording is a recording of something watchable |
+| Permission RECORDING_PUBLISH (Administrator and above) | REQUIRED | server action | publishing is an explicit human act |
+| An open draft revision (and not archived) | REQUIRED | action + repository | only a draft can become the published version; archived must be restored first |
+| Performance, Venue, Performers | RECOMMENDED | completeness | enrich the page; absence is an honest gap |
+| SEO meta title | RECOMMENDED | completeness | discovery, not correctness |
+| Educational content (guide, analysis, difficulty) | OPTIONAL | completeness | editor-authored only |
+| Description | not required | n/a | editorial prose is produced after first publication (AI path) or by an editor |
+| Programme, Composer (via the Work) | via Performance / Work | relationships | composers are reached through works |
+| Rights information, provenance sources | not required | n/a | optional records; AI uses only APPROVED sources |
+| Video public/unlisted status | not a gate | video page rules | the video page has its own gate (unlisted needs explicit approval) |
+
+### Public visibility rules (verified by test)
+
+A Recording is public only when `status = PUBLISHED` and a published revision pointer exists. A retained historical published revision never makes an unpublished, draft, restored or archived Recording visible: direct URL, archive search, sitemap, JSON-LD/metadata, related entities (work, composer, venue become non-public), collections (the link row is kept, the listing drops it) and the video page's link to the Recording all follow. A video page is independent: public videos need a published page; unlisted ones also need explicit approval; private or not-observed never pass.
