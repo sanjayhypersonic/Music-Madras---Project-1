@@ -48,7 +48,10 @@ export function checkRecordingRevisionCompleteness(
       category: "Media",
       level: "REQUIRED",
       status: input.hasPrimaryVideo ? "COMPLETE" : "MISSING",
-      detail: "A primary video media resource is required before publishing",
+      // Phase 6J-4: the detail describes the CURRENT state. It used to be the static
+      // requirement text, so a Recording with its primary video attached still read
+      // "...is required before publishing" next to a COMPLETE status.
+      detail: input.hasPrimaryVideo ? "Primary video attached" : "A primary video media resource is required before publishing",
     },
     {
       category: "Performance",

@@ -61,6 +61,24 @@ describe("checkRecordingRevisionCompleteness", () => {
   });
 });
 
+describe("the Media row (Phase 6J-4: its detail describes the current state, not a static requirement)", () => {
+  const media = (hasPrimaryVideo: boolean) => checkRecordingRevisionCompleteness({ ...completeInput, hasPrimaryVideo }).find((item) => item.category === "Media")!;
+
+  it("COMPLETE: says the primary video is attached and no longer says it is required", () => {
+    expect(media(true)).toEqual({ category: "Media", level: "REQUIRED", status: "COMPLETE", detail: "Primary video attached" });
+    expect(media(true).detail).not.toMatch(/required/i);
+  });
+
+  it("MISSING: states the requirement", () => {
+    expect(media(false)).toEqual({ category: "Media", level: "REQUIRED", status: "MISSING", detail: "A primary video media resource is required before publishing" });
+  });
+
+  it("no COMPLETE row ever carries wording that says something is still required or missing", () => {
+    const report = checkRecordingRevisionCompleteness(completeInput);
+    for (const item of report.filter((i) => i.status === "COMPLETE")) expect(item.detail ?? "", item.category).not.toMatch(/required before|missing/i);
+  });
+});
+
 describe("isReadyToPublish", () => {
   it("is true when every REQUIRED category is COMPLETE, even if RECOMMENDED/OPTIONAL ones are MISSING", () => {
     const report = checkRecordingRevisionCompleteness({
