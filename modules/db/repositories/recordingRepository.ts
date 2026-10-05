@@ -461,6 +461,12 @@ export async function submitRecordingForReview(recordingId: string, actorId: str
   if (recording.status !== "DRAFT") {
     throw new Error(`Recording ${recordingId} is not in DRAFT status (currently ${recording.status}).`);
   }
+  // Phase 6J-4: there must be a draft to review. A Recording that was unpublished has status DRAFT
+  // but NO open draft revision (its last published version is kept as history); "submitting" it
+  // would move it to IN_REVIEW with nothing in review. It must start a new draft first.
+  if (recording.currentDraftRevisionId === null) {
+    throw new Error(`Recording ${recordingId} has no open draft revision to submit for review. Start a new draft first.`);
+  }
 
   const updated = await prisma.recording.update({
     where: { id: recordingId },

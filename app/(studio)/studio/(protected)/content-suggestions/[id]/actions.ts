@@ -24,13 +24,24 @@ function errorRedirect(suggestionId: string, message: string): never {
   redirect(`/studio/content-suggestions/${suggestionId}?error=${encodeURIComponent(message)}`);
 }
 
+// Phase 6J-4: a transition refused by the lifecycle rules (a stale page, a double click, a second reviewer)
+// is reported on the page, exactly as applyToRecordingDraftAction already does, instead of surfacing a raw
+// error. The repository functions still enforce every rule; this only changes how a refusal is shown.
+async function runTransition(suggestionId: string, message: string, run: () => Promise<unknown>): Promise<void> {
+  try {
+    await run();
+  } catch {
+    errorRedirect(suggestionId, message);
+  }
+}
+
 export async function submitForReviewAction(suggestionId: string) {
   const session = await getCurrentStudioSession();
   if (!session || !can(session.user.role, "EDITORIAL_REVIEW")) {
     errorRedirect(suggestionId, "You do not have permission to move this suggestion into review.");
   }
 
-  await submitSuggestionForReview(suggestionId, session!.user.id);
+  await runTransition(suggestionId, "This suggestion can no longer be moved into review (its status has changed).", () => submitSuggestionForReview(suggestionId, session!.user.id));
   redirect(`/studio/content-suggestions/${suggestionId}`);
 }
 
@@ -43,7 +54,9 @@ export async function approveAction(suggestionId: string, formData: FormData) {
   const finalContent = String(formData.get("finalContent") ?? "").trim() || null;
   const reviewNote = String(formData.get("reviewNote") ?? "").trim() || null;
 
-  await approveContentSuggestion(suggestionId, session!.user.id, { finalContent, reviewNote });
+  await runTransition(suggestionId, "This suggestion cannot be approved from its current status. Reload the page to see where it stands.", () =>
+    approveContentSuggestion(suggestionId, session!.user.id, { finalContent, reviewNote })
+  );
   redirect(`/studio/content-suggestions/${suggestionId}`);
 }
 
@@ -81,7 +94,9 @@ export async function rejectAction(suggestionId: string, formData: FormData) {
   const reason = String(formData.get("reason") ?? "OTHER") as RejectSuggestionReason;
   const reviewNote = String(formData.get("reviewNote") ?? "").trim() || null;
 
-  await rejectContentSuggestion(suggestionId, session!.user.id, { reason, reviewNote });
+  await runTransition(suggestionId, "This suggestion cannot be rejected from its current status. Reload the page to see where it stands.", () =>
+    rejectContentSuggestion(suggestionId, session!.user.id, { reason, reviewNote })
+  );
   redirect(`/studio/content-suggestions/${suggestionId}`);
 }
 
@@ -96,6 +111,8 @@ export async function requestChangesAction(suggestionId: string, formData: FormD
     errorRedirect(suggestionId, "Explain what changes are needed before requesting them.");
   }
 
-  await requestContentSuggestionChanges(suggestionId, session!.user.id, reviewNote);
+  await runTransition(suggestionId, "Changes cannot be requested from this suggestion's current status. Reload the page to see where it stands.", () =>
+    requestContentSuggestionChanges(suggestionId, session!.user.id, reviewNote)
+  );
   redirect(`/studio/content-suggestions/${suggestionId}`);
 }

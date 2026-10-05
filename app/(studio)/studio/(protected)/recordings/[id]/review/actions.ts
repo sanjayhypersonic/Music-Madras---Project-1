@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
@@ -24,7 +25,10 @@ import { describeEditableDraftRefusal } from "../../../../../../../modules/publi
 // Each is idempotent-safe against a double click: a repeat finds the state
 // already changed and reports it rather than corrupting anything.
 
+// The workflow layout (step list, heading, phase) is preserved by Next across navigations, so a
+// lifecycle change must invalidate it or the old phase stays on screen (found in 6J-3B QA).
 function back(recordingId: string, error?: string): never {
+  revalidatePath(`/studio/recordings/${recordingId}`, "layout");
   redirect(`/studio/recordings/${recordingId}/review${error ? `?error=${encodeURIComponent(error)}` : ""}`);
 }
 

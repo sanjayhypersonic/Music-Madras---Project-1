@@ -6,6 +6,8 @@ const mockGetCurrentStudioSession = vi.fn();
 vi.mock("../../modules/auth/authService", () => ({
   getCurrentStudioSession: () => mockGetCurrentStudioSession(),
 }));
+// Phase 6J-4: the lifecycle actions revalidate the workflow layout; revalidatePath only exists inside a real request.
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 import { prisma } from "../../modules/db/client";
 import { createComposer } from "../../modules/db/repositories/composerRepository";

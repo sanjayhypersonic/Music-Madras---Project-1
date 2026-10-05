@@ -5,6 +5,7 @@ import { findRecordingById, getRecordingRevisionCompletenessReport } from "../..
 import { isReadyToPublish } from "../../../../../../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
 import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
 import { submitForReviewAction, publishAction, unpublishAction, restoreAction, archiveAction } from "./actions";
+import { startNewDraftAction } from "../draftActions";
 
 export default async function ReviewStepPage({
   params,
@@ -25,7 +26,14 @@ export default async function ReviewStepPage({
   const completeness = openRevisionId ? await getRecordingRevisionCompletenessReport(openRevisionId) : null;
   const ready = completeness ? isReadyToPublish(completeness.report) : false;
 
-  const canSubmitForReview = can(session.user.role, "EDITORIAL_REVIEW") && recording.status === "DRAFT";
+  // Phase 6J-4: the editable state is explicit. "Open draft" is the only thing that can be reviewed or published;
+  // a Recording without one (published with no pending changes, or UNPUBLISHED — which keeps its last published
+  // version as history and opens no draft) must start a new draft to be edited and published again.
+  const hasOpenDraft = recording.currentDraftRevisionId !== null;
+  const hasPublishedRevision = recording.currentPublishedRevisionId !== null;
+  const isLive = recording.status === "PUBLISHED";
+  const canStartDraft = can(session.user.role, "RECORDING_WRITE") && !hasOpenDraft && hasPublishedRevision && recording.status !== "ARCHIVED";
+  const canSubmitForReview = can(session.user.role, "EDITORIAL_REVIEW") && recording.status === "DRAFT" && hasOpenDraft;
   const mayPublish = can(session.user.role, "RECORDING_PUBLISH");
   // Phase 6J-1: an ARCHIVED recording is never published from here — it must be restored first.
   const canPublish = mayPublish && recording.currentDraftRevisionId !== null && ready && recording.status !== "ARCHIVED";
@@ -42,7 +50,9 @@ export default async function ReviewStepPage({
         <p className="studio-empty">No revision to review yet.</p>
       ) : (
         <>
-          <p>Readiness: {completeness.readiness}</p>
+          <p>
+            Readiness of the {hasOpenDraft ? "open draft" : "published version"}: {completeness.readiness}
+          </p>
           <div className="studio-table-scroll">
 <table>
             <thead>
@@ -71,6 +81,28 @@ export default async function ReviewStepPage({
       )}
 
       <p>Status: {recording.status}</p>
+
+      {!hasOpenDraft && recording.status !== "ARCHIVED" && (
+        <div className="studio-panel">
+          {isLive ? (
+            <p>This recording is live with no pending changes. Start a new draft to edit it; the live version stays public until the new draft is published.</p>
+          ) : (
+            <p>
+              This recording is <strong>not public</strong>. Its last published version is kept in its history. To change it and publish it again, start a new
+              draft — that copies the published version into an editable draft; nothing becomes public until you publish.
+            </p>
+          )}
+          {canStartDraft ? (
+            <form action={startNewDraftAction.bind(null, id, "review")}>
+              <ConfirmSubmitButton tone="primary" pendingLabel="Starting…">
+                Start a new draft
+              </ConfirmSubmitButton>
+            </form>
+          ) : (
+            !hasPublishedRevision && <p className="studio-muted">There is no published version to start a draft from.</p>
+          )}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: "1rem", marginTop: "1rem", flexWrap: "wrap" }}>
         {canSubmitForReview && (
