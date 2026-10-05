@@ -30,6 +30,10 @@ export interface FieldOwnershipSnapshot {
   lastEditorialValue: string | null;
 }
 
+/** Phase 6J-5 — absence flagging is refused when it would flag more than this share of a catalogue of at least this size in one pass. */
+const ABSENCE_GUARD_MIN_CATALOGUE = 10;
+const ABSENCE_GUARD_MAX_FRACTION = 0.5;
+
 export interface EntityIdentityResult {
   id: string;
   isNew: boolean;
@@ -239,13 +243,31 @@ export async function runYouTubeSync(
   // (a failed playlist page means a video that lives only in that playlist was never looked for, so its
   // absence proves nothing). Never delete, never escalate (ADR §15).
   if (result.completeness === "FULL") {
-    result.videoAbsenceEvaluated = true;
     const existingVideos = await repo.listVideoIdentities();
     const observedVideoInternalIds = new Set(videoInternalIdByYoutubeId.values());
-    for (const existing of existingVideos) {
-      if (observedVideoInternalIds.has(existing.id)) continue;
-      const update = computeObservabilityUpdate(existing.observabilityState, false);
-      if (update.changed) {
+    const toFlag = existingVideos.filter((existing) => !observedVideoInternalIds.has(existing.id) && computeObservabilityUpdate(existing.observabilityState, false).changed);
+    const previouslyObserved = existingVideos.filter((existing) => existing.observabilityState === "OBSERVED").length;
+
+    // Phase 6J-5 — implausibility guard. Every list was read "completely", but a successful-yet-empty or
+    // truncated response would otherwise flag the whole catalogue. Observing NOTHING while videos are known,
+    // or losing more than half of a sizeable catalogue in one pass, is treated as a bad pass: nothing is
+    // flagged, the run is PARTIAL, and the operator investigates (a re-run is safe; videos that really
+    // vanished are flagged on the next clean pass).
+    const implausible =
+      toFlag.length > 0 &&
+      (observedVideoInternalIds.size === 0 ||
+        (previouslyObserved >= ABSENCE_GUARD_MIN_CATALOGUE && toFlag.length / previouslyObserved > ABSENCE_GUARD_MAX_FRACTION));
+    if (implausible) {
+      result.videoAbsenceEvaluated = false;
+      result.completeness = "PARTIAL";
+      result.errors.push({
+        phase: "absenceFlagging",
+        message: `Refused to flag ${toFlag.length} of ${previouslyObserved} previously observed videos as not observed: that is implausible for one pass and looks like an incomplete YouTube response. Nothing was flagged. Investigate, then re-run.`,
+      });
+    } else {
+      result.videoAbsenceEvaluated = true;
+      for (const existing of toFlag) {
+        const update = computeObservabilityUpdate(existing.observabilityState, false);
         await repo.setVideoObservability(existing.id, update.nextState, "Not observed in the current full YouTube Data API synchronization pass.");
         result.videos.flagged++;
       }
@@ -348,6 +370,13 @@ async function syncVideo(
 ): Promise<string> {
   const identity = await repo.ensureVideoIdentity(video.videoId);
   const resourceId = identity.id;
+
+  // Phase 6J-5 — a video that this pass observed is OBSERVED. Without this, a video wrongly or temporarily
+  // flagged NOT_OBSERVED could never come back: the public gate and Recording intake both require OBSERVED.
+  const observability = computeObservabilityUpdate(identity.observabilityState, true);
+  if (observability.changed) {
+    await repo.setVideoObservability(resourceId, observability.nextState, "Observed again in this full YouTube Data API synchronization pass.");
+  }
   const thumbnailUrl = selectBestThumbnail(video.thumbnails);
 
   const title = await reconcileField(repo, "YOUTUBE_VIDEO", resourceId, "title", video.title, now);
@@ -395,6 +424,12 @@ async function syncPlaylist(
 ): Promise<string> {
   const identity = await repo.ensurePlaylistIdentity(playlist.playlistId);
   const resourceId = identity.id;
+
+  // Phase 6J-5 — as for videos: an observed playlist is OBSERVED again.
+  const observability = computeObservabilityUpdate(identity.observabilityState, true);
+  if (observability.changed) {
+    await repo.setPlaylistObservability(resourceId, observability.nextState, "Observed again in this full YouTube Data API synchronization pass.");
+  }
   const thumbnailUrl = selectBestThumbnail(playlist.thumbnails);
 
   const title = await reconcileField(repo, "YOUTUBE_PLAYLIST", resourceId, "title", playlist.title, now);

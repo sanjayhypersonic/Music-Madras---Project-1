@@ -70,6 +70,23 @@ describe("assessRunnerEnvironment", () => {
     expect(preflight.problems.join(" ")).toMatch(/pooled/i);
   });
 
+  it("(Phase 6J-5) refuses a DIRECT_URL that names a different database than DATABASE_URL — the lock would protect nothing", () => {
+    for (const direct of [
+      `postgresql://user:${PASSWORD}@ep-abc.eu-west-2.aws.neon.tech/another_db?sslmode=require`,
+      `postgresql://user:${PASSWORD}@ep-other.eu-west-2.aws.neon.tech/neondb?sslmode=require`,
+      "not a connection string",
+    ]) {
+      const preflight = assessRunnerEnvironment({ ...GOOD_ENV, DIRECT_URL: direct });
+      expect(preflight.ok).toBe(false);
+      expect(preflight.problems.join(" ")).toMatch(/same database/);
+    }
+  });
+
+  it("accepts the pooled/direct pair of ONE Neon database (a -pooler suffix and port are ignored)", () => {
+    expect(assessRunnerEnvironment(GOOD_ENV).problems).toEqual([]);
+    expect(assessRunnerEnvironment({ ...GOOD_ENV, DIRECT_URL: GOOD_ENV.DIRECT_URL.replace("/neondb", ":5432/neondb") }).ok).toBe(true);
+  });
+
   it("its printable report contains host names and flags only — no key, no password, no connection string", () => {
     const text = JSON.stringify(assessRunnerEnvironment(GOOD_ENV).report);
     expect(text).not.toContain(SECRET_KEY);

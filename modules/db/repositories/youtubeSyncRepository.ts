@@ -171,7 +171,8 @@ export function buildYouTubeSyncRepository(syncJobRunId: string | null): YouTube
         scopeKey,
         pageToken: input.pageToken,
         completeness: input.completeness,
-        lastFullCompletionAt: input.lastFullCompletionAt ?? null,
+        // Phase 6J-5: a PARTIAL write carries no completion time and must not erase the time of the last FULL one.
+        ...(input.lastFullCompletionAt ? { lastFullCompletionAt: input.lastFullCompletionAt } : {}),
         syncJobRunId: syncJobRunId ?? undefined,
       });
     },

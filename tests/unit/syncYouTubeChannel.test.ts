@@ -741,6 +741,72 @@ describe("runYouTubeSync hardening", () => {
     expect(repo.videos.get(repo.videosByYoutubeId.get("v2")!)!.observabilityState).toBe("NOT_OBSERVED");
   });
 
+  it("(Phase 6J-5) a video flagged NOT_OBSERVED comes back to OBSERVED when a later pass sees it again, with a recorded transition", async () => {
+    const repo = new FakeYouTubeSyncRepository();
+    await runYouTubeSync(build({}), repo, { channelId: CHANNEL_ID, now: NOW });
+    await runYouTubeSync(build({ resolvable: ["v1"] }), repo, { channelId: CHANNEL_ID, now: NOW });
+    const v2Id = repo.videosByYoutubeId.get("v2")!;
+    expect(repo.videos.get(v2Id)!.observabilityState).toBe("NOT_OBSERVED");
+
+    const third = await runYouTubeSync(build({}), repo, { channelId: CHANNEL_ID, now: NOW });
+    expect(third.completeness).toBe("FULL");
+    expect(repo.videos.get(v2Id)!.observabilityState).toBe("OBSERVED");
+    expect(repo.observabilityTransitions.filter((t) => t.resourceId === v2Id).map((t) => t.toState)).toEqual(["NOT_OBSERVED", "OBSERVED"]);
+    expect(third.videos.flagged).toBe(0);
+  });
+
+  it("(Phase 6J-5) an observed playlist that had been flagged NOT_OBSERVED is restored to OBSERVED", async () => {
+    const repo = new FakeYouTubeSyncRepository();
+    await runYouTubeSync(build({}), repo, { channelId: CHANNEL_ID, now: NOW });
+    const pl = [...repo.playlists.values()].find((p) => p.youtubePlaylistId === "PL1")!;
+    pl.observabilityState = "NOT_OBSERVED";
+    await runYouTubeSync(build({}), repo, { channelId: CHANNEL_ID, now: NOW });
+    expect(repo.playlists.get(pl.id)!.observabilityState).toBe("OBSERVED");
+  });
+
+  describe("absence-flagging implausibility guard (Phase 6J-5)", () => {
+    const ids = (n: number) => ["v1", "v2", ...Array.from({ length: n - 2 }, (_, i) => `x${i + 3}`)];
+    // v2 lives only in playlist PL1, so it is never part of uploads; every other id is an upload
+    const buildCatalogue = (seen: string[]) => build({ uploadsIds: seen.filter((id) => id !== "v2"), resolvable: seen });
+
+    it("refuses to flag most of a sizeable catalogue in one pass: nothing is flagged and the run is PARTIAL with an explicit error", async () => {
+      const repo = new FakeYouTubeSyncRepository();
+      const all = ids(12);
+      const first = await runYouTubeSync(build({ uploadsIds: all.filter((id) => id !== "v2"), resolvable: all }), repo, { channelId: CHANNEL_ID, now: NOW });
+      expect(first.completeness).toBe("FULL");
+
+      // the next pass resolves only v1 and v2 (v2 lives in PL1): 10 of 12 known videos "vanished"
+      const second = await runYouTubeSync(buildCatalogue(["v1", "v2"]), repo, { channelId: CHANNEL_ID, now: NOW });
+      expect(second.videos.flagged).toBe(0);
+      expect(second.videoAbsenceEvaluated).toBe(false);
+      expect(second.completeness).toBe("PARTIAL");
+      expect(second.errors.map((e) => e.phase)).toContain("absenceFlagging");
+      expect(second.errors.find((e) => e.phase === "absenceFlagging")!.message).toMatch(/Refused to flag 10 of 12/);
+      expect([...repo.videos.values()].every((v) => v.observabilityState === "OBSERVED")).toBe(true);
+    });
+
+    it("refuses when the pass observed no video at all although videos are known (an empty 200 response)", async () => {
+      const repo = new FakeYouTubeSyncRepository();
+      await runYouTubeSync(build({}), repo, { channelId: CHANNEL_ID, now: NOW });
+      const empty = await runYouTubeSync(build({ uploadsIds: [], resolvable: [] }), repo, { channelId: CHANNEL_ID, now: NOW });
+      expect(empty.videos.flagged).toBe(0);
+      expect(empty.completeness).toBe("PARTIAL");
+      expect(empty.errors.map((e) => e.phase)).toContain("absenceFlagging");
+      expect([...repo.videos.values()].every((v) => v.observabilityState === "OBSERVED")).toBe(true);
+    });
+
+    it("still flags a plausible number of genuinely absent videos in a sizeable catalogue (3 of 12)", async () => {
+      const repo = new FakeYouTubeSyncRepository();
+      const all = ids(12);
+      await runYouTubeSync(build({ uploadsIds: all.filter((id) => id !== "v2"), resolvable: all }), repo, { channelId: CHANNEL_ID, now: NOW });
+      const remaining = all.filter((id) => !["x3", "x4", "x5"].includes(id));
+      const second = await runYouTubeSync(build({ uploadsIds: remaining.filter((id) => id !== "v2"), resolvable: remaining }), repo, { channelId: CHANNEL_ID, now: NOW });
+      expect(second.videoAbsenceEvaluated).toBe(true);
+      expect(second.videos.flagged).toBe(3);
+      expect(second.errors).toEqual([]);
+    });
+  });
+
   it("a run that failed to process any record is PARTIAL even though every list was read completely", async () => {
     // v2 is referenced by PL1 but videos.list does not return it.
     const result = await runYouTubeSync(build({ resolvable: ["v1"] }), new FakeYouTubeSyncRepository(), { channelId: CHANNEL_ID, now: NOW });

@@ -45,6 +45,19 @@ export interface RunnerPreflight {
   };
 }
 
+/** Same database = same host (a Neon "-pooler" suffix ignored, port ignored) and same database name. Unparseable strings never match. */
+function pointAtSameDatabase(a: string, b: string): boolean {
+  try {
+    const normalise = (connectionString: string) => {
+      const url = new URL(connectionString);
+      return `${url.hostname.replace("-pooler", "").toLowerCase()}${url.pathname}`;
+    };
+    return normalise(a) === normalise(b);
+  } catch {
+    return false;
+  }
+}
+
 export function assessRunnerEnvironment(env: RunnerEnvironment): RunnerPreflight {
   const problems: string[] = [];
   if (!env.YOUTUBE_API_KEY) problems.push("YOUTUBE_API_KEY is not set.");
@@ -52,6 +65,11 @@ export function assessRunnerEnvironment(env: RunnerEnvironment): RunnerPreflight
   if (!env.DATABASE_URL) problems.push("DATABASE_URL is not set.");
   if (!env.DIRECT_URL) problems.push("DIRECT_URL is not set (the run lock needs a direct, non-pooled connection).");
   else if (isPooledConnectionString(env.DIRECT_URL)) problems.push("DIRECT_URL points at a pooled endpoint; the run lock needs a direct connection.");
+  // Phase 6J-5: the lock is taken on DIRECT_URL but the data is written through DATABASE_URL. If they named different
+  // databases the lock would protect nothing, so the run is refused rather than trusted.
+  if (env.DATABASE_URL && env.DIRECT_URL && !pointAtSameDatabase(env.DATABASE_URL, env.DIRECT_URL)) {
+    problems.push("DATABASE_URL and DIRECT_URL do not point at the same database; the run lock would not protect the data being written.");
+  }
 
   return {
     ok: problems.length === 0,

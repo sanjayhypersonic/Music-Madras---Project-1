@@ -215,4 +215,15 @@ describe("Phase 6F YouTube sync repository against a real database (real reposit
     const count = await prisma.syncCheckpoint.count({ where: { scopeKey: TEST_CHECKPOINT_SCOPE_KEY } });
     expect(count).toBe(1);
   });
+
+  it("a PARTIAL checkpoint write keeps the time of the last FULL completion (Phase 6J-5)", async () => {
+    const repo = buildYouTubeSyncRepository(null);
+    const fullAt = new Date("2026-01-02T03:04:05.000Z");
+    await repo.upsertCheckpoint(TEST_CHECKPOINT_SCOPE_KEY, "YOUTUBE_PLAYLIST_ITEM", { pageToken: null, completeness: "FULL", lastFullCompletionAt: fullAt });
+    await repo.upsertCheckpoint(TEST_CHECKPOINT_SCOPE_KEY, "YOUTUBE_PLAYLIST_ITEM", { pageToken: null, completeness: "PARTIAL" });
+
+    const row = await prisma.syncCheckpoint.findFirstOrThrow({ where: { scopeKey: TEST_CHECKPOINT_SCOPE_KEY } });
+    expect(row.completeness).toBe("PARTIAL"); // the latest pass was incomplete, but when the last complete one happened is not forgotten
+    expect(row.lastFullCompletionAt?.toISOString()).toBe(fullAt.toISOString());
+  });
 });
