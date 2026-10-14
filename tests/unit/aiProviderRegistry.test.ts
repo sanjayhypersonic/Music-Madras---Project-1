@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createAIProvider,
+  FakeAIProviderForbiddenError,
   getConfiguredAIProvider,
   isSupportedAIProviderName,
   resetConfiguredAIProviderForTests,
@@ -24,6 +25,50 @@ describe("createAIProvider", () => {
 
   it("throws UnsupportedAIProviderError for an unknown provider name", () => {
     expect(() => createAIProvider("openai")).toThrow(UnsupportedAIProviderError);
+  });
+});
+
+// Phase 6J-9A — the canned-output provider can never be built by a production process.
+describe("createAIProvider — the fake provider in production", () => {
+  it("refuses \"fake\" when NODE_ENV is production, with a message that names no environment value", () => {
+    const previousKey = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "sk-ant-never-print-this-value";
+    try {
+      expect(() => createAIProvider("fake", { NODE_ENV: "production" })).toThrow(FakeAIProviderForbiddenError);
+      let message = "";
+      try {
+        createAIProvider("fake", { NODE_ENV: "production" });
+      } catch (err) {
+        message = err instanceof Error ? err.message : "";
+      }
+      expect(message).toMatch(/not allowed in production/);
+      expect(message).not.toContain("sk-ant-never-print-this-value");
+    } finally {
+      if (previousKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  });
+
+  it("still builds the fake provider outside production (tests and local development)", () => {
+    expect(createAIProvider("fake", { NODE_ENV: "test" })).toBeInstanceOf(FakeAIProvider);
+    expect(createAIProvider("fake", { NODE_ENV: "development" })).toBeInstanceOf(FakeAIProvider);
+    expect(createAIProvider("fake", {})).toBeInstanceOf(FakeAIProvider);
+  });
+
+  it("AI-disabled operation stays valid in production: anthropic with no key builds and reports itself unconfigured instead of throwing", () => {
+    const previousKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const provider = createAIProvider("anthropic", { NODE_ENV: "production" });
+      expect(provider).toBeInstanceOf(AnthropicProvider);
+      expect(provider.validateConfiguration().configured).toBe(false);
+    } finally {
+      if (previousKey !== undefined) process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  });
+
+  it("an unsupported provider is still reported as unsupported in production", () => {
+    expect(() => createAIProvider("openai", { NODE_ENV: "production" })).toThrow(UnsupportedAIProviderError);
   });
 });
 

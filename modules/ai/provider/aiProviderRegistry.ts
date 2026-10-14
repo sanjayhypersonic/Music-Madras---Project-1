@@ -23,9 +23,22 @@ export class UnsupportedAIProviderError extends Error {
   }
 }
 
-export function createAIProvider(name: string): AIProvider {
+/** Phase 6J-9A: the deterministic fake provider is for tests and local development only. */
+export class FakeAIProviderForbiddenError extends Error {
+  constructor() {
+    super('The "fake" AI provider is not allowed in production. Unset AI_PROVIDER to leave AI disabled, or use "anthropic".');
+    this.name = "FakeAIProviderForbiddenError";
+  }
+}
+
+export function createAIProvider(name: string, env: { NODE_ENV?: string } = process.env): AIProvider {
   if (!isSupportedAIProviderName(name)) {
     throw new UnsupportedAIProviderError(name);
+  }
+  // Defence in depth with the start-up check (modules/config/productionConfig.ts): a production process
+  // can never build the canned-output provider, whatever reached it. The message names no environment value.
+  if (name === "fake" && env.NODE_ENV === "production") {
+    throw new FakeAIProviderForbiddenError();
   }
   switch (name) {
     case "anthropic":
