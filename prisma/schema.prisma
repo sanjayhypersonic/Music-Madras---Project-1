@@ -754,6 +754,13 @@ model RecordingRevision {
   works          RecordingRevisionWork[]
   mediaResources MediaResource[]
 
+  // Phase 6J-11B — revision-scoped relationships (the foundation only: nothing reads or writes these yet except
+  // recordingRevisionRelationshipsRepository's attach/detach functions and the fork copy; public readers and Studio still use the legacy
+  // Recording-level EntitySource/EntityRights/EntityOccasion rows).
+  sourceLinks   RecordingRevisionSource[]
+  rightsLinks   RecordingRevisionRights[]
+  occasionLinks RecordingRevisionOccasion[]
+
   @@unique([recordingId, revisionNumber])
   @@index([performanceId])
   @@map("recording_revisions")
@@ -770,6 +777,60 @@ model RecordingRevisionWork {
 
   @@id([revisionId, musicalWorkId])
   @@map("recording_revision_works")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6J-11B — revision-scoped Recording relationships (foundation).
+//
+// A RecordingRevision's own sources, rights information and occasions: child rows of the revision, like
+// RecordingRevisionWork. They are copied to the new draft when a published revision is forked and are edited only on
+// an editable draft, so a draft's changes cannot reach a published revision. The Source, RightsInformation and
+// Occasion rows themselves stay shared catalogue identities (never copied).
+//
+// Integrity: composite primary keys prevent duplicate links; the revision FK cascades (a revision's links go with it);
+// the catalogue FKs are RESTRICT (a Source/RightsInformation/Occasion that a revision uses cannot be deleted from under
+// it — the application has no delete path for them anyway). The legacy Recording-level rows (EntitySource/
+// EntityRights/EntityOccasion with entityType "RECORDING") are untouched and remain what public pages read until the
+// separately approved cutover.
+// ---------------------------------------------------------------------------
+
+model RecordingRevisionSource {
+  revisionId String
+  sourceId   String
+  createdAt  DateTime @default(now())
+
+  revision RecordingRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  source   Source            @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([revisionId, sourceId])
+  @@index([sourceId])
+  @@map("recording_revision_sources")
+}
+
+model RecordingRevisionRights {
+  revisionId          String
+  rightsInformationId String
+  createdAt           DateTime @default(now())
+
+  revision          RecordingRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  rightsInformation RightsInformation @relation(fields: [rightsInformationId], references: [id], onDelete: Restrict)
+
+  @@id([revisionId, rightsInformationId])
+  @@index([rightsInformationId])
+  @@map("recording_revision_rights")
+}
+
+model RecordingRevisionOccasion {
+  revisionId String
+  occasionId String
+  createdAt  DateTime @default(now())
+
+  revision RecordingRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  occasion Occasion          @relation(fields: [occasionId], references: [id], onDelete: Restrict)
+
+  @@id([revisionId, occasionId])
+  @@index([occasionId])
+  @@map("recording_revision_occasions")
 }
 
 // ---------------------------------------------------------------------------
@@ -855,6 +916,8 @@ model Occasion {
   updatedBy StudioUser @relation("OccasionUpdatedBy", fields: [updatedById], references: [id])
 
   entityLinks EntityOccasion[]
+  // Phase 6J-11B: the revisions that carry this occasion (revision-scoped links).
+  revisionLinks RecordingRevisionOccasion[]
 
   @@index([archivedAt])
   @@map("occasions")
@@ -1528,6 +1591,8 @@ model Source {
 
   citations   Citation[]
   entityLinks EntitySource[]
+  // Phase 6J-11B
+  revisionLinks RecordingRevisionSource[]
 
   @@map("sources")
 }
@@ -1553,6 +1618,8 @@ model RightsInformation {
   // Direct link for the common case (a specific media asset's rights —
   // ADR §17's "attaching a MediaResource... with its own RightsInformation").
   mediaResources MediaResource[]
+  // Phase 6J-11B: the revisions that carry this rights record (revision-scoped links).
+  revisionLinks  RecordingRevisionRights[]
   // Generic link for entity-level rights (e.g. a MusicalWork's copyright
   // status, independent of any one recording of it) — Phase 2, mirrors
   // EntitySource's pattern.

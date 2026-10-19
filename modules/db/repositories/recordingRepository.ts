@@ -719,6 +719,23 @@ export async function forkDraftFromPublished(
       });
     }
 
+    // Phase 6J-11B: carry the published revision's revision-scoped relationships forward too (sources, rights information,
+    // occasions): the draft starts identical to what is published and diverges only by its own edits. Only the LINKS are
+    // copied; the Source / RightsInformation / Occasion rows stay shared. Same transaction as the rest of the fork, so a
+    // failure leaves no draft and no partial copy. (Nothing reads these yet — see recordingRevisionRelationshipsRepository.)
+    const publishedSourceLinks = await tx.recordingRevisionSource.findMany({ where: { revisionId: published.id } });
+    if (publishedSourceLinks.length > 0) {
+      await tx.recordingRevisionSource.createMany({ data: publishedSourceLinks.map((link) => ({ revisionId: draft.id, sourceId: link.sourceId })) });
+    }
+    const publishedRightsLinks = await tx.recordingRevisionRights.findMany({ where: { revisionId: published.id } });
+    if (publishedRightsLinks.length > 0) {
+      await tx.recordingRevisionRights.createMany({ data: publishedRightsLinks.map((link) => ({ revisionId: draft.id, rightsInformationId: link.rightsInformationId })) });
+    }
+    const publishedOccasionLinks = await tx.recordingRevisionOccasion.findMany({ where: { revisionId: published.id } });
+    if (publishedOccasionLinks.length > 0) {
+      await tx.recordingRevisionOccasion.createMany({ data: publishedOccasionLinks.map((link) => ({ revisionId: draft.id, occasionId: link.occasionId })) });
+    }
+
     const pointed = await tx.recording.updateMany({
       where: { id: recordingId, currentDraftRevisionId: null, status: recording.status },
       data: {
@@ -744,6 +761,9 @@ export async function forkDraftFromPublished(
           newDraftRevisionId: draft.id,
           copiedWorkCount: publishedWorks.length,
           copiedMediaCount: publishedMedia.length,
+          copiedSourceCount: publishedSourceLinks.length,
+          copiedRightsCount: publishedRightsLinks.length,
+          copiedOccasionCount: publishedOccasionLinks.length,
         },
       },
       tx

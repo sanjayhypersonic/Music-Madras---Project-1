@@ -276,11 +276,64 @@ migration **before** deploying the code that uses the column; rolling the code b
 applied and tested only against the isolated test database. Existing published recordings, drafts and recordings with
 no draft read and publish exactly as before (covered by tests).
 
+## 10. Revision-scoped relationships: the foundation (Phase 6J-11B) — NOT yet in use
+
+**Status: inert.** This phase adds the storage and the write functions only. **Public readers, the Studio Relationships
+step, Content Intelligence and every existing writer still use the legacy Recording-level rows** (`entity_sources`,
+`entity_rights`, `entity_occasions` with `entityType = "RECORDING"`), which are untouched. Nothing is backfilled, nothing is
+dual-written, and no public behavior changes. The leak described in the Limitations section (Recording-level source,
+rights and occasion links change live pages at once) is therefore **still present** until the separately approved
+cutover. The design and cutover plan are in the Phase 6J-11A audit.
+
+**Decisions this foundation implements.** A Recording's sources, rights information and occasions become revision-scoped.
+Source, RightsInformation and Occasion stay shared catalogue identities (links are stored, rows are never copied).
+Collection membership stays collection-owned, and Learning Guide membership, Sheet Music Requests and `MediaResource`
+rights links are not versioned.
+
+**Tables** (migration `20261020120000_phase6j11b_recording_revision_relationships`, additive: three `CREATE TABLE`s with
+indexes and foreign keys; no existing table is altered or dropped):
+
+| Table | Key | Foreign keys |
+|---|---|---|
+| `recording_revision_sources` | `(revisionId, sourceId)` | revision `CASCADE`, source `RESTRICT` |
+| `recording_revision_rights` | `(revisionId, rightsInformationId)` | revision `CASCADE`, rights `RESTRICT` |
+| `recording_revision_occasions` | `(revisionId, occasionId)` | revision `CASCADE`, occasion `RESTRICT` |
+
+Each also has `createdAt` and an index on the catalogue id. The composite key makes a duplicate link impossible at the
+database level; the foreign keys make orphans impossible; a revision's links are deleted with it; a catalogue record a
+revision uses cannot be deleted from under it (the app has no delete path for these anyway). Existing
+`recording_revisions` need no change: a revision simply has no rows until it is forked from, or edited after, this code.
+
+**Functions** (`modules/db/repositories/recordingRevisionRelationshipsRepository.ts`): `attach…`/`detach…` for
+`Source`, `Rights` and `Occasion`, and `list…ForRevision`. Every write runs through `withEditableDraftRevision`: the
+Recording's edit lock, then a check — in the same transaction — that the revision is a `DRAFT`, is the Recording's
+current draft, and the Recording is not archived (`RevisionNotEditableError` otherwise; published and superseded
+revisions can never be changed). The link and its audit entry (`SOURCE_/RIGHTS_/OCCASION_ATTACHED_TO_` /
+`…_DETACHED_FROM_RECORDING_REVISION`, entity type `RecordingRevision`) commit or roll back together. Typed errors:
+`DuplicateRevisionRelationshipError`, `RevisionRelationshipNotFoundError`; a missing Source/Rights/Occasion, or an
+archived Occasion (same convention as the legacy attach), is refused with nothing written. Waits are bounded by the same
+5 s `lock_timeout` (`RecordingBusyError`).
+
+**Fork.** `forkDraftFromPublished` now also copies the published revision's three link sets onto the new draft in the
+same transaction (a failure leaves no draft and no partial copy); the fork audit records `copiedSourceCount`,
+`copiedRightsCount` and `copiedOccasionCount`. After the fork the two revisions' sets are independent.
+
+**Authorization is not decided here and was not changed.** The repository functions perform no permission check. Today the
+Relationships step is gated by `CATALOGUE_WRITE`. `CATALOGUE_WRITE` and `RECORDING_WRITE` are **not interchangeable**:
+`CONTRIBUTOR` holds `RECORDING_WRITE` only, while `EDITOR`, `REVIEWER`, `ADMINISTRATOR`, `SUPER_ADMINISTRATOR` and
+`FOUNDER` hold both. Moving the step to `RECORDING_WRITE` therefore **widens** access to contributors; that is a
+decision for the cutover phase, not something this foundation does.
+
+**Rollout and compatibility.** Apply the migration before deploying this code; rolling the code back leaves the tables
+harmless (empty, or populated only by drafts forked/edited in the meantime). Existing recordings, public pages and AI
+context are unchanged (covered by tests). Still to do, in later phases: the backfill (dry-run first), switching Studio
+writers and the three readers, the Collection guard, and the rollback re-projection script.
+
 ## Limitations
 
 These are not fixed by this work. Published-page immutability is **not** complete.
 
-- **Recording-level links are not revision-versioned (next slice).** Sources, rights information, occasions and
+- **Recording-level links are not revision-versioned (storage foundation exists since 6J-11B, not yet in use).** Sources, rights information, occasions and
   collection membership attached to a Recording (`entityType: "RECORDING"`, Studio > Relationships step) are keyed to
   the Recording, shown on public pages (for example the Organisation page aggregates APPROVED sources and rights of its
   Recordings) and take effect **immediately**, whatever the draft state. Making them draft-scoped needs revision-scoped
