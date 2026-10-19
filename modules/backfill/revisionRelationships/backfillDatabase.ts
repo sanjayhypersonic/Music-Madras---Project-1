@@ -90,8 +90,8 @@ export async function loadBackfillInput(db: Queryable): Promise<BackfillInput> {
     ).rows;
     existing[kind] = (await db.query<RevisionLinkRow>(`select "revisionId", "${t.revisionTargetColumn}" as "targetId" from ${t.revisionTable}`)).rows;
     const detachRows = (
-      await db.query<{ revisionId: string; recordingId: string | null; revisionNumber: number | null; beforeSnapshot: Record<string, unknown> | null }>(
-        `select a."entityId" as "revisionId", r."recordingId" as "recordingId", r."revisionNumber" as "revisionNumber", a."beforeSnapshot" as "beforeSnapshot"
+      await db.query<{ revisionId: string; recordingId: string | null; revisionNumber: number | null; revisionStatus: string | null; beforeSnapshot: Record<string, unknown> | null }>(
+        `select a."entityId" as "revisionId", r."recordingId" as "recordingId", r."revisionNumber" as "revisionNumber", r."revisionStatus"::text as "revisionStatus", a."beforeSnapshot" as "beforeSnapshot"
            from audit_log_entries a left join recording_revisions r on r.id = a."entityId"
           where a."entityType" = 'RecordingRevision' and a.action = $1`,
         [t.detachAction]
@@ -99,7 +99,7 @@ export async function loadBackfillInput(db: Queryable): Promise<BackfillInput> {
     ).rows;
     detached[kind] = detachRows.flatMap((row) => {
       const targetId = row.beforeSnapshot?.[t.detachSnapshotKey];
-      return typeof targetId === "string" ? [{ revisionId: row.revisionId, targetId, recordingId: row.recordingId, revisionNumber: row.revisionNumber }] : [];
+      return typeof targetId === "string" ? [{ revisionId: row.revisionId, targetId, recordingId: row.recordingId, revisionNumber: row.revisionNumber, revisionStatus: row.revisionStatus }] : [];
     });
   }
 
@@ -153,7 +153,7 @@ export async function runRevisionRelationshipBackfill(db: Queryable, options: { 
     const blocking = plan.report.anomalies.filter((a) => EXECUTE_BLOCKING_ANOMALIES.includes(a.code));
     if (blocking.length > 0) {
       throw new Error(
-        `Refusing to execute: ${blocking.map((a) => `${a.code} x${a.count}`).join(", ")}. An editor detached a link from an older revision and the same link is planned for a newer one; ` +
+        `Refusing to execute: ${blocking.map((a) => `${a.code} x${a.count}`).join(", ")}. An editor detached a link from an older PUBLISHED revision and the same link is planned for a newer one; ` +
           "the script cannot tell whether the detach should carry forward. Review the dry-run report and have a person decide (docs/recording-publication-safety.md, section 12); nothing was written."
       );
     }

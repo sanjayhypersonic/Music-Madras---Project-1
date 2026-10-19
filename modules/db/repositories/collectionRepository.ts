@@ -4,7 +4,7 @@ import { computeNextOrder, reorderProgrammeItems } from "../../mmke/programme/re
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
 import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
 import type { CollectionIndexPage } from "../../mmke/collectionPage/collectionPageContract";
-import type { Collection } from "@prisma/client";
+import type { Collection, Prisma } from "@prisma/client";
 
 // Collections (brief §8): database-driven curated groupings. No hardcoded
 // collections exist anywhere in application code — every Collection row
@@ -56,48 +56,110 @@ export async function createCollection(input: CreateCollectionInput): Promise<Co
   return collection;
 }
 
+// Phase 6J-12A — protecting LIVE Collection membership.
+//
+// A membership change is LIVE when the Collection is PUBLISHED and the Recording is PUBLISHED: visitors see it at once. (Status
+// only — an archived-but-PUBLISHED Collection still counts, because restoring it would publish the change instantly.) Such a change
+// needs RECORDING_PUBLISH, the same rule as publishing a Collection or a Recording (Phase 6J-1); every other combination keeps
+// CATALOGUE_WRITE alone, so ordinary draft-only editorial work is untouched.
+//
+// The Server Actions decide `canPublish` from the session role and pass it as `guard`; the repository then makes the decision and the
+// write in ONE transaction while holding share locks on both rows, so a publish cannot slip in between the check and the write.
+// A caller that passes no guard (tests, scripts) gets the unguarded behaviour — no Studio entry point may do that: the static test
+// tests/integration/relationshipEditingPermissions.test.ts fails if any code under app/ calls these functions without it.
+// REORDER: moving a Recording changes the visitors' order of the published Recordings only when the MOVED Recording is itself published
+// (every other Recording keeps its relative order), so a reorder is live exactly when the Collection and the MOVED Recording are published.
+
+export interface CollectionMembershipGuard {
+  /** can(role, "RECORDING_PUBLISH") for the acting user, decided by the caller from the session. */
+  canPublish: boolean;
+}
+
+export class CollectionMembershipPublishRequiredError extends Error {
+  constructor() {
+    super("Changing a published collection that contains a published recording needs permission to publish.");
+    this.name = "CollectionMembershipPublishRequiredError";
+  }
+}
+
+async function assertMembershipChangeAllowed(tx: Prisma.TransactionClient, collectionId: string, recordingId: string, guard: CollectionMembershipGuard): Promise<void> {
+  // Share-lock both rows: a concurrent publish/unpublish of either waits until this transaction ends.
+  const rows = await tx.$queryRaw<{ collectionStatus: string; recordingStatus: string }[]>`
+    select c.status::text as "collectionStatus", r.status::text as "recordingStatus"
+      from collections c, recordings r
+     where c.id = ${collectionId} and r.id = ${recordingId}
+       for share of c, r`;
+  const row = rows[0];
+  if (!row) return; // no such Collection or Recording: the write below fails on its own, nothing is exposed
+  if (row.collectionStatus === "PUBLISHED" && row.recordingStatus === "PUBLISHED" && !guard.canPublish) {
+    throw new CollectionMembershipPublishRequiredError();
+  }
+}
+
+type MembershipClient = Prisma.TransactionClient | typeof prisma;
+
+async function inGuardedTransaction<T>(guard: CollectionMembershipGuard | undefined, collectionId: string, recordingId: string, body: (db: MembershipClient) => Promise<T>): Promise<T> {
+  if (!guard) return body(prisma);
+  return prisma.$transaction(async (tx) => {
+    await assertMembershipChangeAllowed(tx, collectionId, recordingId, guard);
+    return body(tx);
+  });
+}
+
 export async function addRecordingToCollection(
   collectionId: string,
   recordingId: string,
-  actorId: string
+  actorId: string,
+  guard?: CollectionMembershipGuard
 ) {
-  const existingItems = await prisma.collectionRecording.findMany({
-    where: { collectionId },
-    select: { order: true },
-  });
+  return inGuardedTransaction(guard, collectionId, recordingId, async (db) => {
+    const existingItems = await db.collectionRecording.findMany({
+      where: { collectionId },
+      select: { order: true },
+    });
 
-  const link = await prisma.collectionRecording.upsert({
-    where: { collectionId_recordingId: { collectionId, recordingId } },
-    create: { collectionId, recordingId, order: computeNextOrder(existingItems.map((i, index) => ({ id: String(index), order: i.order }))) },
-    update: {},
-  });
+    const link = await db.collectionRecording.upsert({
+      where: { collectionId_recordingId: { collectionId, recordingId } },
+      create: { collectionId, recordingId, order: computeNextOrder(existingItems.map((i, index) => ({ id: String(index), order: i.order }))) },
+      update: {},
+    });
 
-  await writeAuditLog({
-    actorId,
-    action: "RECORDING_ADDED_TO_COLLECTION",
-    entityType: "Collection",
-    entityId: collectionId,
-    afterSnapshot: { recordingId },
-  });
+    await writeAuditLog(
+      {
+        actorId,
+        action: "RECORDING_ADDED_TO_COLLECTION",
+        entityType: "Collection",
+        entityId: collectionId,
+        afterSnapshot: { recordingId },
+      },
+      db
+    );
 
-  return link;
+    return link;
+  });
 }
 
 export async function removeRecordingFromCollection(
   collectionId: string,
   recordingId: string,
-  actorId: string
+  actorId: string,
+  guard?: CollectionMembershipGuard
 ): Promise<void> {
-  await prisma.collectionRecording.delete({
-    where: { collectionId_recordingId: { collectionId, recordingId } },
-  });
+  await inGuardedTransaction(guard, collectionId, recordingId, async (db) => {
+    await db.collectionRecording.delete({
+      where: { collectionId_recordingId: { collectionId, recordingId } },
+    });
 
-  await writeAuditLog({
-    actorId,
-    action: "RECORDING_REMOVED_FROM_COLLECTION",
-    entityType: "Collection",
-    entityId: collectionId,
-    beforeSnapshot: { recordingId },
+    await writeAuditLog(
+      {
+        actorId,
+        action: "RECORDING_REMOVED_FROM_COLLECTION",
+        entityType: "Collection",
+        entityId: collectionId,
+        beforeSnapshot: { recordingId },
+      },
+      db
+    );
   });
 }
 
@@ -114,9 +176,11 @@ export async function reorderCollectionRecordings(
   collectionId: string,
   movedRecordingId: string,
   targetIndex: number,
-  actorId: string
+  actorId: string,
+  guard?: CollectionMembershipGuard
 ) {
   return prisma.$transaction(async (tx) => {
+    if (guard) await assertMembershipChangeAllowed(tx, collectionId, movedRecordingId, guard);
     const links = await tx.collectionRecording.findMany({ where: { collectionId }, orderBy: { order: "asc" } });
     const reordered = reorderProgrammeItems(
       links.map((link) => ({ id: link.recordingId, order: link.order })),

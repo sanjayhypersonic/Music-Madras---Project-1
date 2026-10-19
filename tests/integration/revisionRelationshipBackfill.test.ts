@@ -715,6 +715,93 @@ describe("Phase 6J-12: a detach on an older revision is not silently carried for
   }, T);
 });
 
+describe("Phase 6J-12A: a PUBLISHED detachment is canonical; an UNPUBLISHED draft detachment suppresses nothing elsewhere", () => {
+  // Rule: an explicitly detached relationship becomes part of the published revision's canonical set when that revision is published;
+  // later drafts fork from that set and must not get it back. A detach that stays in an unpublished draft is only that draft's state.
+  const published = {} as { recordingId: string; sourceId: string; rev1: string; rev2: string; rev3: string };
+  const unpublished = {} as { recordingId: string; sourceId: string; rev1: string; rev2: string };
+
+  async function planAnomalySamples() {
+    const db = await connect();
+    try {
+      const result = await runRevisionRelationshipBackfill(db, { execute: false });
+      return result.report.anomalies.find((a) => a.code === "DETACH_EVIDENCE_ON_OLDER_REVISION")?.samples ?? [];
+    } finally {
+      await db.end();
+    }
+  }
+
+  it("published detachment: the published set loses the link, every later fork lacks it, and the earlier published revision keeps it", async () => {
+    const sourceId = await newSource("sK", true);
+    const first = await draftRecording("RK");
+    await attachSourceToRevision(first.draft!, sourceId, userIds.editor);
+    await publishCurrentDraft(first.id, userIds.admin); // rev1: published WITH the link
+    const rev2 = (await forkDraftFromPublished(first.id, userIds.editor)).id;
+    expect(await sourcesOn(rev2)).toEqual([sourceId]); // the fork starts from the published set
+    await detachSourceFromRevision(rev2, sourceId, userIds.editor);
+    expect(await sourcesOn(first.draft!)).toEqual([sourceId]); // the published set is frozen while the draft is edited
+    await publishCurrentDraft(first.id, userIds.admin); // rev2: the detachment is now canonical
+    const rev3 = (await forkDraftFromPublished(first.id, userIds.editor)).id;
+    await legacy.source(first.id, sourceId); // the Recording-level (legacy) link is still there
+    Object.assign(published, { recordingId: first.id, sourceId, rev1: first.draft!, rev2, rev3 });
+
+    expect(await sourcesOn(published.rev1)).toEqual([sourceId]); // superseded, unchanged
+    expect(await sourcesOn(published.rev2)).toEqual([]); // canonical published set
+    expect(await sourcesOn(published.rev3)).toEqual([]); // a later draft does NOT resurrect it
+  }, T);
+
+  it("unpublished draft detachment: the published set keeps the link, the draft alone lacks it", async () => {
+    const sourceId = await newSource("sL", true);
+    const first = await draftRecording("RL");
+    await attachSourceToRevision(first.draft!, sourceId, userIds.editor);
+    await publishCurrentDraft(first.id, userIds.admin); // rev1 published WITH the link
+    const rev2 = (await forkDraftFromPublished(first.id, userIds.editor)).id;
+    await detachSourceFromRevision(rev2, sourceId, userIds.editor); // never published
+    await legacy.source(first.id, sourceId);
+    Object.assign(unpublished, { recordingId: first.id, sourceId, rev1: first.draft!, rev2 });
+
+    expect(await sourcesOn(unpublished.rev1)).toEqual([sourceId]); // the published page's set is untouched by the draft edit
+    expect(await sourcesOn(unpublished.rev2)).toEqual([]);
+  }, T);
+
+  it("backfill: the published detachment's older-revision evidence is flagged (blocking), the unpublished draft's is not", async () => {
+    const samples = await planAnomalySamples();
+    expect(samples).toContain(`source:${published.recordingId}:${published.sourceId}`);
+    expect(samples.some((s) => s.includes(unpublished.recordingId))).toBe(false);
+  }, T);
+
+  it("backfill: the unpublished draft's own state is respected (not re-added to that draft), and the published row is left as it is", async () => {
+    const db = await connect();
+    try {
+      const all = await loadBackfillInput(db);
+      const mineRevs = new Set([unpublished.rev1, unpublished.rev2]);
+      const plan = planRevisionRelationshipBackfill({
+        ...all,
+        recordings: all.recordings.filter((r) => r.id === unpublished.recordingId),
+        legacy: { source: all.legacy.source.filter((l) => l.recordingId === unpublished.recordingId), rights: [], occasion: [] },
+        existing: { source: all.existing.source.filter((l) => mineRevs.has(l.revisionId)), rights: [], occasion: [] },
+        detached: { source: all.detached.source.filter((l) => mineRevs.has(l.revisionId)), rights: [], occasion: [] },
+      });
+      expect(plan.inserts).toEqual([]);
+      expect(plan.report.kinds.source).toMatchObject({ plannedInserts: 0, alreadyPresent: 1, skippedEditorDetached: 1 });
+      expect(plan.report.anomalies).toEqual([]);
+    } finally {
+      await db.end();
+    }
+  }, T);
+
+  it("backfill: while the published detachment is unresolved, --execute refuses and the later fork is not given the link back", async () => {
+    const before = await tableCounts();
+    const run = runScript(["--execute"], GOOD_ENV);
+    expect(run.code, run.output).toBe(2);
+    expect(run.stderr).toMatch(/Refusing to execute: DETACH_EVIDENCE_ON_OLDER_REVISION/);
+    expect(await tableCounts()).toEqual(before);
+    expect(await sourcesOn(published.rev3)).toEqual([]);
+    expect(await sourcesOn(published.rev2)).toEqual([]);
+    expect(await sourcesOn(unpublished.rev2)).toEqual([]);
+  }, T);
+});
+
 describe("the backfill cannot reach the application's database configuration by construction", () => {
   const files = [
     "scripts/backfillRevisionRelationships.ts",

@@ -214,6 +214,22 @@ describe("detach evidence on an OLDER revision of the same Recording (Phase 6J-1
     expect(flagged([evidence("P1", 2)])).toBe(true); // control: the flagged shape
   });
 
+  it("Phase 6J-12A: only a PUBLISHED (or since superseded) older revision makes a detach canonical; a never-published draft''s detach is not", () => {
+    const planFor = (revisionStatus: string | null | undefined) =>
+      planRevisionRelationshipBackfill(input({ ...numbered, legacy, detached: { source: [{ ...evidence("P1", 2), revisionStatus }], rights: [], occasion: [] } }));
+    const flagged = (plan: ReturnType<typeof planFor>) => plan.report.anomalies.some((a) => a.code === "DETACH_EVIDENCE_ON_OLDER_REVISION");
+    expect(flagged(planFor("PUBLISHED"))).toBe(true); // promoted into the published set
+    expect(flagged(planFor("SUPERSEDED"))).toBe(true); // was published, since replaced
+    expect(flagged(planFor(null))).toBe(true); // unknown: the conservative reading
+    expect(flagged(planFor(undefined))).toBe(true);
+    // An unpublished draft''s detach must not suppress the link in a newer revision: it is planned normally, with no conflict.
+    const draftOnly = planFor("DRAFT");
+    expect(flagged(draftOnly)).toBe(false);
+    expect(draftOnly.inserts).toEqual([
+      { kind: "source", revisionId: "D1", targetId: "s1" },
+    ]);
+    expect(draftOnly.report.kinds.source).toMatchObject({ plannedInserts: 1, skippedEditorDetached: 1 }); // P1 itself: its own draft state is respected
+  });
   it("is not triggered when the link already exists on the newer revision (nothing would be added)", () => {
     const plan = planRevisionRelationshipBackfill(
       input({ ...numbered, legacy, existing: { source: [link("D1", "s1")], rights: [], occasion: [] }, detached: { source: [evidence("P1", 2)], rights: [], occasion: [] } })

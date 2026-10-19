@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import {
+  CollectionMembershipPublishRequiredError,
   addMusicalWorkToCollection,
   addRecordingToCollection,
   archiveCollection,
@@ -20,6 +21,18 @@ import { attachOccasionToEntity, detachOccasionFromEntity } from "../../../../..
 
 function errorRedirect(collectionId: string, message: string): never {
   redirect(`/studio/catalogue/collections/${collectionId}?error=${encodeURIComponent(message)}`);
+}
+
+// Phase 6J-12A: add / remove / reorder of a RECORDING in a Collection is live when the Collection and that Recording are both
+// published, and then needs RECORDING_PUBLISH. The repository makes that decision (atomically); here the role is passed in and the
+// typed refusal becomes a normal error message. Work membership is deliberately NOT part of this rule.
+async function guardedMembership<T>(collectionId: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    if (err instanceof CollectionMembershipPublishRequiredError) errorRedirect(collectionId, err.message);
+    throw err;
+  }
 }
 
 export async function updateCollectionAction(collectionId: string, formData: FormData) {
@@ -126,7 +139,7 @@ export async function addRecordingAction(collectionId: string, formData: FormDat
     errorRedirect(collectionId, "Select a recording to add.");
   }
 
-  await addRecordingToCollection(collectionId, recordingId, session!.user.id);
+  await guardedMembership(collectionId, () => addRecordingToCollection(collectionId, recordingId, session!.user.id, { canPublish: can(session!.user.role, "RECORDING_PUBLISH") }));
   redirect(`/studio/catalogue/collections/${collectionId}`);
 }
 
@@ -136,7 +149,7 @@ export async function removeRecordingAction(collectionId: string, recordingId: s
     errorRedirect(collectionId, "You do not have permission to edit this collection.");
   }
 
-  await removeRecordingFromCollection(collectionId, recordingId, session!.user.id);
+  await guardedMembership(collectionId, () => removeRecordingFromCollection(collectionId, recordingId, session!.user.id, { canPublish: can(session!.user.role, "RECORDING_PUBLISH") }));
   redirect(`/studio/catalogue/collections/${collectionId}`);
 }
 
@@ -146,7 +159,7 @@ export async function moveRecordingAction(collectionId: string, recordingId: str
     errorRedirect(collectionId, "You do not have permission to edit this collection.");
   }
 
-  await reorderCollectionRecordings(collectionId, recordingId, targetIndex, session!.user.id);
+  await guardedMembership(collectionId, () => reorderCollectionRecordings(collectionId, recordingId, targetIndex, session!.user.id, { canPublish: can(session!.user.role, "RECORDING_PUBLISH") }));
   redirect(`/studio/catalogue/collections/${collectionId}`);
 }
 

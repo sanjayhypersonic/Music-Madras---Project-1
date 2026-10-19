@@ -43,10 +43,16 @@ export interface RevisionLinkRow {
   targetId: string;
 }
 
-/** An editor's detach, read from the audit trail. recordingId / revisionNumber come from the revision it was detached from (null if that revision no longer exists). */
+/**
+ * An editor's detach, read from the audit trail. recordingId / revisionNumber / revisionStatus come from the revision it was detached
+ * from (null if that revision no longer exists). A detach is made on a DRAFT; a revision that is now PUBLISHED or SUPERSEDED was
+ * published, so the detach became part of its canonical relationship set. A revision that is still DRAFT was never published: its
+ * detach is that draft's own state and says nothing about any other revision.
+ */
 export interface DetachEvidenceRow extends RevisionLinkRow {
   recordingId?: string | null;
   revisionNumber?: number | null;
+  revisionStatus?: string | null;
 }
 
 export interface BackfillInput {
@@ -79,9 +85,12 @@ export type AnomalyCode =
 
 /**
  * Anomalies that make `--execute` REFUSE (the dry run still reports them). DETACH_EVIDENCE_ON_OLDER_REVISION: a link is planned
- * for a revision, but an editor detached the same link from an OLDER revision of the same Recording. Whether that detach carried
- * forward (the fork inherited its absence) or was superseded by a later legacy re-add cannot be established -- the legacy rows
+ * for a revision, but an editor detached the same link from an OLDER revision of the same Recording that was PUBLISHED (so the
+ * detach is part of that revision's canonical set and every later draft forked from it must not have the link back). Whether the
+ * legacy row is a stale copy of what the editor removed, or a deliberate later re-add, cannot be established -- the legacy rows
  * carry no timestamps and revisions record no parent -- so the script neither re-adds nor drops it on its own: a person decides.
+ * A detach on an older revision that is still a DRAFT (never published) is NOT canonical and is not flagged: it must not suppress
+ * the link anywhere else. A detach whose revision status is unknown is treated as published (the conservative reading).
  */
 export const EXECUTE_BLOCKING_ANOMALIES: readonly AnomalyCode[] = ["DETACH_EVIDENCE_ON_OLDER_REVISION"];
 
@@ -209,12 +218,12 @@ export function planRevisionRelationshipBackfill(input: BackfillInput): Backfill
     }
     const detached = new Set(input.detached[kind].map((row) => pairKey(row.revisionId, row.targetId)));
     // Detach evidence by (Recording, target): which revision numbers it came from. Used only to flag evidence on OLDER revisions.
-    const detachedNumbers = new Map<string, { revisionId: string; revisionNumber: number }[]>();
+    const detachedNumbers = new Map<string, { revisionId: string; revisionNumber: number; revisionStatus: string | null }[]>();
     for (const row of input.detached[kind]) {
       if (!row.recordingId || typeof row.revisionNumber !== "number") continue;
       const key = pairKey(row.recordingId, row.targetId);
       const list = detachedNumbers.get(key);
-      const entry = { revisionId: row.revisionId, revisionNumber: row.revisionNumber };
+      const entry = { revisionId: row.revisionId, revisionNumber: row.revisionNumber, revisionStatus: row.revisionStatus ?? null };
       if (list) list.push(entry);
       else detachedNumbers.set(key, [entry]);
     }
@@ -272,7 +281,7 @@ export function planRevisionRelationshipBackfill(input: BackfillInput): Backfill
           report.plannedInserts += 1;
           inserts.push({ kind, revisionId, targetId: row.targetId });
           const targetNumber = revisions.get(revisionId)?.revisionNumber;
-          const olderEvidence = typeof targetNumber === "number" && (detachedNumbers.get(pairKey(row.recordingId, row.targetId)) ?? []).some((e) => e.revisionId !== revisionId && e.revisionNumber < targetNumber);
+          const olderEvidence = typeof targetNumber === "number" && (detachedNumbers.get(pairKey(row.recordingId, row.targetId)) ?? []).some((e) => e.revisionId !== revisionId && e.revisionNumber < targetNumber && e.revisionStatus !== "DRAFT");
           if (olderEvidence) anomalies.add("DETACH_EVIDENCE_ON_OLDER_REVISION", `${kind}:${row.recordingId}:${row.targetId}`);
         }
       }

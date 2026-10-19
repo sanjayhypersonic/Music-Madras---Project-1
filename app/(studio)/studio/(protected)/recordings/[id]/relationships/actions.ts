@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
-import { addRecordingToCollection } from "../../../../../../../modules/db/repositories/collectionRepository";
+import { CollectionMembershipPublishRequiredError, addRecordingToCollection } from "../../../../../../../modules/db/repositories/collectionRepository";
 import { attachOccasionToEntity, detachOccasionFromEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
 import { attachSourceToEntity, detachSourceFromEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { attachRightsInformationToEntity, detachRightsInformationFromEntity } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
@@ -19,7 +19,15 @@ export async function addToCollectionAction(recordingId: string, formData: FormD
     redirect(`/studio/recordings/${recordingId}/relationships?error=Select+a+collection.`);
   }
 
-  await addRecordingToCollection(collectionId, recordingId, session!.user.id);
+  // Phase 6J-12A: a change that is visible to visitors at once (published Collection + published Recording) needs RECORDING_PUBLISH.
+  try {
+    await addRecordingToCollection(collectionId, recordingId, session!.user.id, { canPublish: can(session!.user.role, "RECORDING_PUBLISH") });
+  } catch (err) {
+    if (err instanceof CollectionMembershipPublishRequiredError) {
+      redirect(`/studio/recordings/${recordingId}/relationships?error=${encodeURIComponent(err.message)}`);
+    }
+    throw err;
+  }
   redirect(`/studio/recordings/${recordingId}/relationships`);
 }
 
