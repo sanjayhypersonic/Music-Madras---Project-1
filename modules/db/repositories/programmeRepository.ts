@@ -3,7 +3,9 @@ import { writeAuditLog } from "../../audit/writeAuditLog";
 import { computeNextOrder, reorderProgrammeItems } from "../../mmke/programme/reorderProgrammeItems";
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
 import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
-import type { Programme, ProgrammeItem } from "@prisma/client";
+import { isLockTimeoutError } from "../isLockTimeoutError";
+import { PUBLISHED_REVISION_WHERE } from "./publicEligibility";
+import type { Prisma, Programme, ProgrammeItem } from "@prisma/client";
 
 // Programme as a first-class entity (brief §4): a real Programme with real,
 // ordered ProgrammeItem rows, each pointing at a canonical MusicalWork —
@@ -56,12 +58,76 @@ export async function createProgramme(input: CreateProgrammeInput): Promise<Prog
   return programme;
 }
 
+/**
+ * Phase 6J-10F — a Programme is a shared catalogue record: its running order is shown on its own public page and on every
+ * Performance page that uses it. The Recording workflow's Programme step is part of preparing a DRAFT, so it must not
+ * change a Programme that published content already shows. Catalogue editing (Studio > Catalogue) is the explicit,
+ * deliberate way to change a shared programme and does not use this guard.
+ */
+export class ProgrammeInPublishedContentError extends Error {
+  constructor() {
+    super(
+      "This programme is part of published content, so changing its running order here would change a live page. " +
+        "Create a new programme for this recording, or edit this one deliberately from the Catalogue."
+    );
+    this.name = "ProgrammeInPublishedContentError";
+  }
+}
+
+type ProgrammeDbClient = Prisma.TransactionClient | typeof prisma;
+
+export class ProgrammeBusyError extends Error {
+  constructor() {
+    super("This programme is being changed or published by someone else right now. Nothing was changed. Try again in a moment.");
+    this.name = "ProgrammeBusyError";
+  }
+}
+
+export const PROGRAMME_EDIT_LOCK_TIMEOUT_MS = 5000;
+
+/** Advisory-lock key (hashtext of this string) serializing the Recording workflow's Programme edits against publications that use the Programme. */
+export function programmeEditLockKey(programmeId: string): string {
+  return `programme-edit:${programmeId}`;
+}
+
+/**
+ * Phase 6J-10F — takes the per-Programme edit lock for the rest of the transaction. Held by (a) the Recording workflow's
+ * guarded Programme edits for their whole check-then-write, and (b) publishRecordingDraft for the draft Performance's
+ * Programme until the publication commits. That closes the window in which a Programme could become published content
+ * between the edit's guard check and its write. Lock order: after the Recording lock and the draft row, before any
+ * Performance row; edits take no other lock, so there is no cycle.
+ */
+export async function lockProgrammeAgainstWorkflowEdits(tx: Prisma.TransactionClient, programmeId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${programmeEditLockKey(programmeId)}))`;
+}
+
+/** Runs a guarded Programme edit under the Programme lock (bounded wait). Throws ProgrammeBusyError when the lock is not available in time. */
+async function withProgrammeEditLock<T>(programmeId: string, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('lock_timeout', ${`${PROGRAMME_EDIT_LOCK_TIMEOUT_MS}ms`}, true)`;
+      await lockProgrammeAgainstWorkflowEdits(tx, programmeId);
+      return fn(tx);
+    });
+  } catch (err) {
+    if (isLockTimeoutError(err)) throw new ProgrammeBusyError();
+    throw err;
+  }
+}
+
+/** True when any Performance using the Programme is used by some Recording's current published revision. */
+export async function isProgrammeInPublishedContent(programmeId: string, client: ProgrammeDbClient = prisma): Promise<boolean> {
+  return (await client.performance.count({ where: { programmeId, revisions: { some: PUBLISHED_REVISION_WHERE } } })) > 0;
+}
+
 export interface AddProgrammeItemInput {
   programmeId: string;
   musicalWorkId: string;
   movement?: string;
   isEncore?: boolean;
   actorId: string;
+  /** Recording workflow only (6J-10F): refuse, in the same transaction as the write, when published content shows this Programme. */
+  refuseIfInPublishedContent?: boolean;
 }
 
 /**
@@ -70,7 +136,8 @@ export interface AddProgrammeItemInput {
  * left to the caller to guess.
  */
 export async function addProgrammeItem(input: AddProgrammeItemInput): Promise<ProgrammeItem> {
-  return prisma.$transaction(async (tx) => {
+  const run = async (tx: Prisma.TransactionClient): Promise<ProgrammeItem> => {
+    if (input.refuseIfInPublishedContent && (await isProgrammeInPublishedContent(input.programmeId, tx))) throw new ProgrammeInPublishedContentError();
     const existingItems = await tx.programmeItem.findMany({
       where: { programmeId: input.programmeId },
       select: { id: true, order: true },
@@ -100,7 +167,10 @@ export async function addProgrammeItem(input: AddProgrammeItemInput): Promise<Pr
     );
 
     return item;
-  });
+  };
+  // The guarded (Recording workflow) path holds the Programme lock across its check and its write (6J-10F); the
+  // catalogue path is a deliberate global edit and is unchanged.
+  return input.refuseIfInPublishedContent ? withProgrammeEditLock(input.programmeId, run) : prisma.$transaction(run);
 }
 
 /**
@@ -148,16 +218,41 @@ export async function reorderProgrammeItem(
   });
 }
 
-export async function removeProgrammeItem(itemId: string, actorId: string): Promise<void> {
-  const item = await prisma.programmeItem.delete({ where: { id: itemId } });
+export async function removeProgrammeItem(
+  itemId: string,
+  actorId: string,
+  options: { refuseIfInPublishedContent?: boolean } = {}
+): Promise<void> {
+  const run = async (tx: Prisma.TransactionClient): Promise<void> => {
+    if (options.refuseIfInPublishedContent) {
+      const existing = await tx.programmeItem.findUnique({ where: { id: itemId }, select: { programmeId: true } });
+      if (existing && (await isProgrammeInPublishedContent(existing.programmeId, tx))) throw new ProgrammeInPublishedContentError();
+    }
+    const item = await tx.programmeItem.delete({ where: { id: itemId } });
 
-  await writeAuditLog({
-    actorId,
-    action: "PROGRAMME_ITEM_REMOVED",
-    entityType: "Programme",
-    entityId: item.programmeId,
-    beforeSnapshot: item,
-  });
+    await writeAuditLog(
+      {
+        actorId,
+        action: "PROGRAMME_ITEM_REMOVED",
+        entityType: "Programme",
+        entityId: item.programmeId,
+        beforeSnapshot: item,
+      },
+      tx
+    );
+  };
+  if (!options.refuseIfInPublishedContent) {
+    await prisma.$transaction(run);
+    return;
+  }
+  // The item's Programme is looked up first (it never changes), then the whole check-then-delete runs under that
+  // Programme's lock, so it is serialized against a publication that would make the Programme live.
+  const target = await prisma.programmeItem.findUnique({ where: { id: itemId }, select: { programmeId: true } });
+  if (!target) {
+    await prisma.$transaction(run); // surfaces the same "record not found" error as before
+    return;
+  }
+  await withProgrammeEditLock(target.programmeId, run);
 }
 
 export function findProgrammeById(id: string) {

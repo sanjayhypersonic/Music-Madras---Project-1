@@ -1,10 +1,10 @@
-﻿import { describeEditableDraftRefusal, type EditableDraftRefusal } from "./editableDraftRefusal";
+import { describeEditableDraftRefusal, type EditableDraftRefusal } from "./editableDraftRefusal";
 
 // Phase 6J-10B — why a publication attempt was refused, and what to tell the editor. Pure: no database,
 // no framework. The reasons come from recordingRepository.publishRecordingDraft, which re-validates
 // inside its transaction; none of the messages can contain a database error or a value.
 
-export type PublishRefusalReason = EditableDraftRefusal | "NOT_READY" | "STATE_CHANGED" | "BUSY" | "FAILED";
+export type PublishRefusalReason = EditableDraftRefusal | "NOT_READY" | "STATE_CHANGED" | "PERFORMANCE_CHANGED" | "BUSY" | "FAILED";
 
 export function describePublishRefusal(reason: PublishRefusalReason, missingCategories: readonly string[] = []): string {
   switch (reason) {
@@ -17,6 +17,8 @@ export function describePublishRefusal(reason: PublishRefusalReason, missingCate
       return `This recording is not ready to publish.${missingCategories.length > 0 ? ` Still required: ${missingCategories.join(", ")}.` : ""}`;
     case "STATE_CHANGED":
       return "This recording changed while it was being published, so nothing was published. Reload the page and try again.";
+    case "PERFORMANCE_CHANGED":
+      return "The participants of this recording's performance were changed by someone else (for example another recording's publication or a catalogue edit) after you started editing them, so nothing was published. Open the Participants step, choose \"Discard my participant changes\", then re-apply your changes and publish again.";
     case "BUSY":
       return "Someone else is changing this recording right now, so nothing was published. Wait a moment and try again.";
     case "FAILED":

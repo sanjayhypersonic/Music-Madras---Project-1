@@ -445,10 +445,23 @@ model Performance {
   createdById     String
   updatedById     String
 
+  // Phase 6J-10F: set ONLY on a copy-on-write clone. When a Recording's draft needs to change the participants of a
+  // Performance that a published revision also uses, the draft gets its own copy (this row) so the live page does not
+  // change until publication; publishing copies the clone's participants back onto the original (keeping its slug and
+  // public URL) and deletes the clone. Null on every ordinary Performance (all existing rows).
+  draftOfPerformanceId String?
+  // A fingerprint (sha256) of the original's participants (performers with roles, choirs, conductors) at the moment this
+  // clone was made. Promotion compares it with the original's participants at publication: if they differ, someone else
+  // changed the original since, and the publication is refused instead of overwriting their change. Null on every
+  // ordinary Performance.
+  draftBaseParticipantsKey String?
+
   programme Programme  @relation(fields: [programmeId], references: [id], onDelete: Restrict)
   venue     Venue      @relation(fields: [venueId], references: [id], onDelete: Restrict)
   createdBy StudioUser @relation("PerformanceCreatedBy", fields: [createdById], references: [id])
   updatedBy StudioUser @relation("PerformanceUpdatedBy", fields: [updatedById], references: [id])
+  draftOf     Performance?  @relation("PerformanceDraftClone", fields: [draftOfPerformanceId], references: [id], onDelete: SetNull)
+  draftClones Performance[] @relation("PerformanceDraftClone")
 
   revisions   RecordingRevision[]
   instruments Instrument[]
@@ -459,6 +472,7 @@ model Performance {
   @@index([programmeId])
   @@index([venueId])
   @@index([archivedAt])
+  @@index([draftOfPerformanceId])
   @@map("performances")
 }
 

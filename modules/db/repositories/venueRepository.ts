@@ -112,7 +112,11 @@ export interface VenueWithOrganisation extends Venue {
 }
 
 export function findVenueById(id: string) {
-  return prisma.venue.findUnique({ where: { id }, include: { organisation: true, instruments: true } });
+  return prisma.venue.findUnique({ where: { id }, // 6J-10F: instrument rows copied onto a draft's Performance clone are implementation detail, not venue inventory.
+    include: {
+      organisation: true,
+      instruments: { where: { OR: [{ performanceId: null }, { performance: { draftOfPerformanceId: null } }] } },
+    } });
 }
 
 export function findVenueBySlug(slug: string): Promise<Venue | null> {

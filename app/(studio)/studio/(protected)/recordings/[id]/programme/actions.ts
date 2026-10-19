@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import type { StudioRoleName } from "../../../../../../../modules/auth/types";
-import { createProgramme, addProgrammeItem, removeProgrammeItem } from "../../../../../../../modules/db/repositories/programmeRepository";
+import { ProgrammeBusyError, ProgrammeInPublishedContentError, createProgramme, addProgrammeItem, removeProgrammeItem } from "../../../../../../../modules/db/repositories/programmeRepository";
 import { slugify } from "../../../../../../../modules/mmke/slug/slugify";
 
 function requireCatalogueWrite(role: StudioRoleName | undefined, recordingId: string) {
@@ -41,13 +41,22 @@ export async function addProgrammeItemAction(recordingId: string, programmeId: s
     redirect(`/studio/recordings/${recordingId}/programme?programmeId=${programmeId}&error=Select+a+work.`);
   }
 
-  await addProgrammeItem({
-    programmeId,
-    musicalWorkId,
-    movement: String(formData.get("movement") ?? "") || undefined,
-    isEncore: formData.get("isEncore") === "on",
-    actorId: session!.user.id,
-  });
+  // 6J-10F: the Recording workflow must not change a Programme that published content already shows.
+  try {
+    await addProgrammeItem({
+      programmeId,
+      musicalWorkId,
+      movement: String(formData.get("movement") ?? "") || undefined,
+      isEncore: formData.get("isEncore") === "on",
+      actorId: session!.user.id,
+      refuseIfInPublishedContent: true,
+    });
+  } catch (error) {
+    if (error instanceof ProgrammeInPublishedContentError || error instanceof ProgrammeBusyError) {
+      redirect(`/studio/recordings/${recordingId}/programme?programmeId=${programmeId}&error=${encodeURIComponent(error.message)}`);
+    }
+    throw error;
+  }
 
   redirect(`/studio/recordings/${recordingId}/programme?programmeId=${programmeId}`);
 }
@@ -56,6 +65,13 @@ export async function removeProgrammeItemAction(recordingId: string, programmeId
   const session = await getCurrentStudioSession();
   requireCatalogueWrite(session?.user.role, recordingId);
 
-  await removeProgrammeItem(itemId, session!.user.id);
+  try {
+    await removeProgrammeItem(itemId, session!.user.id, { refuseIfInPublishedContent: true });
+  } catch (error) {
+    if (error instanceof ProgrammeInPublishedContentError || error instanceof ProgrammeBusyError) {
+      redirect(`/studio/recordings/${recordingId}/programme?programmeId=${programmeId}&error=${encodeURIComponent(error.message)}`);
+    }
+    throw error;
+  }
   redirect(`/studio/recordings/${recordingId}/programme?programmeId=${programmeId}`);
 }

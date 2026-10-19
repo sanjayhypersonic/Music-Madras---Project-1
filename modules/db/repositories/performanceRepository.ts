@@ -93,25 +93,36 @@ export async function createPerformance(
  * — "Soloist", "Organist", etc.). Upserts so re-adding the same artist
  * only updates their role rather than erroring on the composite key.
  */
+/**
+ * The participant add/remove functions below take an optional caller-owned transaction (Phase 6J-10F): the Studio
+ * participants step runs them inside recordingRepository.editDraftPerformanceParticipants, which makes the Performance
+ * draft-owned (copy-on-write) and applies the change plus its audit entry in one transaction.
+ */
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
 export async function addPerformerToPerformance(
   performanceId: string,
   artistId: string,
   role: string | undefined,
-  actorId: string
+  actorId: string,
+  client: DbClient = prisma
 ) {
-  const link = await prisma.performancePerformer.upsert({
+  const link = await client.performancePerformer.upsert({
     where: { performanceId_artistId: { performanceId, artistId } },
     create: { performanceId, artistId, role },
     update: { role },
   });
 
-  await writeAuditLog({
-    actorId,
-    action: "PERFORMER_LINKED_TO_PERFORMANCE",
-    entityType: "Performance",
-    entityId: performanceId,
-    afterSnapshot: { artistId, role },
-  });
+  await writeAuditLog(
+    {
+      actorId,
+      action: "PERFORMER_LINKED_TO_PERFORMANCE",
+      entityType: "Performance",
+      entityId: performanceId,
+      afterSnapshot: { artistId, role },
+    },
+    client
+  );
 
   return link;
 }
@@ -119,71 +130,85 @@ export async function addPerformerToPerformance(
 export async function removePerformerFromPerformance(
   performanceId: string,
   artistId: string,
-  actorId: string
+  actorId: string,
+  client: DbClient = prisma
 ): Promise<void> {
-  await prisma.performancePerformer.delete({
+  await client.performancePerformer.delete({
     where: { performanceId_artistId: { performanceId, artistId } },
   });
 
-  await writeAuditLog({
-    actorId,
-    action: "PERFORMER_UNLINKED_FROM_PERFORMANCE",
-    entityType: "Performance",
-    entityId: performanceId,
-    beforeSnapshot: { artistId },
-  });
+  await writeAuditLog(
+    {
+      actorId,
+      action: "PERFORMER_UNLINKED_FROM_PERFORMANCE",
+      entityType: "Performance",
+      entityId: performanceId,
+      beforeSnapshot: { artistId },
+    },
+    client
+  );
 }
 
-export async function addChoirToPerformance(performanceId: string, choirId: string, actorId: string) {
-  const link = await prisma.performanceChoir.upsert({
+export async function addChoirToPerformance(performanceId: string, choirId: string, actorId: string, client: DbClient = prisma) {
+  const link = await client.performanceChoir.upsert({
     where: { performanceId_choirId: { performanceId, choirId } },
     create: { performanceId, choirId },
     update: {},
   });
 
-  await writeAuditLog({
-    actorId,
-    action: "CHOIR_LINKED_TO_PERFORMANCE",
-    entityType: "Performance",
-    entityId: performanceId,
-    afterSnapshot: { choirId },
-  });
+  await writeAuditLog(
+    {
+      actorId,
+      action: "CHOIR_LINKED_TO_PERFORMANCE",
+      entityType: "Performance",
+      entityId: performanceId,
+      afterSnapshot: { choirId },
+    },
+    client
+  );
 
   return link;
 }
 
-export async function removeChoirFromPerformance(performanceId: string, choirId: string, actorId: string): Promise<void> {
-  await prisma.performanceChoir.delete({
+export async function removeChoirFromPerformance(performanceId: string, choirId: string, actorId: string, client: DbClient = prisma): Promise<void> {
+  await client.performanceChoir.delete({
     where: { performanceId_choirId: { performanceId, choirId } },
   });
 
-  await writeAuditLog({
-    actorId,
-    action: "CHOIR_UNLINKED_FROM_PERFORMANCE",
-    entityType: "Performance",
-    entityId: performanceId,
-    beforeSnapshot: { choirId },
-  });
+  await writeAuditLog(
+    {
+      actorId,
+      action: "CHOIR_UNLINKED_FROM_PERFORMANCE",
+      entityType: "Performance",
+      entityId: performanceId,
+      beforeSnapshot: { choirId },
+    },
+    client
+  );
 }
 
 export async function addConductorToPerformance(
   performanceId: string,
   conductorId: string,
-  actorId: string
+  actorId: string,
+  client: DbClient = prisma
 ) {
-  const link = await prisma.performanceConductor.upsert({
+  const link = await client.performanceConductor.upsert({
     where: { performanceId_conductorId: { performanceId, conductorId } },
     create: { performanceId, conductorId },
     update: {},
   });
 
-  await writeAuditLog({
-    actorId,
-    action: "CONDUCTOR_LINKED_TO_PERFORMANCE",
-    entityType: "Performance",
-    entityId: performanceId,
-    afterSnapshot: { conductorId },
-  });
+  await writeAuditLog(
+    {
+      actorId,
+      action: "CONDUCTOR_LINKED_TO_PERFORMANCE",
+      entityType: "Performance",
+      entityId: performanceId,
+      afterSnapshot: { conductorId },
+    },
+    client
+  );
 
   return link;
 }
@@ -191,19 +216,23 @@ export async function addConductorToPerformance(
 export async function removeConductorFromPerformance(
   performanceId: string,
   conductorId: string,
-  actorId: string
+  actorId: string,
+  client: DbClient = prisma
 ): Promise<void> {
-  await prisma.performanceConductor.delete({
+  await client.performanceConductor.delete({
     where: { performanceId_conductorId: { performanceId, conductorId } },
   });
 
-  await writeAuditLog({
-    actorId,
-    action: "CONDUCTOR_UNLINKED_FROM_PERFORMANCE",
-    entityType: "Performance",
-    entityId: performanceId,
-    beforeSnapshot: { conductorId },
-  });
+  await writeAuditLog(
+    {
+      actorId,
+      action: "CONDUCTOR_UNLINKED_FROM_PERFORMANCE",
+      entityType: "Performance",
+      entityId: performanceId,
+      beforeSnapshot: { conductorId },
+    },
+    client
+  );
 }
 
 export function findPerformanceById(id: string) {
@@ -234,15 +263,21 @@ export interface PerformanceForStudio extends Performance {
  * neither exists as a field on Performance itself.
  */
 export function listPerformancesForStudio(searchQuery?: string): Promise<PerformanceForStudio[]> {
+  // Phase 6J-10F: a copy-on-write clone is part of one Recording's draft, not a catalogue entry.
   return prisma.performance.findMany({
     where: searchQuery
       ? {
-          OR: [
-            { programme: { title: { contains: searchQuery, mode: "insensitive" } } },
-            { venue: { name: { contains: searchQuery, mode: "insensitive" } } },
+          AND: [
+            { draftOfPerformanceId: null },
+            {
+              OR: [
+                { programme: { title: { contains: searchQuery, mode: "insensitive" } } },
+                { venue: { name: { contains: searchQuery, mode: "insensitive" } } },
+              ],
+            },
           ],
         }
-      : undefined,
+      : { draftOfPerformanceId: null },
     include: {
       programme: true,
       venue: true,

@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
-import { findRecordingById } from "../../../../../../../modules/db/repositories/recordingRepository";
+import { findRecordingById, getDraftPerformanceCloneStatus } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { findPerformanceById } from "../../../../../../../modules/db/repositories/performanceRepository";
 import { listActiveArtists } from "../../../../../../../modules/db/repositories/artistRepository";
 import { listActiveChoirs } from "../../../../../../../modules/db/repositories/choirRepository";
 import { listActiveConductors } from "../../../../../../../modules/db/repositories/conductorRepository";
-import { addPerformerAction, removePerformerAction, addChoirAction, addConductorAction } from "./actions";
+import { addPerformerAction, removePerformerAction, addChoirAction, addConductorAction, discardParticipantChangesAction } from "./actions";
 
 export default async function ParticipantsStepPage({
   params,
@@ -41,11 +41,28 @@ export default async function ParticipantsStepPage({
     listActiveConductors(),
   ]);
   if (!performance) redirect(`/studio/recordings/${id}/performance`);
+  const cloneStatus = await getDraftPerformanceCloneStatus(performanceId);
 
   return (
     <div>
       <h2>Participants</h2>
       {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {cloneStatus.isClone && (
+        <div role="status" className={cloneStatus.originalChanged ? "studio-alert studio-alert--warning" : "studio-notice"}>
+          <p>
+            {cloneStatus.originalChanged
+              ? "The participants of the published performance were changed by someone else after you started editing, so this draft cannot be published as it is. Discard your participant changes below, then re-apply them."
+              : "You are editing this draft's own copy of the performance's participants. They go live only when you publish."}
+          </p>
+          {canWrite && (
+            <form action={discardParticipantChangesAction.bind(null, id)}>
+              <button type="submit" className={cloneStatus.originalChanged ? "studio-button--primary" : undefined}>
+                Discard my participant changes
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
       <h3>Performers</h3>
       <ul>

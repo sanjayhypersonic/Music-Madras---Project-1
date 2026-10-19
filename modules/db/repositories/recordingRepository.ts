@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { canForkNewDraft, canPublishCurrentDraft } from "../../publishing/revisionTransitions";
@@ -5,7 +6,11 @@ import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
 import { computeNextOrder } from "../../mmke/programme/reorderProgrammeItems";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
+import { generatePerformanceSlug } from "../../mmke/slug/generatePerformanceSlug";
+import { performanceParticipantsKey } from "../../publishing/performanceParticipantsKey";
 import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
+import { isLockTimeoutError } from "../isLockTimeoutError";
+import { lockProgrammeAgainstWorkflowEdits } from "./programmeRepository";
 import { createPerformance, type CreatePerformanceInput } from "./performanceRepository";
 import {
   checkRecordingRevisionCompleteness,
@@ -58,13 +63,12 @@ export class ConcurrentEditError extends Error {
 // newer state. The success audit entry is written in the same transaction, so a failed or
 // refused attempt leaves neither a state change nor a success audit entry.
 //
-// Lock ordering: exactly one lock (this one) is ever taken per transaction and nothing is taken
-// while holding it, so these transactions cannot deadlock with each other or with apply. The wait
-// is bounded: `lock_timeout` is set LOCAL to the transaction (default 5 s); on expiry the
-// operation is refused with RecordingBusyError / reason "BUSY" and nothing has changed.
-//
-// NOT covered here (later phases): compare-and-swap for draft CONTENT saves, child-row writes
-// (works/media/performance) and shared Performance edits do not take this lock.
+// Lock ordering (current protocol — see docs/recording-publication-safety.md): the per-Recording edit lock is ALWAYS
+// taken first, then row locks. The only other advisory lock is the per-Programme lock below, taken by publication
+// (after the draft row, before any Performance row) and by the Recording workflow's Programme edits (which take nothing
+// else), so the global order is: Recording lock < draft row < Programme lock < Performance row. No transaction takes
+// them in another order, so none can deadlock. Every wait is bounded: `lock_timeout` is set LOCAL to the transaction
+// (default 5 s); on expiry the operation is refused with RecordingBusyError / reason "BUSY" and nothing has changed.
 
 export class RecordingBusyError extends Error {
   constructor(recordingId: string) {
@@ -80,16 +84,7 @@ export function recordingEditLockKey(recordingId: string): string {
   return `recording-edit:${recordingId}`;
 }
 
-function isLockTimeoutError(err: unknown, depth = 0): boolean {
-  if (typeof err !== "object" || err === null || depth > 4) return false;
-  const e = err as { message?: unknown; code?: unknown; meta?: { code?: unknown }; cause?: unknown };
-  return (
-    e.code === "55P03" ||
-    e.meta?.code === "55P03" ||
-    (typeof e.message === "string" && /lock timeout|55P03/i.test(e.message)) ||
-    isLockTimeoutError(e.cause, depth + 1)
-  );
-}
+// isLockTimeoutError: modules/db/isLockTimeoutError.ts (shared with programmeRepository).
 
 /**
  * Runs `fn` inside a transaction that holds the per-Recording edit lock. Throws RecordingBusyError if the
@@ -424,6 +419,189 @@ export async function createPerformanceForDraft(
 }
 
 /**
+ * Phase 6J-10F — participant edits (performers, choirs, conductors) for a Recording's draft, isolated from what is
+ * published.
+ *
+ * A Performance is a shared row: after a fork the draft points at the SAME Performance as the published revision, and
+ * the public pages read its participants live. Changing the participants in place would therefore change the live page
+ * before the draft is published. So, under the per-Recording edit lock and in one transaction, this:
+ *   1. verifies the draft is the editable current draft and that it still uses `expectedPerformanceId`
+ *      (otherwise RevisionNotEditableError STALE_REVISION — a stale form never edits another Performance);
+ *   2. if ANY other revision uses that Performance, first makes a copy-on-write clone owned by this draft — same
+ *      Programme, Venue and date, copies of the participant links, `draftOfPerformanceId` pointing at the original —
+ *      and re-points the draft revision at it (a conditional write that also advances the content token);
+ *   3. runs `change` against the draft-owned Performance, in the same transaction, so the change and its audit entry
+ *      commit or roll back together with the clone.
+ * The clone is not public (public eligibility requires a PUBLISHED revision). Publishing the draft promotes the clone's
+ * participants onto the original (publishRecordingDraft), keeping the original's slug and public URL.
+ *
+ * Canonical identities stay shared: the clone references the same Programme, Venue, Artists, Choirs and Conductors.
+ */
+export async function editDraftPerformanceParticipants<T>(input: {
+  recordingId: string;
+  expectedPerformanceId: string;
+  actorId: string;
+  change: (tx: Prisma.TransactionClient, performanceId: string) => Promise<T>;
+}): Promise<{ result: T; performanceId: string; cloned: boolean }> {
+  return withRecordingEditLock(input.recordingId, async (tx) => {
+    const recording = await tx.recording.findUnique({
+      where: { id: input.recordingId },
+      select: { status: true, currentDraftRevisionId: true },
+    });
+    if (!recording) throw new RevisionNotEditableError("RECORDING_NOT_FOUND");
+    if (recording.status === "ARCHIVED") throw new RevisionNotEditableError("RECORDING_ARCHIVED");
+    if (!recording.currentDraftRevisionId) throw new RevisionNotEditableError("NO_OPEN_DRAFT");
+    const draft = await tx.recordingRevision.findUnique({
+      where: { id: recording.currentDraftRevisionId },
+      select: { id: true, recordingId: true, revisionStatus: true, performanceId: true, updatedAt: true },
+    });
+    if (!draft || draft.recordingId !== input.recordingId || draft.revisionStatus !== "DRAFT") throw new RevisionNotEditableError("NO_OPEN_DRAFT");
+    if (draft.performanceId === null || draft.performanceId !== input.expectedPerformanceId) throw new RevisionNotEditableError("STALE_REVISION");
+
+    const sharedWithOtherRevisions = (await tx.recordingRevision.count({ where: { performanceId: draft.performanceId, id: { not: draft.id } } })) > 0;
+    if (!sharedWithOtherRevisions) {
+      return { result: await input.change(tx, draft.performanceId), performanceId: draft.performanceId, cloned: false };
+    }
+
+    // Share-lock the original so a promotion by another Recording (which holds it FOR UPDATE until it commits) cannot
+    // change its participants between this read, the fingerprint and the copy: the clone is a consistent snapshot.
+    await tx.$queryRaw`SELECT id FROM performances WHERE id = ${draft.performanceId} FOR SHARE`;
+    const original = await tx.performance.findUniqueOrThrow({
+      where: { id: draft.performanceId },
+      include: { programme: { select: { title: true } }, venue: { select: { name: true } }, performers: true, choirs: true, conductors: true },
+    });
+    const instruments = await tx.instrument.findMany({ where: { performanceId: original.id } });
+    const cloneId = randomUUID();
+    await tx.performance.create({
+      data: {
+        id: cloneId,
+        slug: generatePerformanceSlug({ programmeTitle: original.programme.title, venueName: original.venue.name, performanceDate: original.performanceDate, performanceId: cloneId }),
+        programmeId: original.programmeId,
+        venueId: original.venueId,
+        performanceDate: original.performanceDate,
+        draftOfPerformanceId: original.id,
+        draftBaseParticipantsKey: performanceParticipantsKey({
+          performers: original.performers.map((link) => ({ artistId: link.artistId, role: link.role })),
+          choirIds: original.choirs.map((link) => link.choirId),
+          conductorIds: original.conductors.map((link) => link.conductorId),
+        }),
+        createdById: input.actorId,
+        updatedById: input.actorId,
+      },
+    });
+    if (original.performers.length > 0) {
+      await tx.performancePerformer.createMany({ data: original.performers.map((link) => ({ performanceId: cloneId, artistId: link.artistId, role: link.role })) });
+    }
+    if (original.choirs.length > 0) {
+      await tx.performanceChoir.createMany({ data: original.choirs.map((link) => ({ performanceId: cloneId, choirId: link.choirId })) });
+    }
+    if (original.conductors.length > 0) {
+      await tx.performanceConductor.createMany({ data: original.conductors.map((link) => ({ performanceId: cloneId, conductorId: link.conductorId })) });
+    }
+
+    // An Instrument has one optional Performance, so "the clone keeps the same instruments" means copies of the rows,
+    // owned by the clone (performanceId = clone). They are removed again when the clone is promoted or discarded.
+    if (instruments.length > 0) {
+      await tx.instrument.createMany({
+        data: instruments.map((instrument) => ({
+          name: instrument.name,
+          manufacturer: instrument.manufacturer,
+          buildYear: instrument.buildYear,
+          venueId: instrument.venueId,
+          performanceId: cloneId,
+          archivedAt: instrument.archivedAt,
+          createdById: instrument.createdById,
+          updatedById: instrument.updatedById,
+        })),
+      });
+    }
+
+    const repointed = await tx.recordingRevision.updateMany({
+      where: { id: draft.id, revisionStatus: "DRAFT", performanceId: original.id, currentDraftOf: { is: { id: input.recordingId, status: { not: "ARCHIVED" } } } },
+      data: { performanceId: cloneId, updatedById: input.actorId, updatedAt: new Date(Math.max(Date.now(), draft.updatedAt.getTime() + 1)) },
+    });
+    if (repointed.count !== 1) throw new ConcurrentEditError(input.recordingId);
+
+    await writeAuditLog(
+      {
+        actorId: input.actorId,
+        action: "PERFORMANCE_CLONED_FOR_DRAFT",
+        entityType: "Performance",
+        entityId: cloneId,
+        beforeSnapshot: { originalPerformanceId: original.id },
+        afterSnapshot: { draftRevisionId: draft.id, recordingId: input.recordingId },
+      },
+      tx
+    );
+
+    return { result: await input.change(tx, cloneId), performanceId: cloneId, cloned: true };
+  });
+}
+
+/**
+ * Phase 6J-10F — "Discard my participant changes": the way out when a draft's clone can no longer be promoted (the original
+ * Performance changed since — PERFORMANCE_CHANGED) or the editor simply wants the published participants back. Under the
+ * Recording's edit lock, in one transaction: re-point the draft at the original Performance (conditional write that also
+ * advances the content token), delete the clone and its instrument copies, audit it. Idempotent: a draft whose Performance
+ * is not a clone is left alone (`discarded: false`). Nothing about the published revision or the original changes.
+ */
+export async function discardDraftPerformanceClone(input: { recordingId: string; actorId: string }): Promise<{ discarded: boolean }> {
+  return withRecordingEditLock(input.recordingId, async (tx) => {
+    const recording = await tx.recording.findUnique({ where: { id: input.recordingId }, select: { status: true, currentDraftRevisionId: true } });
+    if (!recording) throw new RevisionNotEditableError("RECORDING_NOT_FOUND");
+    if (recording.status === "ARCHIVED") throw new RevisionNotEditableError("RECORDING_ARCHIVED");
+    if (!recording.currentDraftRevisionId) throw new RevisionNotEditableError("NO_OPEN_DRAFT");
+    const draft = await tx.recordingRevision.findUnique({
+      where: { id: recording.currentDraftRevisionId },
+      select: { id: true, recordingId: true, revisionStatus: true, performanceId: true, updatedAt: true },
+    });
+    if (!draft || draft.recordingId !== input.recordingId || draft.revisionStatus !== "DRAFT") throw new RevisionNotEditableError("NO_OPEN_DRAFT");
+    if (!draft.performanceId) return { discarded: false };
+    const clone = await tx.performance.findUnique({ where: { id: draft.performanceId }, select: { id: true, draftOfPerformanceId: true } });
+    if (!clone || !clone.draftOfPerformanceId) return { discarded: false };
+    const original = await tx.performance.findUnique({ where: { id: clone.draftOfPerformanceId }, select: { id: true } });
+    if (!original) return { discarded: false }; // the original is gone (the marker is cleared by the database); nothing to go back to
+
+    const repointed = await tx.recordingRevision.updateMany({
+      where: { id: draft.id, revisionStatus: "DRAFT", performanceId: clone.id, currentDraftOf: { is: { id: input.recordingId, status: { not: "ARCHIVED" } } } },
+      data: { performanceId: original.id, updatedById: input.actorId, updatedAt: new Date(Math.max(Date.now(), draft.updatedAt.getTime() + 1)) },
+    });
+    if (repointed.count !== 1) throw new ConcurrentEditError(input.recordingId);
+    await tx.instrument.deleteMany({ where: { performanceId: clone.id } });
+    await tx.performance.delete({ where: { id: clone.id } });
+    await writeAuditLog(
+      {
+        actorId: input.actorId,
+        action: "PERFORMANCE_DRAFT_CLONE_DISCARDED",
+        entityType: "Performance",
+        entityId: original.id,
+        beforeSnapshot: { discardedCloneId: clone.id },
+        afterSnapshot: { draftRevisionId: draft.id, recordingId: input.recordingId },
+      },
+      tx
+    );
+    return { discarded: true };
+  });
+}
+
+/** For the Participants step: is the draft's Performance a clone, and has the original's participants changed since it was made (so publication would be refused)? */
+export async function getDraftPerformanceCloneStatus(performanceId: string): Promise<{ isClone: boolean; originalChanged: boolean }> {
+  const clone = await prisma.performance.findUnique({ where: { id: performanceId }, select: { draftOfPerformanceId: true, draftBaseParticipantsKey: true } });
+  if (!clone?.draftOfPerformanceId) return { isClone: false, originalChanged: false };
+  const original = await prisma.performance.findUnique({
+    where: { id: clone.draftOfPerformanceId },
+    include: { performers: true, choirs: true, conductors: true },
+  });
+  if (!original) return { isClone: false, originalChanged: false };
+  const currentKey = performanceParticipantsKey({
+    performers: original.performers.map((link) => ({ artistId: link.artistId, role: link.role })),
+    choirIds: original.choirs.map((link) => link.choirId),
+    conductorIds: original.conductors.map((link) => link.conductorId),
+  });
+  return { isClone: true, originalChanged: clone.draftBaseParticipantsKey !== currentKey };
+}
+
+/**
  * Edit-after-publish (ADR §5.3, third bullet): forks a new DRAFT revision
  * as a copy of the currently published one, without altering what the
  * public Museum serves until the new draft is itself published.
@@ -577,6 +755,71 @@ export async function forkDraftFromPublished(
   return client ? run(client) : withRecordingEditLock(recordingId, run);
 }
 
+/** Phase 6J-10F — see publishRecordingDraft. Only acts when the draft's Performance is a clone of the published revision's Performance. */
+async function promoteDraftPerformanceClone(
+  tx: Prisma.TransactionClient,
+  input: { draftId: string; draftPerformanceId: string | null; previousPublishedPerformanceId: string | null; actorId: string }
+): Promise<void> {
+  if (!input.draftPerformanceId || !input.previousPublishedPerformanceId || input.draftPerformanceId === input.previousPublishedPerformanceId) return;
+  const clone = await tx.performance.findUnique({
+    where: { id: input.draftPerformanceId },
+    include: { performers: true, choirs: true, conductors: true },
+  });
+  if (!clone || clone.draftOfPerformanceId !== input.previousPublishedPerformanceId) return; // not a clone of the live Performance: publishes as its own Performance
+  // Serialize promotions to the same original across Recordings: the second one waits here until the first commits, then
+  // re-reads the committed participants below. (Lock order: this Recording's edit lock, then the draft row, then this row.)
+  await tx.$queryRaw`SELECT id FROM performances WHERE id = ${input.previousPublishedPerformanceId} FOR UPDATE`;
+  const original = await tx.performance.findUnique({
+    where: { id: input.previousPublishedPerformanceId },
+    include: { performers: true, choirs: true, conductors: true },
+  });
+  if (!original) return;
+  // The original must still hold exactly the participants the clone was copied from. If someone else changed them since
+  // (another Recording's promotion, a catalogue edit), promoting would silently overwrite their change: refuse instead.
+  // A clone without a recorded fingerprint cannot be verified and is refused the same way.
+  const currentKey = performanceParticipantsKey({
+    performers: original.performers.map((link) => ({ artistId: link.artistId, role: link.role })),
+    choirIds: original.choirs.map((link) => link.choirId),
+    conductorIds: original.conductors.map((link) => link.conductorId),
+  });
+  if (clone.draftBaseParticipantsKey !== currentKey) throw new PublishRefused("PERFORMANCE_CHANGED");
+  const before = {
+    performerArtistIds: original.performers.map((link) => link.artistId).sort(),
+    choirIds: original.choirs.map((link) => link.choirId).sort(),
+    conductorIds: original.conductors.map((link) => link.conductorId).sort(),
+  };
+
+  await tx.performancePerformer.deleteMany({ where: { performanceId: original.id } });
+  await tx.performanceChoir.deleteMany({ where: { performanceId: original.id } });
+  await tx.performanceConductor.deleteMany({ where: { performanceId: original.id } });
+  if (clone.performers.length > 0) await tx.performancePerformer.createMany({ data: clone.performers.map((link) => ({ performanceId: original.id, artistId: link.artistId, role: link.role })) });
+  if (clone.choirs.length > 0) await tx.performanceChoir.createMany({ data: clone.choirs.map((link) => ({ performanceId: original.id, choirId: link.choirId })) });
+  if (clone.conductors.length > 0) await tx.performanceConductor.createMany({ data: clone.conductors.map((link) => ({ performanceId: original.id, conductorId: link.conductorId })) });
+  await tx.performance.update({ where: { id: original.id }, data: { updatedById: input.actorId } });
+
+  const repointed = await tx.recordingRevision.updateMany({ where: { id: input.draftId, revisionStatus: "DRAFT", performanceId: clone.id }, data: { performanceId: original.id } });
+  if (repointed.count !== 1) throw new PublishRefused("STATE_CHANGED");
+  await tx.instrument.deleteMany({ where: { performanceId: clone.id } }); // the clone's copies; the original keeps its own
+  await tx.performance.delete({ where: { id: clone.id } });
+
+  await writeAuditLog(
+    {
+      actorId: input.actorId,
+      action: "PERFORMANCE_DRAFT_PROMOTED",
+      entityType: "Performance",
+      entityId: original.id,
+      beforeSnapshot: before,
+      afterSnapshot: {
+        draftRevisionId: input.draftId,
+        performerArtistIds: clone.performers.map((link) => link.artistId).sort(),
+        choirIds: clone.choirs.map((link) => link.choirId).sort(),
+        conductorIds: clone.conductors.map((link) => link.conductorId).sort(),
+      },
+    },
+    tx
+  );
+}
+
 export type PublishRecordingResult =
   | { ok: true; recording: RecordingWithRevisions }
   | { ok: false; reason: PublishRefusalReason; /** Names of the REQUIRED completeness categories still missing (reason NOT_READY). */ missingCategories: string[] };
@@ -638,6 +881,15 @@ export async function publishRecordingDraft(input: PublishRecordingInput): Promi
 
         // Hold the draft row for the rest of the transaction, then validate against what is committed NOW.
         await tx.$queryRaw`SELECT id FROM recording_revisions WHERE id = ${draft.id} FOR UPDATE`;
+        // Phase 6J-10F: this publication may make the draft Performance's Programme "published content". The Recording
+        // workflow's Programme edits check that, then write; holding the Programme's edit lock until this commits means such
+        // an edit either completes before this publication (and is part of what is published) or waits and is then
+        // refused — it can never write to the Programme after this publication has made it live. (Order: Recording lock,
+        // draft row, Programme lock, Performance rows; Programme edits take only this lock, so no cycle.)
+        if (draft.performanceId) {
+          const draftPerformance = await tx.performance.findUnique({ where: { id: draft.performanceId }, select: { programmeId: true } });
+          if (draftPerformance) await lockProgrammeAgainstWorkflowEdits(tx, draftPerformance.programmeId);
+        }
         if (input.enforceCompleteness !== false) {
           const completeness = await getRecordingRevisionCompletenessReport(draft.id, tx);
           if (!completeness || !isReadyToPublish(completeness.report)) {
@@ -646,6 +898,12 @@ export async function publishRecordingDraft(input: PublishRecordingInput): Promi
         }
 
         const previousPublished = current.currentPublishedRevision;
+
+        // Phase 6J-10F: a draft that edited the participants of a Performance the published revision also uses holds a
+        // copy-on-write clone. Publication is the moment those edits become public: copy them onto the original
+        // Performance (its slug and URL stay), re-point the draft at the original, delete the clone — all in this
+        // transaction, so the public page changes exactly when the publication commits.
+        await promoteDraftPerformanceClone(tx, { draftId: draft.id, draftPerformanceId: draft.performanceId, previousPublishedPerformanceId: previousPublished?.performanceId ?? null, actorId });
 
         const promoted = await tx.recordingRevision.updateMany({
           where: { id: draft.id, recordingId: current.id, revisionStatus: "DRAFT" },

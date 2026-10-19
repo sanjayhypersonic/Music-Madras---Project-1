@@ -23,8 +23,10 @@ compare-and-swap in the `UPDATE` itself as a database-level backstop.
 - The lock is released at commit or rollback. State read after the lock is taken sees everything committed by
   earlier holders.
 - **Order is always advisory lock first, then row locks.** Nothing takes a row lock and then waits for the advisory
-  lock, so no cycle between the two is possible. The only row lock held across statements is publish's
-  `FOR UPDATE` on the draft row, and it is taken after the advisory lock.
+  lock, so no cycle between the two is possible. The row locks held across statements are publish's
+  `FOR UPDATE` on the draft row and (Phase 6J-10F) on the original Performance when promoting a clone, taken after the
+  Recording lock. The one other advisory lock is the per-Programme lock (section 9); the complete order is **Recording
+  lock, draft row, Programme lock, Performance rows**.
 - Transaction limits: `timeout: 30000`, `maxWait: 10000`.
 
 Operations that take the lock (own transaction): publish, submit for review, archive, restore, unpublish,
@@ -162,22 +164,139 @@ npm run test:integration:db:stop
 
 `npm run test:integration:reset` returns the test database to an empty state. Suites:
 `tests/integration/publishAtomicity.test.ts` (10B), `draftCasAndChildWrites.test.ts` (10C),
-`lifecycleSerialization.test.ts` (10D) and the apply-lock cases in `contentSuggestionApplication.test.ts` (10D);
+`lifecycleSerialization.test.ts` (10D), `sharedRecordIsolation.test.ts` (10F) and the apply-lock cases in `contentSuggestionApplication.test.ts` (10D);
 `tests/unit/publishRefusal.test.ts` covers refusal messages. The tests use
 explicit barriers (holding the edit lock or the draft row lock from outside, a hook between a function's read and
 its write) rather than sleeps; `stillPending` only asserts that something is blocked. Tests that need media on an
 already-published revision seed it with `tests/integration/helpers/seedRevisionRows.ts`, which bypasses the
 repository on purpose and is imported only by tests.
 
+## 9. Shared records: ownership and versioning (Phase 6J-10F)
+
+Governing rule: **draft edits made through the Recording workflow must not silently change published content.**
+Different records are owned differently, so they are handled differently:
+
+| Record | Ownership | What the Recording workflow can do to it |
+|---|---|---|
+| `RecordingRevision` (content, works, media, per-media rights link) | revision-owned | edit only the editable draft (sections 3-4) |
+| `Performance` participants (performers, choirs, conductors) | the Performance row is **shared** between a published revision and its fork | **copy-on-write**: the draft edits its own clone; publication promotes it (below) |
+| `Performance` itself (programme, venue, date, slug) | canonical event | the workflow only creates a **new** Performance for the draft (`createPerformanceForDraft`); it never edits an existing one |
+| `Programme` running order | canonical, shared | the workflow **refuses** to change a Programme that published content shows |
+| `Venue`, `Artist`, `Choir`, `Conductor`, `MusicalWork`, `Composer` | canonical catalogue identities | the workflow only picks existing ones (or creates new ones); it does not edit them |
+| `RightsInformation` | canonical, shared | no Studio path edits an existing record (create only) |
+
+Catalogue editing (Studio > Catalogue: renaming a Venue or Artist, a Performance's date, a Programme's items,
+reassigning a Performance's programme or venue) is the explicit, deliberate way to change a shared catalogue record
+and is **intentionally global**: it is not draft preparation and is not guarded by this model.
+
+### Performance participants: copy-on-write, promoted on publish
+
+`editDraftPerformanceParticipants({ recordingId, expectedPerformanceId, actorId, change })` runs under the edit lock in
+one transaction:
+
+1. Verifies the draft is the editable current draft of a non-archived Recording and still uses
+   `expectedPerformanceId` (otherwise `RevisionNotEditableError`; a stale form never edits another Performance).
+2. If **any other revision** uses that Performance, creates a clone owned by this draft: same Programme, Venue and
+   date, new id and slug, copies of the participant links and of the original's Instrument rows,
+   `draftOfPerformanceId` = the original and `draftBaseParticipantsKey` = a fingerprint of the participants it was
+   copied from. The original is share-locked (`FOR SHARE`) while it is read, so a concurrent promotion cannot change
+   it halfway: the copy and the fingerprint are one consistent snapshot. The draft revision is re-pointed at the clone
+   with a conditional write that also advances the content token (so a form loaded before the edit conflicts instead
+   of overwriting). The clone, its copies and its audit entry (`PERFORMANCE_CLONED_FOR_DRAFT`) are written in the same
+   transaction.
+3. Applies the change (and its audit entry) to the draft-owned Performance in the same transaction. A Performance used
+   only by this draft is edited in place; later edits reuse the clone.
+
+A clone is never public: public eligibility requires a Performance to be used by a **published** revision. Studio's
+Performance list hides clones.
+
+**Publication promotes the clone — unless the original changed since.** Inside `publishRecordingDraft`, under the
+Recording's lock and after the completeness check, if the draft's Performance is a clone of the previously published
+revision's Performance:
+
+1. the original Performance row is locked `FOR UPDATE` (lock order: this Recording's edit lock, the draft row, then the
+   original — no other path takes them in another order). A second Recording promoting to the same original waits here
+   (bounded by the 5 s `lock_timeout`: reason `BUSY`) until the first publication commits, and then reads the
+   *committed* participants;
+2. the original's participants are fingerprinted and compared with `draftBaseParticipantsKey`. If they differ — another
+   Recording's promotion, a catalogue edit, anything — the publication is **refused** with the typed reason
+   `PERFORMANCE_CHANGED` and rolls back completely (nothing is published, no audit is written, the clone and the
+   draft survive). A clone with no recorded fingerprint cannot be verified and is refused the same way. The message
+   tells the editor what to do: open the Participants step, choose **Discard my participant changes**, re-apply, publish
+   again;
+3. otherwise the clone's participants replace the original's, the draft revision is re-pointed at the original, the
+   clone's instrument copies and the clone are deleted, and `PERFORMANCE_DRAFT_PROMOTED` is audited (before/after
+   participant ids) — all in the publication transaction. The public page changes exactly when the publication
+   commits, at the same URL (the original keeps its slug).
+
+So two Recordings that share one Performance can no longer overwrite each other: the first promotion wins; the second
+is refused instead of replacing the first result. A draft that switched to a brand-new Performance publishes that
+Performance as before; a draft with no participant edit does not promote anything.
+
+**Discarding the participant changes.** `discardDraftPerformanceClone({ recordingId, actorId })` (Participants step:
+"Discard my participant changes", shown with a warning when the original has changed) runs under the edit lock in one
+transaction: re-points the draft at the original Performance (conditional, advances the content token), deletes the
+clone and its instrument copies, audits `PERFORMANCE_DRAFT_CLONE_DISCARDED`. It is idempotent (`discarded: false` when
+the draft has no clone) and refuses an archived Recording. The editor then re-applies the edits, which makes a fresh clone
+from the *current* original, and publishes — keeping the other Recording's change. There is no merge. This discards
+the participant edits only, not the draft.
+
+**Instruments.** An `Instrument` belongs to a Venue and has one optional `performanceId`, so "the clone has the same
+instruments" means copies of the rows owned by the clone (same Venue, name, maker, year, archived state). They are
+created in the cloning transaction, deleted when the clone is promoted or discarded (so nothing is orphaned), and
+excluded from the Studio venue inventory (`findVenueById`) so no instrument shows twice. The original's instrument rows
+are never touched; no Studio workflow edits instruments, so promotion writes none back.
+
+Canonical identities stay shared: the clone references the same Programme, Venue, Artist, Choir and Conductor rows;
+none are duplicated.
+
+### Programme running order
+
+`addProgrammeItem` / `removeProgrammeItem` accept `refuseIfInPublishedContent`; the Recording workflow's Programme
+step sets it. When any Performance using the Programme is used by a published revision of a **published** Recording,
+the change is refused (`ProgrammeInPublishedContentError`: create a new programme for this recording, or edit it
+deliberately from the Catalogue) and nothing is written. A programme that no published content shows can be built
+freely, and becomes protected once it is published (and editable again if the Recording is unpublished).
+
+**Serialized against publication.** The check and the write run in one transaction under a per-Programme advisory lock
+(`programme-edit:<id>`, bounded by `lock_timeout` 5 s; `ProgrammeBusyError` on expiry). `publishRecordingDraft` takes the
+same lock for the draft Performance's Programme right after it locks the draft row and holds it until the publication
+commits. So a guarded edit either completes before the publication (and is part of what gets published — publication does
+not validate Programme content) or waits for it and is then refused; it can never write to a Programme after a publication
+has made it live. Lock order: Recording lock, draft row, Programme lock, Performance rows. Programme edits take no other
+lock and never wait for anything a publication holds, so there is no cycle; two Recordings publishing the same Programme
+simply queue on the Programme lock. The catalogue path does not take the lock.
+
+### Schema and rollout
+
+One additive migration (`20261019120000_phase6j10f_performance_draft_clone`): two nullable columns on `performances`
+(`draftOfPerformanceId`, `draftBaseParticipantsKey`), an index and a `SET NULL` self foreign key. Every existing row keeps `NULL` (an
+ordinary Performance); nothing is rewritten or dropped; code that predates the column ignores it. Rollout: apply the
+migration **before** deploying the code that uses the column; rolling the code back leaves the column harmless. It was
+applied and tested only against the isolated test database. Existing published recordings, drafts and recordings with
+no draft read and publish exactly as before (covered by tests).
+
 ## Limitations
 
 These are not fixed by this work. Published-page immutability is **not** complete.
 
-- **Shared records are not revision-isolated.** Performance, Programme, Venue, participant (performer, choir,
-  conductor) and `RightsInformation` rows are shared across revisions; a fork copies `performanceId`. Editing them
-  changes the live page immediately regardless of draft state.
-- **Recording-level source and rights links are not revision-versioned.** Links with `entityType: "RECORDING"`
-  are keyed to the Recording and are editable while it is live.
+- **Recording-level links are not revision-versioned (next slice).** Sources, rights information, occasions and
+  collection membership attached to a Recording (`entityType: "RECORDING"`, Studio > Relationships step) are keyed to
+  the Recording, shown on public pages (for example the Organisation page aggregates APPROVED sources and rights of its
+  Recordings) and take effect **immediately**, whatever the draft state. Making them draft-scoped needs revision-scoped
+  link rows (or a new `RECORDING_REVISION` entity type), copy on fork, readers switched to the published revision, and
+  a backfill of existing links for published revisions; that touches several public readers and the AI context and was
+  not attempted here.
+- **A refused promotion has no merge.** When the original changed since the clone, the editor discards the participant
+  changes and re-applies them; there is no automatic three-way merge. The fingerprint covers participants only (performers
+  with roles, choirs, conductors) — not the Programme, Venue, date or instruments, none of which promotion writes.
+- **A refused or waiting promotion holds the original's row lock only for its own transaction**; other publications to
+  the same original wait up to 5 s and then report "busy".
+- **Abandoned drafts leave their clone behind.** There is no "discard draft" operation yet (only "discard my participant
+  changes"); an unpublished draft keeps its clone and its instrument copies (not public, hidden from the Studio list
+  and the venue inventory) until the draft is published or the participant changes are discarded. A cleanup belongs with
+  a draft-discard operation.
+- **Catalogue edits are global by design** (see above) and can change published pages immediately.
 - **Autosave recovery is local and manual.** Since Phase 6J-10E the autosave steps serialize saves, keep the
   editor's text on conflict and offer it back after a reload (see [`studio-autosave.md`](studio-autosave.md)), but
   recovery is per browser, there is no merge (the editor restores or discards), delivery during browser termination is
