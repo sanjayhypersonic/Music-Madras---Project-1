@@ -458,6 +458,87 @@ script (revision-scoped → legacy, dry-run first) belongs to the cutover phase.
 run `--execute` **before** the Studio writers are switched: afterwards, an editor's change to a draft is only protected from
 being re-added by the audit trail, not by any other record.
 
+## 12. Pre-cutover checklist for the relationship backfill (Phase 6J-11D) — NOT approved, NOT scheduled
+
+Nothing here authorises a cutover. It lists what must be true, and who must decide what, before the backfill is run on a
+real database and the Studio writers/readers are switched. Every production figure below is **unknown until measured**:
+the numbers in this repository come from the integration-test fixture and say nothing about production data.
+
+**What was rehearsed (fixture facts, isolated loopback test database only).** The committed script was dry-run against the
+test fixture (9 Recordings; every classification below occurs in it). Reproduce with the commands in section 11. Expected
+fixture figures, asserted by `tests/integration/revisionRelationshipBackfill.test.ts`:
+
+| | legacy rows | orphaned | duplicates | distinct | skipped (no safe revision) | planned inserts | already present | skipped (detached) |
+|---|---|---|---|---|---|---|---|---|
+| Source | 12 | 2 | 1 | 9 | 1 | 9 | 1 | 1 |
+| Rights | 5 | 1 | 1 | 3 | 0 | 4 | 0 | 0 |
+| Occasion | 4 | 1 | 0 | 3 | 0 | 5 | 0 | 0 |
+
+Totals: 18 planned inserts, 1 already present, 1 skipped (editor detached); 2 unapproved Sources and 1 archived Occasion
+preserved; anomalies `DUPLICATE_LEGACY_LINK` 2, `ORPHANED_LEGACY_LINK` 4, `NO_REVISION_POINTER` 1,
+`POINTER_REVISION_OTHER_RECORDING` 1. `POINTER_REVISION_MISSING` and `POINTER_STATUS_MISMATCH` are covered by the planner's
+unit tests but do not occur in the integration fixture (the database's foreign keys prevent the first; the second needs a
+pointer to a superseded revision). The same script against an empty database reports all zeros.
+
+### Checklist (all items must be satisfied, in this order)
+
+1. **Fresh dry run immediately before the approved maintenance window.** Not a report from days earlier. Archive the
+   complete text and `--json` output (counts and opaque ids only) with the change record.
+2. **Explicit disposition of every anomaly category, by a named approver.** The script's *behaviour* is fixed (below); what
+   is *unknown* is how many occur in production and whether the behaviour is acceptable for them:
+
+   | Category | What the script does | Production count | Decision required |
+   |---|---|---|---|
+   | `ORPHANED_LEGACY_LINK` | counts it; never projects it (no Recording to attach to) | unknown — measure | leave as is, or clean up the legacy rows separately before cutover |
+   | `DUPLICATE_LEGACY_LINK` | projects one link; counts the extra rows | unknown — measure | none expected (one link results); confirm |
+   | `NO_REVISION_POINTER` | skips that Recording's links | unknown — measure | whether those Recordings' links are intentionally dropped, or a pointer must be repaired first |
+   | `POINTER_REVISION_MISSING` / `_OTHER_RECORDING` / `_STATUS_MISMATCH` | skips that pointer; a safe sibling pointer still receives the links | unknown — measure | each is a data-integrity fault: repair the pointer (a separate, reviewed change) or accept the loss of that revision's links |
+   | Unapproved Sources / archived Occasions | projected and counted (approval/archival stay read-time filters) | unknown — measure | confirm that readers keep filtering; no data decision |
+   | Editor-detached links | not re-added to that exact revision | unknown — measure | see item 4 |
+   | Revision-scoped rows with no legacy counterpart | left untouched | unknown — measure | confirm they are editor-created, not leftovers |
+
+   A category with a non-zero production count and no recorded disposition is a **stop condition**.
+3. **The legacy relationship dataset has not changed since the accepted rehearsal.** Record, at acceptance time, the row
+   counts of `entity_sources` / `entity_rights` / `entity_occasions` (`entityType = 'RECORDING'`), the Recording pointer
+   state (`currentPublishedRevisionId`, `currentDraftRevisionId`) and the dry-run totals; repeat the measurement
+   immediately before `--execute`. Any difference means the accepted rehearsal no longer describes what will run: re-run,
+   re-review, re-approve. (The legacy tables carry no timestamps, so counts and the dry-run totals are the evidence.)
+4. **Decision on detach / fork behaviour (needs approval).** Evidence of an editor's detach is read from the audit trail,
+   is scoped to one revision, is not inherited by a fork, and cannot be ordered against later legacy edits (section 11).
+   Decide, and record, whether that is acceptable: for example whether a link an editor removed from a draft but that still
+   exists at Recording level should reappear on the first fork after cutover. Until decided, the script's behaviour is the
+   only one available.
+5. **Decision on legacy links added after the one-time backfill (needs approval).** The backfill is insert-only and not a
+   sync. A legacy link written between the backfill and the cutover is **not** projected. The options are: freeze
+   Recording-level link writes from the start of the maintenance window until the readers/writers switch (the product
+   decision of Phase 6J-11A is that legacy rows are frozen at cutover); or re-run a dry run after the window to measure the
+   delta and decide whether to run again. Which one applies, and who confirms the window is quiet, must be decided.
+6. **A verified backup and restore plan.** A restore point of the target database taken immediately before `--execute`,
+   with a *tested* restore (to a scratch database, never over the live one) and a named owner. The script cannot undo a
+   committed run; this is the only recovery for the inserts. Whether Neon branch/point-in-time restore satisfies this is
+   to be confirmed with evidence, not assumed.
+7. **Application readers and writers are unchanged until a separate cutover approval.** At backfill time no Studio
+   writer, public reader, AI context builder or Collection guard uses the revision-scoped tables (verify with a search of
+   the code at the deployed commit for any reference to the `recording_revision_*` models outside their repository and the
+   fork copy, and with the backfill's no-wiring test). The backfill and the cutover are separate
+   approvals; approving one is not approving the other.
+8. **The script's target safety has been re-reviewed for the real target.** In this phase the script refuses every
+   database except the local, marked test database. Running it on a real database needs a separate, reviewed change to
+   the allowlist in `backfillTarget.ts` and its tests, approved on its own. Do not work around the refusal.
+
+### After `--execute`: reconciliation and stop conditions
+
+- **Reconcile immediately** (read-only): re-run the dry run — it must report 0 planned inserts, and `already present`
+  must equal the pre-run planned inserts plus the previously present rows. Compare per-table row counts with the dry run's
+  expected totals. Spot-check a sample of Recordings: the links of the published and draft revisions equal the legacy links
+  (minus the recorded dispositions).
+- **Stop, do not proceed to cutover, and restore from the backup or re-plan** if any of these holds: the execute run exits
+  non-zero or rolled back (nothing was written — find out why first); the post-run dry run reports any planned insert; the
+  row counts differ from the accepted dry run; an anomaly category appears that had no recorded disposition; legacy row
+  counts changed during the window; any sampled Recording does not reconcile; or a writer was active during the window.
+- Cutover itself (switching writers/readers, the RBAC decision, the Collection-membership guard, the rollback
+  re-projection script) is a later, separately approved phase.
+
 ## Limitations
 
 These are not fixed by this work. Published-page immutability is **not** complete.
