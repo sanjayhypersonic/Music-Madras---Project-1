@@ -25,6 +25,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "seed:founder": "tsx scripts/seedFounder.ts",
     "youtube:full-sync": "tsx scripts/runYouTubeFullSync.ts",
+    "backfill:revision-relationships": "tsx scripts/backfillRevisionRelationships.ts",
     "design:evaluate": "tsx scripts/evaluateVisualDirections.ts",
     "design:specimen": "tsx scripts/generateDirectionSpecimen.ts"
   },

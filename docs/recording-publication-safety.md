@@ -326,14 +326,143 @@ decision for the cutover phase, not something this foundation does.
 
 **Rollout and compatibility.** Apply the migration before deploying this code; rolling the code back leaves the tables
 harmless (empty, or populated only by drafts forked/edited in the meantime). Existing recordings, public pages and AI
-context are unchanged (covered by tests). Still to do, in later phases: the backfill (dry-run first), switching Studio
-writers and the three readers, the Collection guard, and the rollback re-projection script.
+context are unchanged (covered by tests). The backfill utility exists since 6J-11C (section 11). Still to do, in later phases: running it against a real
+database (needs an authorized, reviewed target allowlist), switching Studio writers and the three readers, the Collection guard,
+and the rollback re-projection script.
+
+## 11. Revision relationship backfill (Phase 6J-11C) — a utility, not wired into anything
+
+**What it is.** A dry-run-by-default, idempotent operator script that projects the legacy Recording-level Source, Rights
+Information and Occasion links (`entity_sources` / `entity_rights` / `entity_occasions`, `entityType = "RECORDING"`) into
+the revision-scoped tables of section 10. It is **data-migration tooling only**: no application reader or writer uses the
+new tables yet, nothing is dual-written, no legacy row is ever deleted or rewritten, and the script is **not** part of
+deployment, the build, application startup, the YouTube sync or any Studio workflow (`package.json` has one operator
+entry, `backfill:revision-relationships`, and nothing calls it). The leak in the Limitations section is **still present**
+until the separately approved cutover.
+
+**Projection rules** (`modules/backfill/revisionRelationships/backfillPlan.ts`, pure and unit-tested):
+- For each Recording, every legacy link is projected to its **current published revision** and its **current draft
+  revision**, where present and safe. Superseded revisions get nothing. Nothing is inferred from titles, descriptions, AI
+  or entity matching.
+- A pointer is *safe* only if its revision exists, belongs to that Recording and has the expected status (`PUBLISHED` /
+  `DRAFT`). An unsafe pointer is skipped and reported; a safe sibling pointer still receives the links. A Recording with no
+  safe pointer has its links skipped (counted), never guessed.
+- Unapproved Sources and archived Occasions are projected like any other link (approval and archival remain read-time
+  filters) and are counted as "preserved".
+- Insert-only: rows that already exist are counted and left alone (not rewritten, `createdAt` included). A link an editor
+  **detached** from a revision (found in the audit trail, `*_DETACHED_FROM_RECORDING_REVISION`) is not re-added to that
+  revision. Revision-scoped rows with no legacy counterpart (an editor's own edits) are reported and never touched.
+
+**Configuration and target safety.** The script never reads `DATABASE_URL` / `DIRECT_URL` as a target, never imports the
+application Prisma client or `dotenv/config`, and never loads a `.env` file into the environment. It uses its own variables:
+
+| Variable | Meaning |
+|---|---|
+| `BACKFILL_DATABASE_URL` | the target (required; **no fallback of any kind**) |
+| `BACKFILL_TARGET_CONFIRM` | must equal `host:port/database` of that URL: the operator names the target |
+
+It refuses (exit 4, naming only host/port/database, never a credential) unless **all** of these hold: the URL is set and
+has the strict form below; the environment is not production; the host is a **loopback IP literal** (`127.0.0.1` or
+`::1` — in this phase no remote database, production, staging or otherwise, and no host *name* can be a target); the
+database name has a "test" word; the acknowledgement matches; the target is not any configured real database
+(`DATABASE_URL` / `DIRECT_URL` in the shell or any `.env*` file, which are *parsed for comparison only*); and, after
+connecting, the database carries the integration-test marker (`music-madras-integration-test`, written only by
+`npm run test:integration:setup`) with the 6J-11B migration applied. A name that merely looks like a test database is
+therefore not enough. A later phase that is authorized to backfill a real database must add an explicit, reviewed
+allowlist to `backfillTarget.ts`; nothing else makes it possible.
+
+**The validated target *is* the connection.** The PostgreSQL driver parses a connection string by its own rules: a query
+parameter such as `?host=` or `?port=` overrides the URL's host and port, and a URL without a port takes it from the
+`PGPORT` environment variable. A check that only looked at the URL's authority would therefore validate one destination
+and connect to another. So the raw string is **never given to the driver**:
+- `BACKFILL_DATABASE_URL` must be exactly `postgresql://user[:password]@host:port/database`. A query string or fragment
+  (even an empty one), a missing port, a missing user, several hosts, a multi-segment path, a database name with anything
+  but letters, digits, `_`, `.` or `-`, and any host that is not the literal `127.0.0.1` / `[::1]` (including `localhost`,
+  `127.1`, `0x7f.0.0.1`, `2130706433`, `0.0.0.0`) are refused before any connection is attempted.
+- The driver is constructed from the validated fields only — `{ host, port, database, user, password }`, every
+  destination field explicit — so neither the URL nor `PGHOST` / `PGPORT` / `PGDATABASE` / `PGUSER` / `PGHOSTADDR` in the
+  environment can change where it connects. The script also checks that the destination the driver will use equals the
+  acknowledged `host:port/database` and refuses otherwise; the printed `Target:` line is that same value.
+- The run-time marker check remains, but it is a second, independent signal, not the primary protection: a remote
+  connection is impossible by construction.
+
+**The comparison with the real database fails closed.** The `.env*` files are located from the repository root (resolved
+from the script's own location, **not** from the shell's working directory), and the check is "can the real database be
+determined?", not "was a real database found?". If the root is not recognised (no `package.json`), cannot be listed, or any
+`.env*` file (other than `.env.example`) cannot be read or parsed, the script refuses (exit 4) instead of carrying on with
+a shorter list. The files are parsed in memory; no value is printed, and the refusal names only the file and an error code.
+
+**Commands** (PowerShell; the isolated local test database from `npm run test:integration:db:start`):
+
+```powershell
+# the URL must be plain (no ?options, no #fragment) and must give the port explicitly
+$env:BACKFILL_DATABASE_URL = "postgresql://postgres@127.0.0.1:54329/music_madras_test"
+$env:BACKFILL_TARGET_CONFIRM = "127.0.0.1:54329/music_madras_test"
+npm run backfill:revision-relationships                 # dry run: reads, plans, reports, writes nothing
+npm run backfill:revision-relationships -- --execute    # applies the plan in ONE transaction
+npm run backfill:revision-relationships -- --json       # machine-readable report (also with --execute)
+```
+
+Exit codes: `0` done (dry run or executed), `2` failed (rolled back), `4` refused / configuration.
+
+**How writes are made safe.** A dry run runs in a `READ ONLY` transaction: the database itself rejects any write. `--execute`
+is one transaction: a global advisory lock (concurrent runs queue, never interleave), `lock_timeout` 5 s (a `recordings`
+row held by a publish/fork/archive makes the run fail cleanly rather than wait), a share-lock on every `recordings` row (no
+pointer moves underneath it), the plan is computed **inside** the transaction after the locks are held, rows are inserted
+with `ON CONFLICT DO NOTHING` against the composite primary keys, and a post-check re-plans and requires zero remaining
+inserts before `COMMIT`. Any error — including a failed post-check — rolls everything back.
+
+**Report format.** Per relationship type (`SOURCE`, `RIGHTS`, `OCCASION`) the report states, and every line is an accounting
+identity so no row is silently dropped:
+- `legacy rows = orphaned + duplicates + distinct links` — *orphaned*: rows whose entityId matches no Recording (counted
+  only here); *duplicates*: rows beyond the first for the same (Recording, target) — the legacy `entity_sources` and
+  `entity_rights` tables have no unique constraint (`entity_occasions` does);
+- `distinct links = skipped (no safe revision) + eligible`;
+- per target revision: `planned inserts`, `already present`, `skipped (editor detached)`, and the count of revision-scoped
+  rows with no legacy counterpart (left untouched); plus the preserved unapproved-Source / archived-Occasion counts.
+
+It also lists anomalies by code with exact counts and up to 10 sample ids each (`ORPHANED_LEGACY_LINK`,
+`DUPLICATE_LEGACY_LINK`, `NO_REVISION_POINTER`, `POINTER_REVISION_MISSING`, `POINTER_REVISION_OTHER_RECORDING`,
+`POINTER_STATUS_MISMATCH`) and the recordings summary. Anomalies are facts about the legacy data, so they are reported on
+every run, including after an execute. The report contains counts and opaque ids only.
+
+**What the script is, and what it is not (read before scheduling it).**
+- **Detach evidence is scoped to the exact revision and is not inherited by a fork.** A detach recorded in the audit trail
+  names one revision. It keeps that link off *that* revision only. A draft forked from a published revision later gets the
+  fork's own copied link set (6J-11B), so a link detached from the old draft is not suppressed on a new fork, and the
+  backfill never carries it across revisions.
+- **Detach evidence cannot be reliably ordered against later legacy edits.** The legacy link tables have no timestamps.
+  If an editor detached a link from a revision and a legacy writer later re-added or re-edited the same Recording-level
+  link, the script cannot tell which came last; it treats the detach as the editor's decision and does not re-add the row.
+  (An existing revision-scoped row always wins over detach evidence.) Review the "skipped (editor detached)" counts in the
+  dry run: any non-zero figure is a place where legacy and revision-scoped data were already editor-diverged.
+- **It is an insert-only projection, not a synchronisation.** It never updates or deletes a revision-scoped row and never
+  mirrors later legacy changes. Run once, **immediately before the approved cutover**, after the legacy writers can no
+  longer diverge from what the cutover will read. Running it earlier leaves a gap that nothing fills; running it repeatedly
+  is safe (idempotent) but is not a way to keep two stores in step.
+- **A dry-run report can be affected by concurrent changes.** The dry run reads in a single read-only transaction at
+  `READ COMMITTED`, not a snapshot: Studio and sync writes that commit while it runs may be partly reflected in the
+  report. Treat a dry run as an estimate; `--execute` recomputes the plan after taking its locks, and its post-check
+  (which can fail, safely, with a rollback, if a legacy edit lands during the run) is the authoritative one. Legacy link
+  edits take no `recordings` lock, so the share lock does not hold them off.
+- **`--execute` can block recording writers briefly and must be scheduled as maintenance.** It takes a share lock on
+  every `recordings` row and a global advisory lock for the duration of the transaction. A publish, fork, archive or
+  any other write that needs to update or exclusively lock a `recordings` row queues behind it, and if the script cannot
+  acquire a Recording's lock within 5 s (because one of those operations holds it) it fails and rolls back. Run it in a maintenance window with writers quiet, never from a
+  schedule or a hook.
+
+**Rollback considerations.** The script only ever inserts; legacy rows are never modified, so there is nothing to restore
+there. A run is all-or-nothing. A *committed* run cannot be undone by a script in this phase (none is provided): the rows
+it added are ordinary revision-scoped links that nothing reads yet, so leaving them is harmless, and the reviewed re-projection
+script (revision-scoped → legacy, dry-run first) belongs to the cutover phase. Run a dry run, review the anomalies, and
+run `--execute` **before** the Studio writers are switched: afterwards, an editor's change to a draft is only protected from
+being re-added by the audit trail, not by any other record.
 
 ## Limitations
 
 These are not fixed by this work. Published-page immutability is **not** complete.
 
-- **Recording-level links are not revision-versioned (storage foundation exists since 6J-11B, not yet in use).** Sources, rights information, occasions and
+- **Recording-level links are not revision-versioned (storage foundation since 6J-11B and a backfill utility since 6J-11C exist; neither is in use by the application).** Sources, rights information, occasions and
   collection membership attached to a Recording (`entityType: "RECORDING"`, Studio > Relationships step) are keyed to
   the Recording, shown on public pages (for example the Organisation page aggregates APPROVED sources and rights of its
   Recordings) and take effect **immediately**, whatever the draft state. Making them draft-scoped needs revision-scoped
