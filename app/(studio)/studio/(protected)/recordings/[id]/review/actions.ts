@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import {
+  RecordingBusyError,
   archiveRecording,
   publishRecordingDraft,
   restoreRecording,
@@ -37,7 +38,8 @@ export async function submitForReviewAction(recordingId: string) {
 
   try {
     await submitRecordingForReview(recordingId, session!.user.id);
-  } catch {
+  } catch (err) {
+    if (err instanceof RecordingBusyError) back(recordingId, err.message);
     back(recordingId, "This recording can no longer be submitted for review (its status has changed).");
   }
   back(recordingId);
@@ -70,7 +72,8 @@ export async function unpublishAction(recordingId: string) {
 
   try {
     await unpublishRecording(recordingId, session!.user.id);
-  } catch {
+  } catch (err) {
+    if (err instanceof RecordingBusyError) back(recordingId, err.message);
     back(recordingId, "This recording is not published, so it cannot be unpublished.");
   }
   back(recordingId);
@@ -84,7 +87,8 @@ export async function restoreAction(recordingId: string) {
 
   try {
     await restoreRecording(recordingId, session!.user.id);
-  } catch {
+  } catch (err) {
+    if (err instanceof RecordingBusyError) back(recordingId, err.message);
     back(recordingId, "This recording is not archived, so it cannot be restored.");
   }
   back(recordingId);
@@ -98,7 +102,8 @@ export async function archiveAction(recordingId: string) {
 
   try {
     await archiveRecording(recordingId, session!.user.id);
-  } catch {
+  } catch (err) {
+    if (err instanceof RecordingBusyError) back(recordingId, err.message);
     back(recordingId, "This recording could not be archived.");
   }
   redirect(`/studio/recordings`);

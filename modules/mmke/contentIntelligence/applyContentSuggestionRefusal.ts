@@ -14,7 +14,9 @@ export type ApplyContentSuggestionRefusal =
   | "FRESHNESS_UNKNOWN"
   | "RECORDING_NOT_FOUND"
   | "RECORDING_ARCHIVED"
-  | "NO_REVISION";
+  | "NO_REVISION"
+  // 6J-10D: the Recording's edit lock was not available within its bounded wait; nothing was changed.
+  | "BUSY";
 
 export function describeApplyRefusalForEditor(reason: ApplyContentSuggestionRefusal): string {
   switch (reason) {
@@ -30,6 +32,8 @@ export function describeApplyRefusalForEditor(reason: ApplyContentSuggestionRefu
       return "This suggestion does not target an editorial field that can be applied to a Recording.";
     case "EMPTY_CONTENT":
       return "This suggestion has no content to apply.";
+    case "BUSY":
+      return "This Recording is being changed by someone else right now. Nothing was changed. Try again in a moment.";
     case "RECORDING_ARCHIVED":
       return "This Recording is archived, so content cannot be applied to it.";
     case "RECORDING_NOT_FOUND":

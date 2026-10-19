@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
-import { findRecordingById, forkDraftFromPublished } from "../../../../../../modules/db/repositories/recordingRepository";
+import { RecordingBusyError, RevisionNotEditableError, findRecordingById, forkDraftFromPublished } from "../../../../../../modules/db/repositories/recordingRepository";
 
 // Phase 6J-4 — "Start a new draft": the one way back to an EDITABLE draft once a
 // Recording has no open draft revision — either because it is published with no
@@ -48,8 +48,15 @@ export async function startNewDraftAction(recordingId: string, step: string) {
   if (current.currentDraftRevisionId === null) {
     try {
       await forkDraftFromPublished(recordingId, session!.user.id);
-    } catch {
-      land(recordingId, step, "A new draft could not be started (this recording has no published version to start from).");
+    } catch (err) {
+      // 6J-10D: the repository re-checks under the edit lock, so a refusal here is authoritative. Typed
+      // refusals (archived since the check above, busy) are shown as themselves; a draft that appeared
+      // meanwhile (double click) is a success, not an error.
+      if (err instanceof RevisionNotEditableError || err instanceof RecordingBusyError) land(recordingId, step, err.message);
+      const after = await findRecordingById(recordingId);
+      if (!after || after.currentDraftRevisionId === null) {
+        land(recordingId, step, "A new draft could not be started (this recording has no published version to start from).");
+      }
     }
   }
 

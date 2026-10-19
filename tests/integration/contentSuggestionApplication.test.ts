@@ -29,6 +29,7 @@ import {
   submitSuggestionForReview,
 } from "../../modules/db/repositories/contentSuggestionRepository";
 import { applyApprovedContentSuggestion, findContentSuggestionApplication } from "../../modules/db/repositories/contentSuggestionApplicationRepository";
+import { describeApplyRefusalForEditor } from "../../modules/mmke/contentIntelligence/applyContentSuggestionRefusal";
 import { approveSource, attachSourceToEntity, createSource } from "../../modules/db/repositories/sourceRepository";
 import { createCitation } from "../../modules/db/repositories/citationRepository";
 import { findPublishedRecordingSlugForYouTubeVideo } from "../../modules/db/repositories/mediaResourceRepository";
@@ -543,6 +544,63 @@ describe("E. Duplicate application", () => {
     const draft = await prisma.recordingRevision.findUniqueOrThrow({ where: { id: draftId } });
     expect(draft.educationalListeningGuide).toBe("Suggestion A.");
     expect(draft.seoMetaTitle).toBe("Suggestion B.");
+  }, T);
+
+  // Phase 6J-10D: the apply transaction uses the shared edit-lock protocol, including its 5 s bounded wait.
+  /** Holds the per-Recording edit lock (the key every lifecycle operation, save and apply uses) until released. */
+  function holdEditLock(recordingId: string) {
+    let release!: () => void;
+    let acquired!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const got = new Promise<void>((resolve) => (acquired = resolve));
+    const done = prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`recording-edit:${recordingId}`}))`;
+        acquired();
+        await released;
+      },
+      { timeout: 60000, maxWait: 10000 }
+    );
+    return { got, release, done };
+  }
+
+  it("waits for the edit lock while another operation holds it, then applies normally", async () => {
+    const f = await createPublishedRecording();
+    const suggestion = await generateApproved(f, GUIDE, "Wait for me.");
+    const holder = holdEditLock(f.recording.id);
+    await holder.got;
+    const apply = applyApprovedContentSuggestion({ suggestionId: suggestion.id, actorId: f.user.id });
+    let settled = false;
+    void apply.then(() => (settled = true), () => (settled = true));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(settled).toBe(false); // blocked on the lock, nothing applied yet
+    expect(await prisma.recordingRevision.count({ where: { recordingId: f.recording.id } })).toBe(1);
+    holder.release();
+    await holder.done;
+    const result = await apply;
+    expect(result.ok).toBe(true);
+    expect(await prisma.recordingRevision.count({ where: { recordingId: f.recording.id } })).toBe(2);
+  }, T);
+
+  it("returns the typed BUSY refusal (not a raw error) when the edit lock stays unavailable, and changes nothing", async () => {
+    const f = await createPublishedRecording();
+    const suggestion = await generateApproved(f, GUIDE, "Busy.");
+    const holder = holdEditLock(f.recording.id);
+    await holder.got;
+    let result: Awaited<ReturnType<typeof applyApprovedContentSuggestion>>;
+    try {
+      result = await applyApprovedContentSuggestion({ suggestionId: suggestion.id, actorId: f.user.id });
+    } finally {
+      holder.release();
+      await holder.done;
+    }
+    expect(result).toEqual({ ok: false, reason: "BUSY" });
+    expect(describeApplyRefusalForEditor("BUSY")).toMatch(/being changed by someone else/);
+    expect(await prisma.recordingRevision.count({ where: { recordingId: f.recording.id } })).toBe(1);
+    expect(await prisma.auditLogEntry.count({ where: { entityType: "ContentSuggestion", entityId: suggestion.id, action: "CONTENT_SUGGESTION_APPLIED" } })).toBe(0);
+    expect(await findContentSuggestionApplication(suggestion.id)).toBeNull();
+    // the suggestion is still applicable once the Recording is free
+    expect((await applyApprovedContentSuggestion({ suggestionId: suggestion.id, actorId: f.user.id })).ok).toBe(true);
   }, T);
 });
 

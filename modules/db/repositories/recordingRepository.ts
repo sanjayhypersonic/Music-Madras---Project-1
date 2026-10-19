@@ -313,7 +313,7 @@ export async function resolveEditableDraftRevision(recordingId: string, expected
 
 /**
  * Updates fields on the current draft revision as a DATABASE-ENFORCED compare-and-swap (ADR §5.4, hardened
- * in 6J-10C). The caller passes the token (`updatedAt`) it last read — and, from the Studio, the id of the
+ * in 6J-10C; serialized with the lifecycle operations in 6J-10D). The caller passes the token (`updatedAt`) it last read — and, from the Studio, the id of the
  * revision it rendered (`options.expectedRevisionId`). The write is ONE conditional UPDATE:
  *
  *   UPDATE recording_revisions SET <patch>, updatedAt = <strictly greater token>
@@ -327,9 +327,9 @@ export async function resolveEditableDraftRevision(recordingId: string, expected
  * matches nothing. The token is a millisecond timestamp, so it is advanced to max(now, expected + 1ms): it
  * can never repeat or move backwards, even for two saves inside the same millisecond (no ABA on `updatedAt`).
  *
- * Errors: ConcurrentEditError (stale token/revision, or the draft changed state under the save),
- * RecordingBusyError (a row lock could not be had within the bounded wait), plain Error for a Recording with
- * no open draft / an archived Recording (messages unchanged since 6G).
+ * Errors (all typed, all with editor-safe messages): ConcurrentEditError (stale token/revision, or the draft
+ * changed state under the save), RecordingBusyError (the edit lock or the row lock could not be had within the
+ * bounded wait), RevisionNotEditableError (reason RECORDING_NOT_FOUND / RECORDING_ARCHIVED / NO_OPEN_DRAFT).
  *
  * `client` is an optional caller-owned transaction (apply-approved-suggestion, intake); in that case the
  * caller owns locking and the write simply joins its transaction.
@@ -362,12 +362,9 @@ export async function updateDraftRevisionContent(
       where: { id: recordingId },
       select: { status: true, currentDraftRevisionId: true },
     });
-    if (!recording?.currentDraftRevisionId) {
-      throw new Error(`Recording ${recordingId} has no open draft revision to update.`);
-    }
-    if (recording.status === "ARCHIVED") {
-      throw new Error(`Recording ${recordingId} is archived and cannot be edited. Restore it first.`);
-    }
+    if (!recording) throw new RevisionNotEditableError("RECORDING_NOT_FOUND");
+    if (recording.status === "ARCHIVED") throw new RevisionNotEditableError("RECORDING_ARCHIVED");
+    if (!recording.currentDraftRevisionId) throw new RevisionNotEditableError("NO_OPEN_DRAFT");
     const draftId = recording.currentDraftRevisionId;
     if (options.expectedRevisionId !== undefined && options.expectedRevisionId !== draftId) {
       throw new ConcurrentEditError(recordingId);
@@ -389,19 +386,14 @@ export async function updateDraftRevisionContent(
     return tx.recordingRevision.findUniqueOrThrow({ where: { id: draftId } });
   };
 
+  // Phase 6J-10D: a save takes the SAME per-Recording edit lock as archive/restore/fork/publish and the child
+  // writes, BEFORE it touches the draft row (advisory lock first, row lock second — the one order used everywhere).
+  // A save therefore cannot interleave with a lifecycle change: it runs entirely before it or entirely after it,
+  // and in the second case the first read below already sees ARCHIVED / no draft / a new draft. The CAS in the
+  // UPDATE stays as the database-level backstop for everything the lock cannot see (a different writer, a token
+  // that went stale). With a caller-owned transaction the caller holds the lock (apply-approved-suggestion).
   if (client !== prisma) return run(client as Prisma.TransactionClient);
-  try {
-    return await prisma.$transaction(
-      async (tx) => {
-        await tx.$executeRaw`SELECT set_config('lock_timeout', ${`${RECORDING_EDIT_LOCK_TIMEOUT_MS}ms`}, true)`;
-        return run(tx);
-      },
-      { timeout: 15000, maxWait: 10000 }
-    );
-  } catch (err) {
-    if (isLockTimeoutError(err)) throw new RecordingBusyError(recordingId);
-    throw err;
-  }
+  return withRecordingEditLock(recordingId, run);
 }
 
 /**
@@ -416,27 +408,19 @@ export async function createPerformanceForDraft(
   expectedRevisionUpdatedAt: Date,
   input: CreatePerformanceInput
 ) {
-  try {
-    return await prisma.$transaction(
-      async (tx) => {
-        await tx.$executeRaw`SELECT set_config('lock_timeout', ${`${RECORDING_EDIT_LOCK_TIMEOUT_MS}ms`}, true)`;
-        const performance = await createPerformance(input, tx);
-        await updateDraftRevisionContent(
-          recordingId,
-          expectedRevisionUpdatedAt,
-          input.actorId,
-          { performanceId: performance.id },
-          tx,
-          { expectedRevisionId }
-        );
-        return performance;
-      },
-      { timeout: 15000, maxWait: 10000 }
+  // Same lock protocol as every other draft write (6J-10D): edit lock first, then the draft row.
+  return withRecordingEditLock(recordingId, async (tx) => {
+    const performance = await createPerformance(input, tx);
+    await updateDraftRevisionContent(
+      recordingId,
+      expectedRevisionUpdatedAt,
+      input.actorId,
+      { performanceId: performance.id },
+      tx,
+      { expectedRevisionId }
     );
-  } catch (err) {
-    if (isLockTimeoutError(err)) throw new RecordingBusyError(recordingId);
-    throw err;
-  }
+    return performance;
+  });
 }
 
 /**
@@ -459,8 +443,15 @@ export async function createPerformanceForDraft(
  *   still lands in IN_REVIEW exactly as before — forking never makes a
  *   non-public Recording public.
  *
+ * Phase 6J-10D — safe against the other lifecycle operations. Without a caller transaction it runs under the
+ * per-Recording edit lock (bounded wait, RecordingBusyError); inside the transaction it re-reads the Recording and
+ * refuses an ARCHIVED one (RevisionNotEditableError RECORDING_ARCHIVED — nothing is created, no audit is written),
+ * and the final pointer move is conditional (still no open draft, same status, not archived), so two forks, or a
+ * fork racing archive/restore, can never create a second open draft or a draft on an archived Recording.
+ *
  * `client` is optional: omitted by every pre-existing caller, supplied by
- * apply-approved-suggestion so the fork, the edit, and the audit are atomic.
+ * apply-approved-suggestion so the fork, the edit, and the audit are atomic. With a caller-owned transaction the
+ * caller holds the edit lock (apply does).
  */
 export async function forkDraftFromPublished(
   recordingId: string,
@@ -475,6 +466,9 @@ export async function forkDraftFromPublished(
 
     if (!recording) {
       throw new Error(`Recording ${recordingId} does not exist.`);
+    }
+    if (recording.status === "ARCHIVED") {
+      throw new RevisionNotEditableError("RECORDING_ARCHIVED");
     }
 
     const hasOpenDraft = recording.currentDraftRevisionId !== null;
@@ -547,8 +541,8 @@ export async function forkDraftFromPublished(
       });
     }
 
-    await tx.recording.update({
-      where: { id: recordingId },
+    const pointed = await tx.recording.updateMany({
+      where: { id: recordingId, currentDraftRevisionId: null, status: recording.status },
       data: {
         currentDraftRevisionId: draft.id,
         // A live Recording stays live while its new draft is edited; anything
@@ -556,6 +550,10 @@ export async function forkDraftFromPublished(
         status: recording.status === "PUBLISHED" ? "PUBLISHED" : "IN_REVIEW",
       },
     });
+    if (pointed.count !== 1) {
+      // Rolls back the new revision, its copied works/media and everything else in this transaction.
+      throw new Error(`Recording ${recordingId} changed while a new draft was being started. Reload and try again.`);
+    }
 
     await writeAuditLog(
       {
@@ -576,7 +574,7 @@ export async function forkDraftFromPublished(
     return draft;
   };
 
-  return client ? run(client) : prisma.$transaction(run, { timeout: 30000, maxWait: 10000 });
+  return client ? run(client) : withRecordingEditLock(recordingId, run);
 }
 
 export type PublishRecordingResult =

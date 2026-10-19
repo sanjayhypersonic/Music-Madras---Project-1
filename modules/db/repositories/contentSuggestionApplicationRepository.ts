@@ -4,7 +4,13 @@ import { getApplicableTargetField, resolveContentToApply } from "../../mmke/cont
 import type { RecordingEditorialTargetField } from "../../mmke/contentIntelligence/recordingEditorialTargetFields";
 import type { ApplyContentSuggestionRefusal } from "../../mmke/contentIntelligence/applyContentSuggestionRefusal";
 import { checkContentSuggestionFreshness } from "./contentSuggestionRepository";
-import { forkDraftFromPublished, updateDraftRevisionContent } from "./recordingRepository";
+import {
+  RecordingBusyError,
+  RevisionNotEditableError,
+  forkDraftFromPublished,
+  updateDraftRevisionContent,
+  withRecordingEditLock,
+} from "./recordingRepository";
 import type { RecordingRevision } from "@prisma/client";
 
 // Phase 6I-2 — the editorial application boundary
@@ -110,70 +116,83 @@ export async function applyApprovedContentSuggestion(input: { suggestionId: stri
 
   const recordingId = suggestion.targetEntityId;
 
-  return prisma.$transaction(
-    async (tx): Promise<ApplyContentSuggestionResult> => {
-      // Serializes every application against this Recording: two suggestions
-      // (or a double-click on one) cannot race to fork the same published
-      // revision or both pass the already-applied check.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`recording-edit:${recordingId}`}))`;
+  // Phase 6J-10D: runs under withRecordingEditLock, the one implementation of the shared
+  // `recording-edit:<id>` protocol (same lock key, same 30 s transaction, and the documented 5 s bounded
+  // wait). Serializes every application against this Recording and against publish, archive, restore,
+  // fork and content saves: two suggestions (or a double-click on one) cannot race to fork the same
+  // published revision or both pass the already-applied check. fork and save below join this transaction.
+  try {
+    return await withRecordingEditLock(
+      recordingId,
+      async (tx): Promise<ApplyContentSuggestionResult> => {
+        const current = await tx.contentSuggestion.findUnique({ where: { id: suggestion.id }, select: { status: true } });
+        if (!current || current.status !== "APPROVED") return { ok: false, reason: "NOT_APPROVED" };
 
-      const current = await tx.contentSuggestion.findUnique({ where: { id: suggestion.id }, select: { status: true } });
-      if (!current || current.status !== "APPROVED") return { ok: false, reason: "NOT_APPROVED" };
+        const alreadyApplied = await tx.auditLogEntry.findFirst({
+          where: { entityType: "ContentSuggestion", entityId: suggestion.id, action: "CONTENT_SUGGESTION_APPLIED" },
+          select: { id: true },
+        });
+        if (alreadyApplied) return { ok: false, reason: "ALREADY_APPLIED" };
 
-      const alreadyApplied = await tx.auditLogEntry.findFirst({
-        where: { entityType: "ContentSuggestion", entityId: suggestion.id, action: "CONTENT_SUGGESTION_APPLIED" },
-        select: { id: true },
-      });
-      if (alreadyApplied) return { ok: false, reason: "ALREADY_APPLIED" };
+        const recording = await tx.recording.findUnique({ where: { id: recordingId }, include: { currentDraftRevision: true } });
+        if (!recording) return { ok: false, reason: "RECORDING_NOT_FOUND" };
+        if (recording.status === "ARCHIVED") return { ok: false, reason: "RECORDING_ARCHIVED" };
 
-      const recording = await tx.recording.findUnique({ where: { id: recordingId }, include: { currentDraftRevision: true } });
-      if (!recording) return { ok: false, reason: "RECORDING_NOT_FOUND" };
-      if (recording.status === "ARCHIVED") return { ok: false, reason: "RECORDING_ARCHIVED" };
+        let draft: RecordingRevision | null = recording.currentDraftRevision;
+        let forkedDraft = false;
+        if (!draft) {
+          if (!recording.currentPublishedRevisionId) return { ok: false, reason: "NO_REVISION" };
+          draft = await forkDraftFromPublished(recordingId, input.actorId, tx);
+          forkedDraft = true;
+        }
 
-      let draft: RecordingRevision | null = recording.currentDraftRevision;
-      let forkedDraft = false;
-      if (!draft) {
-        if (!recording.currentPublishedRevisionId) return { ok: false, reason: "NO_REVISION" };
-        draft = await forkDraftFromPublished(recordingId, input.actorId, tx);
-        forkedDraft = true;
-      }
+        const before = draft[targetField];
+        await updateDraftRevisionContent(recordingId, draft.updatedAt, input.actorId, { [targetField]: content }, tx);
 
-      const before = draft[targetField];
-      await updateDraftRevisionContent(recordingId, draft.updatedAt, input.actorId, { [targetField]: content }, tx);
-
-      await writeAuditLog(
-        {
-          actorId: input.actorId,
-          action: "CONTENT_SUGGESTION_APPLIED",
-          entityType: "ContentSuggestion",
-          entityId: suggestion.id,
-          afterSnapshot: {
-            recordingId,
-            recordingRevisionId: draft.id,
-            targetField,
-            contentSource,
-            forkedDraft,
-            contextFingerprint: suggestion.generationRequest.contextFingerprint,
+        await writeAuditLog(
+          {
+            actorId: input.actorId,
+            action: "CONTENT_SUGGESTION_APPLIED",
+            entityType: "ContentSuggestion",
+            entityId: suggestion.id,
+            afterSnapshot: {
+              recordingId,
+              recordingRevisionId: draft.id,
+              targetField,
+              contentSource,
+              forkedDraft,
+              contextFingerprint: suggestion.generationRequest.contextFingerprint,
+            },
           },
-        },
-        tx
-      );
-      // Also on the Recording's own history, with what was replaced, so an
-      // editor reading the Recording's activity can see (and undo) the change.
-      await writeAuditLog(
-        {
-          actorId: input.actorId,
-          action: "RECORDING_DRAFT_CONTENT_APPLIED",
-          entityType: "Recording",
-          entityId: recordingId,
-          beforeSnapshot: { [targetField]: before },
-          afterSnapshot: { [targetField]: content, recordingRevisionId: draft.id, contentSuggestionId: suggestion.id, contentSource },
-        },
-        tx
-      );
+          tx
+        );
+        // Also on the Recording's own history, with what was replaced, so an
+        // editor reading the Recording's activity can see (and undo) the change.
+        await writeAuditLog(
+          {
+            actorId: input.actorId,
+            action: "RECORDING_DRAFT_CONTENT_APPLIED",
+            entityType: "Recording",
+            entityId: recordingId,
+            beforeSnapshot: { [targetField]: before },
+            afterSnapshot: { [targetField]: content, recordingRevisionId: draft.id, contentSuggestionId: suggestion.id, contentSource },
+          },
+          tx
+        );
 
-      return { ok: true, suggestionId: suggestion.id, recordingId, recordingRevisionId: draft.id, targetField, contentSource, forkedDraft };
-    },
-    { timeout: 30000, maxWait: 10000 }
-  );
+        return { ok: true, suggestionId: suggestion.id, recordingId, recordingRevisionId: draft.id, targetField, contentSource, forkedDraft };
+      }
+    );
+  } catch (err) {
+    // Lock contention is a typed, safe refusal (never a raw database error): nothing was changed.
+    if (err instanceof RecordingBusyError) return { ok: false, reason: "BUSY" };
+    // The shared helpers can refuse with a typed error if the Recording changed state outside the lock protocol;
+    // the whole transaction has rolled back.
+    if (err instanceof RevisionNotEditableError) {
+      if (err.reason === "RECORDING_ARCHIVED") return { ok: false, reason: "RECORDING_ARCHIVED" };
+      if (err.reason === "RECORDING_NOT_FOUND") return { ok: false, reason: "RECORDING_NOT_FOUND" };
+      return { ok: false, reason: "NO_REVISION" };
+    }
+    throw err;
+  }
 }

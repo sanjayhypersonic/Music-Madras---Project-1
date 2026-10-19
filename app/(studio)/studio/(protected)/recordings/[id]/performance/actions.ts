@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
-import { ConcurrentEditError, RecordingBusyError, createPerformanceForDraft, resolveEditableDraftRevision } from "../../../../../../../modules/db/repositories/recordingRepository";
+import { ConcurrentEditError, RecordingBusyError, RevisionNotEditableError, createPerformanceForDraft, resolveEditableDraftRevision } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { describeEditableDraftRefusal } from "../../../../../../../modules/publishing/editableDraftRefusal";
 
 // `revisionId` and `revisionUpdatedAt` are the draft the form was rendered for (6J-10C): the save is a
@@ -38,7 +38,7 @@ export async function createPerformanceAction(recordingId: string, revisionId: s
       actorId: session!.user.id,
     });
   } catch (error) {
-    if (error instanceof ConcurrentEditError || error instanceof RecordingBusyError) refusal = error.message;
+    if (error instanceof ConcurrentEditError || error instanceof RecordingBusyError || error instanceof RevisionNotEditableError) refusal = error.message;
     else throw error;
   }
   if (refusal) redirect(`/studio/recordings/${recordingId}/performance?error=${encodeURIComponent(refusal)}`);

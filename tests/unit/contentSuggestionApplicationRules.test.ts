@@ -81,6 +81,7 @@ describe("describeApplyRefusalForEditor", () => {
     "RECORDING_NOT_FOUND",
     "RECORDING_ARCHIVED",
     "NO_REVISION",
+    "BUSY",
   ];
 
   it("has a non-empty, secret-free message for every refusal reason", () => {

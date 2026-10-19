@@ -2,7 +2,7 @@
 
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
-import { ConcurrentEditError, RecordingBusyError, updateDraftRevisionContent } from "../../../../../../../modules/db/repositories/recordingRepository";
+import { ConcurrentEditError, RecordingBusyError, RevisionNotEditableError, updateDraftRevisionContent } from "../../../../../../../modules/db/repositories/recordingRepository";
 import type { AutosaveSaveResult } from "../../../../_components/AutosaveStepForm";
 
 // expectedRevisionId is bound by the page (6J-10C): the draft this form was rendered for.
@@ -24,7 +24,7 @@ export async function saveSourceStep(
     }, undefined, { expectedRevisionId });
     return { ok: true, updatedAt: updated.updatedAt.toISOString() };
   } catch (error) {
-    if (error instanceof ConcurrentEditError || error instanceof RecordingBusyError) {
+    if (error instanceof ConcurrentEditError || error instanceof RecordingBusyError || error instanceof RevisionNotEditableError) {
       return { ok: false, error: error.message };
     }
     throw error;
