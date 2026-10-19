@@ -178,8 +178,10 @@ These are not fixed by this work. Published-page immutability is **not** complet
   changes the live page immediately regardless of draft state.
 - **Recording-level source and rights links are not revision-versioned.** Links with `entityType: "RECORDING"`
   are keyed to the Recording and are editable while it is live.
-- **Autosave conflict recovery is incomplete.** There is no in-flight guard, no flush on unload and no recovery; a
-  stale save is refused with a clear message but the editor must reload by hand.
+- **Autosave recovery is local and manual.** Since Phase 6J-10E the autosave steps serialize saves, keep the
+  editor's text on conflict and offer it back after a reload (see [`studio-autosave.md`](studio-autosave.md)), but
+  recovery is per browser, there is no merge (the editor restores or discards), delivery during browser termination is
+  not guaranteed, and only the Source, SEO and Educational steps autosave.
 - **No database constraints enforce revision-pointer consistency.** Nothing ties a pointed revision to its Recording
   or status; the protocol and conditional writes above are application-level. A writer that bypasses the repository
   (raw SQL) is caught only where a conditional `WHERE` applies (content saves, lifecycle writes), not for child rows.

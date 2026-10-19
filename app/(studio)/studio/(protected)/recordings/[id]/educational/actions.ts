@@ -2,10 +2,12 @@
 
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
-import { ConcurrentEditError, RecordingBusyError, RevisionNotEditableError, updateDraftRevisionContent } from "../../../../../../../modules/db/repositories/recordingRepository";
-import type { AutosaveSaveResult } from "../../../../_components/AutosaveStepForm";
+import { updateDraftRevisionContent } from "../../../../../../../modules/db/repositories/recordingRepository";
+import type { AutosaveSaveResult } from "../../../../../../../modules/studio/autosave/autosaveTypes";
+import { FORBIDDEN_RESULT, runAutosaveSave } from "../../../../_components/autosaveServer";
 
-// expectedRevisionId is bound by the page (6J-10C): the draft this form was rendered for.
+// `expectedRevisionId` is bound by the page (6J-10C): the draft this form was rendered for. The result carries the
+// KIND of any refusal (6J-10E) so the client can keep the editor's text and stop, retry later, or ask for a reload.
 export async function saveEducationalStep(
   expectedRevisionId: string,
   recordingId: string,
@@ -13,21 +15,20 @@ export async function saveEducationalStep(
   patch: Record<string, string>
 ): Promise<AutosaveSaveResult> {
   const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "RECORDING_WRITE")) {
-    return { ok: false, error: "You do not have permission to edit recordings." };
-  }
+  if (!session || !can(session.user.role, "RECORDING_WRITE")) return FORBIDDEN_RESULT;
 
-  try {
-    const updated = await updateDraftRevisionContent(recordingId, new Date(expectedUpdatedAt), session.user.id, {
-      educationalDifficultyLevel: patch.educationalDifficultyLevel || null,
-      educationalListeningGuide: patch.educationalListeningGuide || null,
-      educationalAnalysis: patch.educationalAnalysis || null,
-    }, undefined, { expectedRevisionId });
-    return { ok: true, updatedAt: updated.updatedAt.toISOString() };
-  } catch (error) {
-    if (error instanceof ConcurrentEditError || error instanceof RecordingBusyError || error instanceof RevisionNotEditableError) {
-      return { ok: false, error: error.message };
-    }
-    throw error;
-  }
+  return runAutosaveSave(() =>
+    updateDraftRevisionContent(
+      recordingId,
+      new Date(expectedUpdatedAt),
+      session.user.id,
+      {
+        educationalDifficultyLevel: patch.educationalDifficultyLevel || null,
+        educationalListeningGuide: patch.educationalListeningGuide || null,
+        educationalAnalysis: patch.educationalAnalysis || null,
+      },
+      undefined,
+      { expectedRevisionId }
+    )
+  );
 }

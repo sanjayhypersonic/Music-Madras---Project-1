@@ -27,6 +27,9 @@ export default async function EducationalStepPage({ params }: { params: Promise<
       <p>Optional context for listeners — a listening guide and analysis, and a difficulty level.</p>
       <AutosaveStepForm
         recordingId={id}
+        revisionId={recording.currentDraftRevision.id}
+        userId={session.user.id}
+        formId="educational"
         initialUpdatedAt={recording.currentDraftRevision.updatedAt.toISOString()}
         initialValues={{
           educationalDifficultyLevel: recording.currentDraftRevision.educationalDifficultyLevel ?? "",

@@ -27,6 +27,9 @@ export default async function SeoStepPage({ params }: { params: Promise<{ id: st
       <p>Metadata for this recording&apos;s public page — distinct from catalogue data (ADR §19).</p>
       <AutosaveStepForm
         recordingId={id}
+        revisionId={recording.currentDraftRevision.id}
+        userId={session.user.id}
+        formId="seo"
         initialUpdatedAt={recording.currentDraftRevision.updatedAt.toISOString()}
         initialValues={{
           seoMetaTitle: recording.currentDraftRevision.seoMetaTitle ?? "",

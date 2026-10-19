@@ -61,6 +61,9 @@ export default async function SourceStepPage({ params }: { params: Promise<{ id:
       )}
       <AutosaveStepForm
         recordingId={id}
+        revisionId={recording.currentDraftRevision.id}
+        userId={session.user.id}
+        formId="source"
         initialUpdatedAt={recording.currentDraftRevision.updatedAt.toISOString()}
         initialValues={{
           title: recording.currentDraftRevision.title ?? "",
