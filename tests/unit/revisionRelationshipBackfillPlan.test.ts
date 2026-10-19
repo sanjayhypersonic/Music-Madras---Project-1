@@ -7,6 +7,7 @@ import {
   type BackfillInput,
   type BackfillRecording,
   type BackfillRevision,
+  type DetachEvidenceRow,
   type LegacyLinkRow,
   type RelationshipKind,
   type RevisionLinkRow,
@@ -172,6 +173,66 @@ describe("anomalies are reported, never silently dropped", () => {
     const orphan = plan.report.anomalies.find((a) => a.code === "ORPHANED_LEGACY_LINK")!;
     expect(orphan.count).toBe(SAMPLE_LIMIT + 7);
     expect(orphan.samples).toHaveLength(SAMPLE_LIMIT);
+  });
+});
+
+describe("detach evidence on an OLDER revision of the same Recording (Phase 6J-12: never resurrected silently)", () => {
+  const legacy = { source: [legacyRow("a", "R1", "s1")], rights: [], occasion: [] };
+  // History: P0 (1, superseded) -> P1 (2, published; an editor detached s1 from it before it was published) -> D1 (3, draft forked from P1)
+  const numbered = {
+    recordings: [recording("R1", "P1", "D1")],
+    revisions: [
+      { ...revision("P1", "R1", "PUBLISHED"), revisionNumber: 2 },
+      { ...revision("D1", "R1", "DRAFT"), revisionNumber: 3 },
+    ],
+  };
+  const evidence = (revisionId: string, revisionNumber: number | null, recordingId: string | null = "R1") => ({ revisionId, targetId: "s1", recordingId, revisionNumber });
+
+  it("flags a link planned for a NEWER revision when an editor detached it from an older one — and still counts the plan, so a person decides", () => {
+    const plan = planRevisionRelationshipBackfill(input({ ...numbered, legacy, detached: { source: [evidence("P1", 2)], rights: [], occasion: [] } }));
+    // P1 itself: detached there (skipped). D1: newer than the evidence -> planned AND flagged.
+    expect(plan.report.kinds.source).toMatchObject({ plannedInserts: 1, skippedEditorDetached: 1 });
+    expect(plan.inserts).toEqual([{ kind: "source", revisionId: "D1", targetId: "s1" }]);
+    expect(plan.report.anomalies).toEqual([{ code: "DETACH_EVIDENCE_ON_OLDER_REVISION", count: 1, samples: ["source:R1:s1"] }]);
+    expect(formatBackfillReport(plan.report, "DRY RUN")).toMatch(/DETACH_EVIDENCE_ON_OLDER_REVISION: 1.*BLOCKS --execute/);
+  });
+
+  it("does NOT flag the normal case: a detach on a NEWER draft leaves the older published revision to be backfilled", () => {
+    const plan = planRevisionRelationshipBackfill(input({ ...numbered, legacy, detached: { source: [evidence("D1", 3)], rights: [], occasion: [] } }));
+    expect(plan.inserts).toEqual([{ kind: "source", revisionId: "P1", targetId: "s1" }]);
+    expect(plan.report.anomalies).toEqual([]);
+  });
+
+  it("does not flag a detach on the SAME revision, on another Recording, for another target, or with unknown history", () => {
+    const flagged = (detached: DetachEvidenceRow[]) =>
+      planRevisionRelationshipBackfill(input({ ...numbered, legacy, detached: { source: detached, rights: [], occasion: [] } })).report.anomalies.some((a) => a.code === "DETACH_EVIDENCE_ON_OLDER_REVISION");
+    expect(flagged([evidence("D1", 3)])).toBe(false); // same revision as the target
+    expect(flagged([evidence("X9", 1, "R2")])).toBe(false); // an older revision of a DIFFERENT Recording
+    expect(flagged([{ ...evidence("P1", 2), targetId: "otherSource" }])).toBe(false); // a different link
+    expect(flagged([evidence("GONE", null, null)])).toBe(false); // the revision no longer exists: nothing to order
+    expect(flagged([{ revisionId: "P1", targetId: "s1" }])).toBe(false); // legacy-shaped evidence without history
+    expect(flagged([evidence("P1", 2)])).toBe(true); // control: the flagged shape
+  });
+
+  it("is not triggered when the link already exists on the newer revision (nothing would be added)", () => {
+    const plan = planRevisionRelationshipBackfill(
+      input({ ...numbered, legacy, existing: { source: [link("D1", "s1")], rights: [], occasion: [] }, detached: { source: [evidence("P1", 2)], rights: [], occasion: [] } })
+    );
+    expect(plan.inserts).toEqual([]);
+    expect(plan.report.anomalies).toEqual([]);
+  });
+
+  it("applies to rights and occasions as well as sources", () => {
+    const plan = planRevisionRelationshipBackfill(
+      input({
+        ...numbered,
+        legacy: { source: [], rights: [legacyRow("b", "R1", "s1")], occasion: [legacyRow("c", "R1", "s1")] },
+        detached: { source: [], rights: [evidence("P1", 2)], occasion: [evidence("P1", 2)] },
+      })
+    );
+    expect(plan.report.anomalies).toHaveLength(1);
+    expect(plan.report.anomalies[0]).toMatchObject({ code: "DETACH_EVIDENCE_ON_OLDER_REVISION", count: 2 });
+    expect([...plan.report.anomalies[0].samples].sort()).toEqual(["occasion:R1:s1", "rights:R1:s1"]);
   });
 });
 

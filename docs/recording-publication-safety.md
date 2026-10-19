@@ -423,7 +423,7 @@ identity so no row is silently dropped:
 
 It also lists anomalies by code with exact counts and up to 10 sample ids each (`ORPHANED_LEGACY_LINK`,
 `DUPLICATE_LEGACY_LINK`, `NO_REVISION_POINTER`, `POINTER_REVISION_MISSING`, `POINTER_REVISION_OTHER_RECORDING`,
-`POINTER_STATUS_MISMATCH`) and the recordings summary. Anomalies are facts about the legacy data, so they are reported on
+`POINTER_STATUS_MISMATCH`, and — the only one that blocks `--execute` — `DETACH_EVIDENCE_ON_OLDER_REVISION`) and the recordings summary. Anomalies are facts about the legacy data, so they are reported on
 every run, including after an execute. The report contains counts and opaque ids only.
 
 **What the script is, and what it is not (read before scheduling it).**
@@ -434,7 +434,9 @@ every run, including after an execute. The report contains counts and opaque ids
 - **Detach evidence cannot be reliably ordered against later legacy edits.** The legacy link tables have no timestamps.
   If an editor detached a link from a revision and a legacy writer later re-added or re-edited the same Recording-level
   link, the script cannot tell which came last; it treats the detach as the editor's decision and does not re-add the row.
-  (An existing revision-scoped row always wins over detach evidence.) Review the "skipped (editor detached)" counts in the
+  (An existing revision-scoped row always wins over detach evidence. Since 6J-12, evidence on an *older* revision of the
+  same Recording, for a link planned onto a newer one, is reported as `DETACH_EVIDENCE_ON_OLDER_REVISION` and blocks
+  `--execute`; see section 13.) Review the "skipped (editor detached)" counts in the
   dry run: any non-zero figure is a place where legacy and revision-scoped data were already editor-diverged.
 - **It is an insert-only projection, not a synchronisation.** It never updates or deletes a revision-scoped row and never
   mirrors later legacy changes. Run once, **immediately before the approved cutover**, after the legacy writers can no
@@ -495,6 +497,7 @@ pointer to a superseded revision). The same script against an empty database rep
    | `POINTER_REVISION_MISSING` / `_OTHER_RECORDING` / `_STATUS_MISMATCH` | skips that pointer; a safe sibling pointer still receives the links | unknown — measure | each is a data-integrity fault: repair the pointer (a separate, reviewed change) or accept the loss of that revision's links |
    | Unapproved Sources / archived Occasions | projected and counted (approval/archival stay read-time filters) | unknown — measure | confirm that readers keep filtering; no data decision |
    | Editor-detached links | not re-added to that exact revision | unknown — measure | see item 4 |
+   | `DETACH_EVIDENCE_ON_OLDER_REVISION` (added in 6J-12) | still planned, but **`--execute` refuses** while any exist | unknown — expected 0, measure | a person decides each case (section 13 C); there is no override |
    | Revision-scoped rows with no legacy counterpart | left untouched | unknown — measure | confirm they are editor-created, not leftovers |
 
    A category with a non-zero production count and no recorded disposition is a **stop condition**.
@@ -538,6 +541,114 @@ pointer to a superseded revision). The same script against an empty database rep
   counts changed during the window; any sampled Recording does not reconcile; or a writer was active during the window.
 - Cutover itself (switching writers/readers, the RBAC decision, the Collection-membership guard, the rollback
   re-projection script) is a later, separately approved phase.
+
+## 13. Cutover design: decisions, controls and the rollback boundary (Phase 6J-12) — preparation only
+
+Nothing in this section switches a reader or a writer. The legacy Recording-level rows stay authoritative until a separate,
+approved cutover. The decisions below come from reading the code, the grant matrix and the tests; the first two are pinned by
+`tests/integration/relationshipEditingPermissions.test.ts`.
+
+### A. Who may edit relationships — decision: keep `CATALOGUE_WRITE` (no RBAC change)
+
+What exists today:
+- `RECORDING_WRITE` = create/edit a Recording draft revision; held by **every** role including Contributor.
+  `CATALOGUE_WRITE` = create/edit catalogue records (Composer, Work, Artist, Venue, Collection, Source, Rights, Occasion…);
+  held by Editor, Reviewer, Administrator, Super Administrator, Founder — **not** Contributor. The role comments in
+  `modules/auth/policy.ts` describe Editor as "relational entity mapping" and Contributor as "ingestion / draft-creation only".
+- Every mutation of the Relationships step — attach/detach Source, Rights, Occasion, and add to Collection — checks
+  `can(role, "CATALOGUE_WRITE")` in its Server Action, and the page shows the controls only when `can(…, "CATALOGUE_WRITE")`.
+  The repository functions (legacy and revision-scoped) take an `actorId` and do **not** check roles: the Server Action is the gate.
+
+Decision: the revision-scoped Source / Rights / Occasion writers must be gated by **`CATALOGUE_WRITE`**, exactly as now. It is
+the least privilege that preserves today's workflow: `RECORDING_WRITE` would newly allow Contributors to attach Sources, Rights
+and Occasions, a widening nothing has asked for. No grant changes. The cutover's new Studio actions must call
+`can(role, "CATALOGUE_WRITE")` before the repository (the 6J-11B repository enforces only draft-eligibility, locking and audit).
+Whether Contributors should ever relate content is a separate product question, not part of this cutover.
+
+### B. Collection membership — a guard is needed; the rule is an open decision (NOT implemented)
+
+Findings (the "existing guard" does not exist): `addRecordingToCollection`, `removeRecordingFromCollection` and
+`reorderCollectionRecordings` (and the Work equivalents) check **nothing** about the publication state of the Collection or the
+Recording. Mutation paths, all guarded only by `CATALOGUE_WRITE` in their Server Action:
+
+| Path | Entry point |
+|---|---|
+| Add a Recording to a Collection | Recording > Relationships `addToCollectionAction`; Collection page `addRecordingAction` |
+| Remove a Recording | Collection page `removeRecordingAction` only |
+| Reorder | Collection page `moveRecordingAction` only |
+| Add / remove / reorder a Musical Work | Collection page `addWorkAction` / `removeWorkAction` / `moveWorkAction` (same absence of any state guard) |
+
+The state combinations and what they mean: membership with a draft Collection or a draft Recording is not visible to visitors; a
+**published, unarchived Collection with a published Recording is visible immediately** and an Editor can change it without
+`RECORDING_PUBLISH`. This is consistent with Phase 6J-1, which moved *publish/unpublish* of a Collection to
+`RECORDING_PUBLISH` but deliberately left *editing* (including a published Collection's fields) with `CATALOGUE_WRITE`.
+The tests pin this current behaviour for all four combinations (and that a Contributor is refused on every path).
+
+The decision needed (it changes what Editors can do today, so it is not made here): should an add/remove/reorder that alters
+what visitors see — Collection published and not archived, Recording published — additionally require `RECORDING_PUBLISH`?
+- **Option 1 (recommended):** yes, for membership changes that touch a live Collection × published Recording, enforced in one
+  shared server-side check used by every path above, with an explicit typed refusal; draft and unpublished combinations keep
+  `CATALOGUE_WRITE`. It applies the 6J-1 rule ("one rule for who may change what visitors see"). Work membership should follow.
+- **Option 2:** keep the current behaviour (live edits by Editors) and record it as intended.
+Until this is decided the guard stays unimplemented; the pinned tests are the ones to change when it is.
+
+### C. Detach, fork, publish — the behaviour, and what is and is not enforced
+
+| Event | Revision-scoped behaviour (6J-11B, tested) | Legacy rows |
+|---|---|---|
+| Fork a published Recording into a draft | the draft gets an exact copy of the published revision's three link sets | untouched |
+| A draft detaches a link | the row is removed from **that draft only**; one audit entry (`*_DETACHED_FROM_RECORDING_REVISION`) names the revision | untouched |
+| Publish the draft | the published set is exactly the draft's set; the previous revision is superseded and unchanged | untouched |
+| Another draft is created after that | it is a fork of the *new* published set, so a link detached earlier stays off | untouched |
+| A legacy link is added/removed later | nothing happens: there is no mirror and no sync (insert-only backfill, no dual writes) | changes |
+
+Backfill, and the one residual hole this phase closes: a revision-scoped detach is recorded against one revision and forks
+carry no parent link. If an editor detached link L from revision N, and a *newer* revision N+k is a target while legacy still
+holds L, the backfill cannot tell whether N+k should carry L (the legacy table has no timestamps). It therefore no longer
+decides: such a case is reported as **`DETACH_EVIDENCE_ON_OLDER_REVISION`** (counted with `kind:recordingId:targetId` samples),
+and **`--execute` refuses to run while any exist** (it rolls back and exits non-zero; the dry run still completes and labels the
+anomaly `BLOCKS --execute`). A detach on a *newer* draft than the published target is the normal case and is not flagged.
+There is no override: resolving a flagged case needs a person's decision (and, for the backfill to proceed, a reviewed change),
+never an automatic rule. The product choice that remains open is whether a detach should carry forward across forks at all; the
+code does not guess. In the intended cutover sequence no revision-scoped writer is in use before the backfill, so this anomaly
+is expected to be **zero in production — to be verified by the pre-execute dry run, not assumed**.
+
+### D. Cutover controls
+
+**Prerequisites before switching any reader or writer** (all must hold, in order):
+1. Section 12's checklist is satisfied (fresh dry run accepted, dispositions recorded, backup verified, target-allowlist change
+   separately approved) and the backfill has been executed once on the real database, with a clean reconciliation (below).
+2. Decisions A (no change) and B (Option 1 or 2, recorded) are approved; C's open question is answered or explicitly deferred.
+3. The new Studio relationship actions exist with `CATALOGUE_WRITE`, the draft-eligibility repository functions, and tests
+   equivalent to the legacy ones (attach, detach, duplicate, concurrency, audit-in-transaction, published set frozen).
+4. Every public reader that shows Recording-level Source / Rights / Occasion (Recording page, Organisation page aggregation, AI
+   context) reads the **published revision's** rows, with a test that a draft edit does not change the public page.
+5. Readers and writers switch **in one release**, writers never ahead of readers (a writer writing rows nothing reads, or a reader
+   reading rows nothing wrote, is a silent divergence). No dual writes.
+6. Legacy Recording-level link writes are removed or refused in that same release (decision of Phase 6J-11A: legacy frozen).
+
+**Reconciliation (read-only), run immediately after the backfill and again after the switch:** the post-backfill dry run
+reports 0 planned inserts; per-table revision-scoped row counts equal the accepted dry run's expected totals; for a sample of
+Recordings the published revision's links equal the legacy links minus the recorded dispositions; the public page of each sampled
+Recording is unchanged by the switch; no `DETACH_EVIDENCE_ON_OLDER_REVISION` anomaly existed.
+
+**Rollback triggers:** any failed reconciliation check; a public page whose Source/Rights/Occasion content differs from before the
+switch; an editor's relationship edit that does not appear on the draft or leaks to the published page; an anomaly with no
+recorded disposition; errors on the new writers.
+
+**The safe rollback boundary is the first revision-scoped Studio write after the switch.** Before it, reverting the release is
+lossless: legacy rows were never modified, so the old readers/writers resume exactly where they left off, and the extra
+revision-scoped rows are inert. After it, legacy rows no longer receive edits (no dual writes), so a revert loses those edits
+unless they are first re-projected revision-scoped → legacy. That re-projection script **does not exist**; it must be written,
+dry-run-first, and reviewed before the switch is approved, or the switch must be accepted as one-way past that boundary. The
+backup of section 12 is the recovery for the backfill's inserts only.
+
+**Legacy data:** nothing in this phase, the backfill, or the switch deletes or rewrites a legacy relationship row. Removing
+them, if ever wanted, is a separately approved migration after a soak period, with its own backup.
+
+**Backfill target restrictions are unchanged:** the script still refuses every database except the local marked test database
+(section 11). Running it on a real database needs its own reviewed, separately approved allowlist change; this phase adds no
+override of any kind.
 
 ## Limitations
 

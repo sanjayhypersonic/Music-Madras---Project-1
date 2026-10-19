@@ -4,6 +4,8 @@ import {
   type BackfillInput,
   type BackfillPlan,
   type BackfillReport,
+  type DetachEvidenceRow,
+  EXECUTE_BLOCKING_ANOMALIES,
   type LegacyLinkRow,
   type PlannedInsert,
   type RelationshipKind,
@@ -76,11 +78,11 @@ export async function loadBackfillInput(db: Queryable): Promise<BackfillInput> {
   const revisions =
     pointerIds.length === 0
       ? []
-      : (await db.query<{ id: string; recordingId: string; revisionStatus: string }>('select id, "recordingId", "revisionStatus"::text as "revisionStatus" from recording_revisions where id = any($1::text[])', [pointerIds])).rows;
+      : (await db.query<{ id: string; recordingId: string; revisionStatus: string; revisionNumber: number }>('select id, "recordingId", "revisionStatus"::text as "revisionStatus", "revisionNumber" from recording_revisions where id = any($1::text[])', [pointerIds])).rows;
 
   const legacy = {} as Record<RelationshipKind, LegacyLinkRow[]>;
   const existing = {} as Record<RelationshipKind, RevisionLinkRow[]>;
-  const detached = {} as Record<RelationshipKind, RevisionLinkRow[]>;
+  const detached = {} as Record<RelationshipKind, DetachEvidenceRow[]>;
   for (const kind of RELATIONSHIP_KINDS) {
     const t = TABLES[kind];
     legacy[kind] = (
@@ -88,14 +90,16 @@ export async function loadBackfillInput(db: Queryable): Promise<BackfillInput> {
     ).rows;
     existing[kind] = (await db.query<RevisionLinkRow>(`select "revisionId", "${t.revisionTargetColumn}" as "targetId" from ${t.revisionTable}`)).rows;
     const detachRows = (
-      await db.query<{ revisionId: string; beforeSnapshot: Record<string, unknown> | null }>(
-        `select "entityId" as "revisionId", "beforeSnapshot" from audit_log_entries where "entityType" = 'RecordingRevision' and action = $1`,
+      await db.query<{ revisionId: string; recordingId: string | null; revisionNumber: number | null; beforeSnapshot: Record<string, unknown> | null }>(
+        `select a."entityId" as "revisionId", r."recordingId" as "recordingId", r."revisionNumber" as "revisionNumber", a."beforeSnapshot" as "beforeSnapshot"
+           from audit_log_entries a left join recording_revisions r on r.id = a."entityId"
+          where a."entityType" = 'RecordingRevision' and a.action = $1`,
         [t.detachAction]
       )
     ).rows;
     detached[kind] = detachRows.flatMap((row) => {
       const targetId = row.beforeSnapshot?.[t.detachSnapshotKey];
-      return typeof targetId === "string" ? [{ revisionId: row.revisionId, targetId }] : [];
+      return typeof targetId === "string" ? [{ revisionId: row.revisionId, targetId, recordingId: row.recordingId, revisionNumber: row.revisionNumber }] : [];
     });
   }
 
@@ -146,6 +150,13 @@ export async function runRevisionRelationshipBackfill(db: Queryable, options: { 
     await db.query("select id from recordings order by id for share");
 
     const plan: BackfillPlan = planRevisionRelationshipBackfill(await loadBackfillInput(db));
+    const blocking = plan.report.anomalies.filter((a) => EXECUTE_BLOCKING_ANOMALIES.includes(a.code));
+    if (blocking.length > 0) {
+      throw new Error(
+        `Refusing to execute: ${blocking.map((a) => `${a.code} x${a.count}`).join(", ")}. An editor detached a link from an older revision and the same link is planned for a newer one; ` +
+          "the script cannot tell whether the detach should carry forward. Review the dry-run report and have a person decide (docs/recording-publication-safety.md, section 12); nothing was written."
+      );
+    }
     const inserted = {} as Record<RelationshipKind, number>;
     for (const kind of RELATIONSHIP_KINDS) inserted[kind] = await insertPlanned(db, kind, plan.inserts);
 

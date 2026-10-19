@@ -22,7 +22,7 @@ import {
   publishRecordingDraft,
 } from "../../modules/db/repositories/recordingRepository";
 import { loadBackfillInput, runRevisionRelationshipBackfill } from "../../modules/backfill/revisionRelationships/backfillDatabase";
-import { planRevisionRelationshipBackfill, type BackfillInput } from "../../modules/backfill/revisionRelationships/backfillPlan";
+import { formatBackfillReport, planRevisionRelationshipBackfill, type BackfillInput } from "../../modules/backfill/revisionRelationships/backfillPlan";
 import { parseBackfillDatabaseUrl, describeTarget, type Queryable } from "../../modules/backfill/revisionRelationships/backfillTarget";
 
 // Phase 6J-11C — the relationship backfill against the isolated loopback test database.
@@ -643,6 +643,75 @@ describe("the script refuses an unsafe or ambiguous target (exit 4) and never fa
       await admin.query(`drop database if exists ${name} with (force)`).catch(() => undefined);
       await admin.end();
     }
+  }, T);
+});
+
+describe("Phase 6J-12: a detach on an older revision is not silently carried forward or resurrected", () => {
+  // History built through the real lifecycle: rev1 published -> fork rev2, an editor attaches then DETACHES the link on rev2 ->
+  // rev2 published (rev1 superseded) -> fork rev3. The legacy Recording-level link still exists.
+  const mine = {} as { recordingId: string; sourceId: string; rev2: string; rev3: string };
+
+  it("the lifecycle keeps the detached link off the next fork (it is copied from the published set, which lacks it)", async () => {
+    const sourceId = await newSource("sJ", true);
+    const first = await publishedRecording("RJ");
+    const withDraft1 = await withDraft(first); // rev2
+    await attachSourceToRevision(withDraft1.draft!, sourceId, userIds.editor);
+    await detachSourceFromRevision(withDraft1.draft!, sourceId, userIds.editor); // the editor removed it
+    await publishCurrentDraft(first.id, userIds.admin); // rev2 is now the published revision
+    const rev3 = (await forkDraftFromPublished(first.id, userIds.editor)).id;
+    await legacy.source(first.id, sourceId); // the Recording-level link still exists in the legacy table
+    Object.assign(mine, { recordingId: first.id, sourceId, rev2: withDraft1.draft!, rev3 });
+
+    expect(await sourcesOn(first.published!)).toEqual([]); // rev1: never had a revision-scoped row
+    expect(await sourcesOn(mine.rev2)).toEqual([]);
+    expect(await sourcesOn(mine.rev3)).toEqual([]); // not resurrected by the fork
+  }, T);
+
+  it("the dry run flags the newer draft as a conflict (still counting its plan) and says it blocks --execute", async () => {
+    const before = await tableCounts();
+    const db = await connect();
+    try {
+      const result = await runRevisionRelationshipBackfill(db, { execute: false });
+      const flagged = result.report.anomalies.find((a) => a.code === "DETACH_EVIDENCE_ON_OLDER_REVISION");
+      expect(flagged?.samples).toContain(`source:${mine.recordingId}:${mine.sourceId}`);
+      expect(formatBackfillReport(result.report, "DRY RUN")).toContain("BLOCKS --execute");
+    } finally {
+      await db.end();
+    }
+    expect(await tableCounts()).toEqual(before);
+
+    const run = runScript([], GOOD_ENV);
+    expect(run.code, run.output).toBe(0); // a dry run is still allowed to report it
+    expect(run.stdout).toMatch(/DETACH_EVIDENCE_ON_OLDER_REVISION: [1-9].*BLOCKS --execute/);
+  }, T);
+
+  it("--execute refuses while the conflict exists: it exits non-zero, rolls back, and writes nothing (for ANY Recording)", async () => {
+    const before = await tableCounts();
+    const snapshot = await revisionSnapshot();
+    const run = runScript(["--execute"], GOOD_ENV);
+    expect(run.code, run.output).toBe(2);
+    expect(run.stderr).toMatch(/Refusing to execute: DETACH_EVIDENCE_ON_OLDER_REVISION/);
+    expect(run.stderr).toMatch(/nothing was written/);
+    expect(await tableCounts()).toEqual(before);
+    const after = await revisionSnapshot();
+    for (const kind of ["source", "rights", "occasion"] as const) expect([...after[kind].entries()].sort()).toEqual([...snapshot[kind].entries()].sort());
+    expect(await sourcesOn(mine.rev3)).toEqual([]);
+
+    const db = await connect();
+    try {
+      await expect(runRevisionRelationshipBackfill(db, { execute: true })).rejects.toThrow(/Refusing to execute/);
+    } finally {
+      await db.end();
+    }
+    expect(await tableCounts()).toEqual(before);
+  }, T);
+
+  it("once the conflict is gone (here: the audit evidence is removed by a person's decision in the test), execute proceeds normally", async () => {
+    // This stands in for the human decision. Nothing in the product deletes audit rows; the test does it to prove the block is the ONLY thing in the way.
+    await prisma.auditLogEntry.deleteMany({ where: { entityId: mine.rev2, action: "SOURCE_DETACHED_FROM_RECORDING_REVISION" } });
+    const run = runScript(["--execute", "--json"], GOOD_ENV);
+    expect(run.code, run.output).toBe(0);
+    expect(await sourcesOn(mine.rev3)).toEqual([mine.sourceId]);
   }, T);
 });
 

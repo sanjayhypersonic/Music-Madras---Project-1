@@ -27,6 +27,8 @@ export interface BackfillRevision {
   id: string;
   recordingId: string;
   revisionStatus: string;
+  /** Position in the Recording's revision history; used only to tell whether detach evidence is OLDER than a target. */
+  revisionNumber?: number;
 }
 
 /** One legacy row. `recordingId` is the row's entityId (a Recording id when entityType is RECORDING). */
@@ -41,14 +43,20 @@ export interface RevisionLinkRow {
   targetId: string;
 }
 
+/** An editor's detach, read from the audit trail. recordingId / revisionNumber come from the revision it was detached from (null if that revision no longer exists). */
+export interface DetachEvidenceRow extends RevisionLinkRow {
+  recordingId?: string | null;
+  revisionNumber?: number | null;
+}
+
 export interface BackfillInput {
   recordings: readonly BackfillRecording[];
   revisions: readonly BackfillRevision[];
   legacy: Readonly<Record<RelationshipKind, readonly LegacyLinkRow[]>>;
   /** Every row currently in the three revision-scoped tables. */
   existing: Readonly<Record<RelationshipKind, readonly RevisionLinkRow[]>>;
-  /** Links an editor DETACHED from a revision (from the audit trail): never re-added. */
-  detached: Readonly<Record<RelationshipKind, readonly RevisionLinkRow[]>>;
+  /** Links an editor DETACHED from a revision (from the audit trail): never re-added to that revision. */
+  detached: Readonly<Record<RelationshipKind, readonly DetachEvidenceRow[]>>;
   /** Informational only: Sources whose approval state is not APPROVED, and archived Occasions. */
   unapprovedSourceIds: readonly string[];
   archivedOccasionIds: readonly string[];
@@ -66,7 +74,16 @@ export type AnomalyCode =
   | "NO_REVISION_POINTER"
   | "POINTER_REVISION_MISSING"
   | "POINTER_REVISION_OTHER_RECORDING"
-  | "POINTER_STATUS_MISMATCH";
+  | "POINTER_STATUS_MISMATCH"
+  | "DETACH_EVIDENCE_ON_OLDER_REVISION";
+
+/**
+ * Anomalies that make `--execute` REFUSE (the dry run still reports them). DETACH_EVIDENCE_ON_OLDER_REVISION: a link is planned
+ * for a revision, but an editor detached the same link from an OLDER revision of the same Recording. Whether that detach carried
+ * forward (the fork inherited its absence) or was superseded by a later legacy re-add cannot be established -- the legacy rows
+ * carry no timestamps and revisions record no parent -- so the script neither re-adds nor drops it on its own: a person decides.
+ */
+export const EXECUTE_BLOCKING_ANOMALIES: readonly AnomalyCode[] = ["DETACH_EVIDENCE_ON_OLDER_REVISION"];
 
 export interface AnomalySummary {
   code: AnomalyCode;
@@ -191,6 +208,16 @@ export function planRevisionRelationshipBackfill(input: BackfillInput): Backfill
       else existingByRevision.set(row.revisionId, [row.targetId]);
     }
     const detached = new Set(input.detached[kind].map((row) => pairKey(row.revisionId, row.targetId)));
+    // Detach evidence by (Recording, target): which revision numbers it came from. Used only to flag evidence on OLDER revisions.
+    const detachedNumbers = new Map<string, { revisionId: string; revisionNumber: number }[]>();
+    for (const row of input.detached[kind]) {
+      if (!row.recordingId || typeof row.revisionNumber !== "number") continue;
+      const key = pairKey(row.recordingId, row.targetId);
+      const list = detachedNumbers.get(key);
+      const entry = { revisionId: row.revisionId, revisionNumber: row.revisionNumber };
+      if (list) list.push(entry);
+      else detachedNumbers.set(key, [entry]);
+    }
     const unapproved = new Set(input.unapprovedSourceIds);
     const archivedOccasions = new Set(input.archivedOccasionIds);
 
@@ -244,6 +271,9 @@ export function planRevisionRelationshipBackfill(input: BackfillInput): Backfill
         else {
           report.plannedInserts += 1;
           inserts.push({ kind, revisionId, targetId: row.targetId });
+          const targetNumber = revisions.get(revisionId)?.revisionNumber;
+          const olderEvidence = typeof targetNumber === "number" && (detachedNumbers.get(pairKey(row.recordingId, row.targetId)) ?? []).some((e) => e.revisionId !== revisionId && e.revisionNumber < targetNumber);
+          if (olderEvidence) anomalies.add("DETACH_EVIDENCE_ON_OLDER_REVISION", `${kind}:${row.recordingId}:${row.targetId}`);
         }
       }
     }
@@ -311,7 +341,10 @@ export function formatBackfillReport(report: BackfillReport, mode: "DRY RUN" | "
     lines.push("Anomalies: none");
   } else {
     lines.push("Anomalies (nothing is discarded silently: each is counted above or skipped for the reason shown)");
-    for (const a of report.anomalies) lines.push(`  ${a.code}: ${a.count}${a.samples.length > 0 ? `  e.g. ${a.samples.join(", ")}` : ""}`);
+    for (const a of report.anomalies) {
+      const blocks = EXECUTE_BLOCKING_ANOMALIES.includes(a.code) ? "  [BLOCKS --execute until a person has decided]" : "";
+      lines.push(`  ${a.code}: ${a.count}${a.samples.length > 0 ? `  e.g. ${a.samples.join(", ")}` : ""}${blocks}`);
+    }
   }
   lines.push("");
   lines.push(`Totals: planned inserts ${report.totals.plannedInserts}, already present ${report.totals.alreadyPresent}, skipped (editor detached) ${report.totals.skippedEditorDetached}`);
