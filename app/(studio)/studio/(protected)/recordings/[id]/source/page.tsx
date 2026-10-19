@@ -70,7 +70,7 @@ export default async function SourceStepPage({ params }: { params: Promise<{ id:
           { name: "title", label: "Title", type: "text" },
           { name: "description", label: "Description", type: "textarea" },
         ]}
-        saveAction={saveSourceStep}
+        saveAction={saveSourceStep.bind(null, recording.currentDraftRevision.id)}
       />
     </div>
   );

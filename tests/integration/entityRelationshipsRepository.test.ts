@@ -29,7 +29,7 @@ import {
   publishCurrentDraft,
   updateDraftRevisionContent,
 } from "../../modules/db/repositories/recordingRepository";
-import { attachMediaToRevision } from "../../modules/db/repositories/mediaResourceRepository";
+import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import {
   approveUnlistedPublication,
   createDraftVideoPage,
@@ -111,7 +111,7 @@ async function createFullChainFixture() {
   const publishedRevisionId = published.currentPublishedRevision!.id;
 
   const video = await createTestVideo();
-  await attachMediaToRevision({
+  await seedMediaOnRevision({
     recordingRevisionId: publishedRevisionId,
     provider: "YOUTUBE",
     role: "PRIMARY_VIDEO",
@@ -349,7 +349,7 @@ describe("entityRelationshipsRepository against a real database", () => {
       const publishedRevisionId = published.currentPublishedRevision!.id;
 
       const video = await createTestVideo(videoOverrides);
-      await attachMediaToRevision({
+      await seedMediaOnRevision({
         recordingRevisionId: publishedRevisionId,
         provider: "YOUTUBE",
         role: "PRIMARY_VIDEO",

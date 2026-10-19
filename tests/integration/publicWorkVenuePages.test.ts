@@ -18,7 +18,7 @@ import {
   updateDraftRevisionContent,
   archiveRecording,
 } from "../../modules/db/repositories/recordingRepository";
-import { attachMediaToRevision } from "../../modules/db/repositories/mediaResourceRepository";
+import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import { approveUnlistedPublication, createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { createCollection, addRecordingToCollection, publishCollection, archiveCollection } from "../../modules/db/repositories/collectionRepository";
 import { getComposerEntityPageData, getPublicRecordingPageData, getPublicWorkPageData, getVenueEntityPageData } from "../../modules/db/repositories/entityRelationshipsRepository";
@@ -238,7 +238,7 @@ describe("WORK — getPublicWorkPageData", () => {
     );
     try {
       for (const video of [publicVideo, privateVideo, unlistedVideo, unavailableVideo]) {
-        await attachMediaToRevision({
+        await seedMediaOnRevision({
           recordingRevisionId: (await prisma.recording.findUnique({ where: { id: fixture.recordingId }, select: { currentPublishedRevisionId: true } }))!.currentPublishedRevisionId!,
           provider: "YOUTUBE",
           role: "PRIMARY_VIDEO",
@@ -336,7 +336,7 @@ describe("VENUE — getVenueEntityPageData", () => {
     await publishVideoPage(videoPage.id, fixture.user.id);
     try {
       const revisionId = (await prisma.recording.findUnique({ where: { id: fixture.recordingId }, select: { currentPublishedRevisionId: true } }))!.currentPublishedRevisionId!;
-      await attachMediaToRevision({ recordingRevisionId: revisionId, provider: "YOUTUBE", role: "PRIMARY_VIDEO", youtubeVideoId: video.id, actorId: fixture.user.id });
+      await seedMediaOnRevision({ recordingRevisionId: revisionId, provider: "YOUTUBE", role: "PRIMARY_VIDEO", youtubeVideoId: video.id, actorId: fixture.user.id });
 
       const before = await getVenueEntityPageData(fixture.venue.slug);
       expect(before!.relatedVideos.map((v) => v.slug)).toContain(videoPage.slug);

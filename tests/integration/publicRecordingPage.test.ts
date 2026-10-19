@@ -18,7 +18,7 @@ import {
   submitRecordingForReview,
   updateDraftRevisionContent,
 } from "../../modules/db/repositories/recordingRepository";
-import { attachMediaToRevision } from "../../modules/db/repositories/mediaResourceRepository";
+import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import { approveUnlistedPublication, createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { createCollection, addRecordingToCollection, publishCollection, archiveCollection } from "../../modules/db/repositories/collectionRepository";
 import { getPublicRecordingPageData } from "../../modules/db/repositories/entityRelationshipsRepository";
@@ -273,7 +273,7 @@ describe("B. Relationship rendering — getPublicRecordingPageData", () => {
 describe("C. MusicMadras video visibility — getPublicRecordingPageData", () => {
   async function attachVideoToFixture(fixture: Fixture, video: { id: string }) {
     const revision = await prisma.recording.findUnique({ where: { id: fixture.recordingId }, select: { currentPublishedRevisionId: true } });
-    await attachMediaToRevision({
+    await seedMediaOnRevision({
       recordingRevisionId: revision!.currentPublishedRevisionId!,
       provider: "YOUTUBE",
       role: "PRIMARY_VIDEO",
@@ -349,7 +349,7 @@ describe("C. MusicMadras video visibility — getPublicRecordingPageData", () =>
     await publishVideoPage(videoPage.id, fixture.user.id);
     await attachVideoToFixture(fixture, video); // first attachment
     const revision = await prisma.recording.findUnique({ where: { id: fixture.recordingId }, select: { currentPublishedRevisionId: true } });
-    await attachMediaToRevision({
+    await seedMediaOnRevision({
       recordingRevisionId: revision!.currentPublishedRevisionId!,
       provider: "YOUTUBE",
       role: "THUMBNAIL", // a second MediaResource row, same YouTubeVideo

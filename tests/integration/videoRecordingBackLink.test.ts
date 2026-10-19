@@ -13,7 +13,8 @@ import {
   publishCurrentDraft,
   updateDraftRevisionContent,
 } from "../../modules/db/repositories/recordingRepository";
-import { attachMediaToRevision, findPublishedRecordingSlugForYouTubeVideo } from "../../modules/db/repositories/mediaResourceRepository";
+import { findPublishedRecordingSlugForYouTubeVideo } from "../../modules/db/repositories/mediaResourceRepository";
+import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import type { ObservabilityState } from "@prisma/client";
 
 // Phase 6G-11 — proves findPublishedRecordingSlugForYouTubeVideo (the
@@ -107,7 +108,7 @@ describe("findPublishedRecordingSlugForYouTubeVideo", () => {
     const video = await createTestVideo();
     const fixture = await createFixture(user);
     try {
-      await attachMediaToRevision({
+      await seedMediaOnRevision({
         recordingRevisionId: fixture.publishedRevisionId,
         provider: "YOUTUBE",
         role: "PRIMARY_VIDEO",
@@ -128,7 +129,7 @@ describe("findPublishedRecordingSlugForYouTubeVideo", () => {
     const video = await createTestVideo();
     const fixture = await createFixture(user);
     try {
-      await attachMediaToRevision({
+      await seedMediaOnRevision({
         recordingRevisionId: fixture.publishedRevisionId,
         provider: "YOUTUBE",
         role: "PRIMARY_VIDEO",
@@ -161,7 +162,7 @@ describe("findPublishedRecordingSlugForYouTubeVideo", () => {
           updatedById: user.id,
         },
       });
-      await attachMediaToRevision({
+      await seedMediaOnRevision({
         recordingRevisionId: strayRevision.id,
         provider: "YOUTUBE",
         role: "PRIMARY_VIDEO",

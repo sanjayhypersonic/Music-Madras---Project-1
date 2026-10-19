@@ -6,13 +6,19 @@ import { computeNextOrder } from "../../mmke/programme/reorderProgrammeItems";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
 import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
+import { createPerformance, type CreatePerformanceInput } from "./performanceRepository";
 import {
   checkRecordingRevisionCompleteness,
   computeRecordingReadiness,
+  isReadyToPublish,
+  listMissingRequiredCategories,
   type CompletenessReportItem,
   type RecordingReadiness,
 } from "../../mmke/completeness/checkRecordingRevisionCompleteness";
-import type { EditableDraftRefusal } from "../../publishing/editableDraftRefusal";
+import { describeEditableDraftRefusal, type EditableDraftRefusal } from "../../publishing/editableDraftRefusal";
+import type { PublishRefusalReason } from "../../publishing/publishRefusal";
+
+export type { PublishRefusalReason };
 import type { Prisma, Recording, RecordingRevision } from "@prisma/client";
 
 // Recording / RecordingRevision repository — the mechanical core of the
@@ -32,6 +38,154 @@ export class ConcurrentEditError extends Error {
     );
     this.name = "ConcurrentEditError";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6J-10B — serializing the Recording lifecycle
+// ---------------------------------------------------------------------------
+//
+// Publish, submit-for-review, unpublish, archive and restore all change Recording.status (and
+// publish also moves the revision pointers). Each used to read the state, then write
+// unconditionally, so two of them racing could produce a state neither would have chosen
+// (a publish un-archiving an archived Recording, a late "submit" taking a live Recording
+// offline, two publishes each writing a success audit entry).
+//
+// They now run in ONE transaction that first takes the per-Recording advisory lock
+// `recording-edit:<id>` — the same key applyApprovedContentSuggestion already takes, so applying
+// AI content, publishing and every lifecycle change for one Recording are serialized — and then
+// re-reads the state, re-validates, and writes with conditional updates (updateMany with the
+// expected state in the WHERE clause, count checked) so a stale decision can never overwrite a
+// newer state. The success audit entry is written in the same transaction, so a failed or
+// refused attempt leaves neither a state change nor a success audit entry.
+//
+// Lock ordering: exactly one lock (this one) is ever taken per transaction and nothing is taken
+// while holding it, so these transactions cannot deadlock with each other or with apply. The wait
+// is bounded: `lock_timeout` is set LOCAL to the transaction (default 5 s); on expiry the
+// operation is refused with RecordingBusyError / reason "BUSY" and nothing has changed.
+//
+// NOT covered here (later phases): compare-and-swap for draft CONTENT saves, child-row writes
+// (works/media/performance) and shared Performance edits do not take this lock.
+
+export class RecordingBusyError extends Error {
+  constructor(recordingId: string) {
+    super(`Recording ${recordingId} is being changed by someone else right now. Try again in a moment.`);
+    this.name = "RecordingBusyError";
+  }
+}
+
+export const RECORDING_EDIT_LOCK_TIMEOUT_MS = 5000;
+
+/** The advisory-lock key shared with applyApprovedContentSuggestion (hashtext of this string). */
+export function recordingEditLockKey(recordingId: string): string {
+  return `recording-edit:${recordingId}`;
+}
+
+function isLockTimeoutError(err: unknown, depth = 0): boolean {
+  if (typeof err !== "object" || err === null || depth > 4) return false;
+  const e = err as { message?: unknown; code?: unknown; meta?: { code?: unknown }; cause?: unknown };
+  return (
+    e.code === "55P03" ||
+    e.meta?.code === "55P03" ||
+    (typeof e.message === "string" && /lock timeout|55P03/i.test(e.message)) ||
+    isLockTimeoutError(e.cause, depth + 1)
+  );
+}
+
+/**
+ * Runs `fn` inside a transaction that holds the per-Recording edit lock. Throws RecordingBusyError if the
+ * lock cannot be taken within `lockTimeoutMs`. Everything `fn` reads after this point sees every change
+ * committed by earlier holders of the lock.
+ */
+export async function withRecordingEditLock<T>(
+  recordingId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  lockTimeoutMs: number = RECORDING_EDIT_LOCK_TIMEOUT_MS
+): Promise<T> {
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT set_config('lock_timeout', ${`${Math.max(1, Math.floor(lockTimeoutMs))}ms`}, true)`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${recordingEditLockKey(recordingId)}))`;
+        return fn(tx);
+      },
+      { timeout: 30000, maxWait: 10000 }
+    );
+  } catch (err) {
+    if (isLockTimeoutError(err)) throw new RecordingBusyError(recordingId);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6J-10C — revision-safe writes
+// ---------------------------------------------------------------------------
+//
+// Two invariants are enforced HERE, at the repository boundary, for every caller (a Studio action, an AI
+// application, a script, a test), not only by the Studio actions:
+//
+//  1. Draft CONTENT saves are a real compare-and-swap. updateDraftRevisionContent writes with ONE conditional
+//     UPDATE whose WHERE clause carries the token the editor read (`updatedAt`), `revisionStatus = DRAFT` and
+//     "this revision is still the current draft of a non-archived Recording"; the write advances the token to a
+//     strictly greater value. Two writers holding the same token cannot both succeed: the second UPDATE waits
+//     for the first to commit, re-evaluates its WHERE clause against the new row, matches nothing, and the
+//     caller gets ConcurrentEditError. No advisory lock is taken, so saves for different Recordings (and
+//     frequent autosaves) never serialize against each other. Publication holds the draft ROW lock for its
+//     whole transaction (publishRecordingDraft), so a save can neither slip in between its completeness check
+//     and the state change, nor land afterwards on the now-PUBLISHED revision (its WHERE no longer matches).
+//
+//  2. Child rows of a revision (works, media, rights on media) are only written to an EDITABLE draft: the
+//     revision must be a DRAFT revision that is the Recording's current draft, on a non-archived Recording. The
+//     check and the write happen in one transaction under the per-Recording edit lock from 6J-10B (same
+//     lock as publish, apply and the lifecycle changes), so a child write is serialized with publication:
+//     it either completes against the still-valid draft before the publication, or is refused after it, and
+//     it can never change a published or superseded revision.
+//
+// Child writes do NOT advance the content token: they change rows the token does not protect, and bumping it
+// would turn an unrelated attach into a false conflict for an editor typing in another step.
+
+/** A write targeted a revision that is not (or is no longer) an editable draft. The message is safe to show. */
+export class RevisionNotEditableError extends Error {
+  constructor(readonly reason: EditableDraftRefusal) {
+    super(describeEditableDraftRefusal(reason));
+    this.name = "RevisionNotEditableError";
+  }
+}
+
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
+/** Throws RevisionNotEditableError unless `revisionId` is a DRAFT revision that is the current draft of a non-archived Recording. */
+async function assertEditableDraftRevision(client: DbClient, revisionId: string): Promise<string> {
+  const revision = await client.recordingRevision.findUnique({
+    where: { id: revisionId },
+    select: { id: true, recordingId: true, revisionStatus: true, recording: { select: { status: true, currentDraftRevisionId: true } } },
+  });
+  if (!revision) throw new RevisionNotEditableError("STALE_REVISION");
+  if (revision.recording.status === "ARCHIVED") throw new RevisionNotEditableError("RECORDING_ARCHIVED");
+  if (revision.revisionStatus !== "DRAFT" || revision.recording.currentDraftRevisionId !== revision.id) throw new RevisionNotEditableError("STALE_REVISION");
+  return revision.recordingId;
+}
+
+/**
+ * Runs `fn` against an editable draft revision: inside a transaction holding the per-Recording edit lock, with the
+ * revision's eligibility re-verified after the lock is taken. If the caller already owns a transaction (`client`),
+ * eligibility is verified on it and the caller keeps responsibility for locking (used by Recording intake, where
+ * the Recording was created in that same transaction).
+ */
+export async function withEditableDraftRevision<T>(
+  revisionId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  client?: DbClient
+): Promise<T> {
+  if (client !== undefined && client !== prisma) {
+    await assertEditableDraftRevision(client, revisionId);
+    return fn(client as Prisma.TransactionClient);
+  }
+  const owner = await prisma.recordingRevision.findUnique({ where: { id: revisionId }, select: { recordingId: true } });
+  if (!owner) throw new RevisionNotEditableError("STALE_REVISION");
+  return withRecordingEditLock(owner.recordingId, async (tx) => {
+    await assertEditableDraftRevision(tx, revisionId);
+    return fn(tx);
+  });
 }
 
 export interface CreateDraftRecordingInput {
@@ -158,10 +312,27 @@ export async function resolveEditableDraftRevision(recordingId: string, expected
 }
 
 /**
- * Updates fields on the current draft revision, guarded by optimistic
- * concurrency (ADR §5.4): the caller must pass the `updatedAt` value it
- * last read, or a ConcurrentEditError is thrown instead of silently
- * overwriting a concurrent edit.
+ * Updates fields on the current draft revision as a DATABASE-ENFORCED compare-and-swap (ADR §5.4, hardened
+ * in 6J-10C). The caller passes the token (`updatedAt`) it last read — and, from the Studio, the id of the
+ * revision it rendered (`options.expectedRevisionId`). The write is ONE conditional UPDATE:
+ *
+ *   UPDATE recording_revisions SET <patch>, updatedAt = <strictly greater token>
+ *    WHERE id = <draft> AND revisionStatus = 'DRAFT' AND updatedAt = <expected token>
+ *      AND <draft> is the current draft of a Recording whose status is not ARCHIVED
+ *
+ * so the decision "is this still the revision/state the editor saw" and the write are the same statement.
+ * When two writers hold the same token the second blocks on the first's row lock, re-evaluates the WHERE
+ * clause after the first commits, matches zero rows and gets a ConcurrentEditError; it never overwrites. A
+ * save that arrives after publication (the revision is no longer a DRAFT / no longer the current draft) also
+ * matches nothing. The token is a millisecond timestamp, so it is advanced to max(now, expected + 1ms): it
+ * can never repeat or move backwards, even for two saves inside the same millisecond (no ABA on `updatedAt`).
+ *
+ * Errors: ConcurrentEditError (stale token/revision, or the draft changed state under the save),
+ * RecordingBusyError (a row lock could not be had within the bounded wait), plain Error for a Recording with
+ * no open draft / an archived Recording (messages unchanged since 6G).
+ *
+ * `client` is an optional caller-owned transaction (apply-approved-suggestion, intake); in that case the
+ * caller owns locking and the write simply joins its transaction.
  */
 export async function updateDraftRevisionContent(
   recordingId: string,
@@ -182,30 +353,90 @@ export async function updateDraftRevisionContent(
     >
   >,
   /** Phase 6I-2 — optional caller-owned transaction (see createDraftRecording). Omitted by every existing caller. */
-  client: Prisma.TransactionClient | typeof prisma = prisma
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+  /** Phase 6J-10C — the revision the editor rendered; a different current draft is a conflict, not a redirect. */
+  options: { expectedRevisionId?: string } = {}
 ): Promise<RecordingRevision> {
-  const recording = await client.recording.findUnique({
-    where: { id: recordingId },
-    include: { currentDraftRevision: true },
-  });
+  const run = async (tx: Prisma.TransactionClient): Promise<RecordingRevision> => {
+    const recording = await tx.recording.findUnique({
+      where: { id: recordingId },
+      select: { status: true, currentDraftRevisionId: true },
+    });
+    if (!recording?.currentDraftRevisionId) {
+      throw new Error(`Recording ${recordingId} has no open draft revision to update.`);
+    }
+    if (recording.status === "ARCHIVED") {
+      throw new Error(`Recording ${recordingId} is archived and cannot be edited. Restore it first.`);
+    }
+    const draftId = recording.currentDraftRevisionId;
+    if (options.expectedRevisionId !== undefined && options.expectedRevisionId !== draftId) {
+      throw new ConcurrentEditError(recordingId);
+    }
 
-  if (!recording?.currentDraftRevision) {
-    throw new Error(`Recording ${recordingId} has no open draft revision to update.`);
+    const nextToken = new Date(Math.max(Date.now(), expectedRevisionUpdatedAt.getTime() + 1));
+    const { count } = await tx.recordingRevision.updateMany({
+      where: {
+        id: draftId,
+        revisionStatus: "DRAFT",
+        updatedAt: expectedRevisionUpdatedAt,
+        currentDraftOf: { is: { id: recordingId, status: { not: "ARCHIVED" } } },
+      },
+      data: { ...patch, updatedById: actorId, updatedAt: nextToken },
+    });
+    if (count !== 1) throw new ConcurrentEditError(recordingId);
+
+    // The matched row stays locked until this transaction ends, so this reads exactly what was just written.
+    return tx.recordingRevision.findUniqueOrThrow({ where: { id: draftId } });
+  };
+
+  if (client !== prisma) return run(client as Prisma.TransactionClient);
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT set_config('lock_timeout', ${`${RECORDING_EDIT_LOCK_TIMEOUT_MS}ms`}, true)`;
+        return run(tx);
+      },
+      { timeout: 15000, maxWait: 10000 }
+    );
+  } catch (err) {
+    if (isLockTimeoutError(err)) throw new RecordingBusyError(recordingId);
+    throw err;
   }
-  if (recording.status === "ARCHIVED") {
-    throw new Error(`Recording ${recordingId} is archived and cannot be edited. Restore it first.`);
+}
+
+/**
+ * Creates a Performance and links it to the current draft in ONE transaction (6J-10C). The link is the same
+ * compare-and-swap as every other content save, so a stale form (token mismatch, draft published or replaced
+ * meanwhile) is refused with ConcurrentEditError and the Performance insert rolls back with it: no orphan
+ * Performance row is left behind and no audit row claims it was created.
+ */
+export async function createPerformanceForDraft(
+  recordingId: string,
+  expectedRevisionId: string,
+  expectedRevisionUpdatedAt: Date,
+  input: CreatePerformanceInput
+) {
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT set_config('lock_timeout', ${`${RECORDING_EDIT_LOCK_TIMEOUT_MS}ms`}, true)`;
+        const performance = await createPerformance(input, tx);
+        await updateDraftRevisionContent(
+          recordingId,
+          expectedRevisionUpdatedAt,
+          input.actorId,
+          { performanceId: performance.id },
+          tx,
+          { expectedRevisionId }
+        );
+        return performance;
+      },
+      { timeout: 15000, maxWait: 10000 }
+    );
+  } catch (err) {
+    if (isLockTimeoutError(err)) throw new RecordingBusyError(recordingId);
+    throw err;
   }
-
-  if (recording.currentDraftRevision.updatedAt.getTime() !== expectedRevisionUpdatedAt.getTime()) {
-    throw new ConcurrentEditError(recordingId);
-  }
-
-  const updated = await client.recordingRevision.update({
-    where: { id: recording.currentDraftRevision.id },
-    data: { ...patch, updatedById: actorId },
-  });
-
-  return updated;
 }
 
 /**
@@ -348,84 +579,137 @@ export async function forkDraftFromPublished(
   return client ? run(client) : prisma.$transaction(run, { timeout: 30000, maxWait: 10000 });
 }
 
-/**
- * Publishing by moving the pointer (ADR §5.3, second bullet; §5.5): the
- * current draft revision becomes PUBLISHED, any previously published
- * revision becomes SUPERSEDED, and Recording.currentPublishedRevisionId is
- * updated. This is deliberately just the pointer-move mechanic — the
- * completeness gate (ADR §4) and Next.js revalidation call (ADR §10) are
- * the Publishing workflow phase's responsibility, invoked around this
- * function, not inside it.
- */
-export async function publishCurrentDraft(
-  recordingId: string,
-  actorId: string
-): Promise<RecordingWithRevisions> {
-  return prisma.$transaction(async (tx) => {
-    const recording = await tx.recording.findUnique({
-      where: { id: recordingId },
-      include: { currentDraftRevision: true, currentPublishedRevision: true },
-    });
+export type PublishRecordingResult =
+  | { ok: true; recording: RecordingWithRevisions }
+  | { ok: false; reason: PublishRefusalReason; /** Names of the REQUIRED completeness categories still missing (reason NOT_READY). */ missingCategories: string[] };
 
-    if (!recording || !canPublishCurrentDraft({ hasOpenDraft: recording.currentDraftRevision !== null })) {
-      throw new Error(`Recording ${recordingId} has no open draft revision to publish.`);
-    }
-    if (!recording.currentDraftRevision) {
-      // Unreachable given the check above; needed for TypeScript narrowing.
-      throw new Error(`Recording ${recordingId} has no open draft revision to publish.`);
-    }
-    // Phase 6J-1: publishing must never silently un-archive a Recording. An archived
-    // Recording keeps any open draft (archive does not clear it); it must be restored
-    // deliberately first, so restore stays the only way back from ARCHIVED.
-    if (recording.status === "ARCHIVED") {
-      throw new Error(`Recording ${recordingId} is archived. Restore it before publishing.`);
-    }
-
-    const draft = recording.currentDraftRevision;
-    const previousPublished = recording.currentPublishedRevision;
-
-    await tx.recordingRevision.update({
-      where: { id: draft.id },
-      data: { revisionStatus: "PUBLISHED" },
-    });
-
-    if (previousPublished) {
-      await tx.recordingRevision.update({
-        where: { id: previousPublished.id },
-        data: { revisionStatus: "SUPERSEDED" },
-      });
-    }
-
-    const updated = await tx.recording.update({
-      where: { id: recordingId },
-      data: {
-        status: "PUBLISHED",
-        currentPublishedRevisionId: draft.id,
-        currentDraftRevisionId: null,
-        updatedById: actorId,
-      },
-    });
-
-    await writeAuditLog(
-      {
-        actorId,
-        action: "RECORDING_PUBLISHED",
-        entityType: "Recording",
-        entityId: recordingId,
-        beforeSnapshot: previousPublished ? { previousPublishedRevisionId: previousPublished.id } : null,
-        afterSnapshot: { publishedRevisionId: draft.id },
-      },
-      tx
-    );
-
-    return {
-      ...updated,
-      currentDraftRevision: null,
-      currentPublishedRevision: { ...draft, revisionStatus: "PUBLISHED" },
-    };
-  }, { timeout: 30000, maxWait: 10000 });
+class PublishRefused extends Error {
+  constructor(readonly reason: PublishRefusalReason, readonly missingCategories: string[] = []) {
+    super(`Publication refused: ${reason}`);
+    this.name = "PublishRefused";
+  }
 }
 
+export interface PublishRecordingInput {
+  recordingId: string;
+  actorId: string;
+  /** The draft revision the caller saw. If given and no longer current, the publish is refused (STALE_REVISION). */
+  expectedDraftRevisionId?: string;
+  /** Default true: the REQUIRED completeness categories are re-checked INSIDE the publishing transaction. */
+  enforceCompleteness?: boolean;
+  lockTimeoutMs?: number;
+}
+
+/**
+ * Publishing by moving the pointer (ADR §5.3, second bullet; §5.5): the current draft revision becomes
+ * PUBLISHED, any previously published revision becomes SUPERSEDED, Recording.currentPublishedRevisionId
+ * moves, and the success audit entry is written — all in ONE transaction.
+ *
+ * Phase 6J-10B — atomic and race-safe. Inside the transaction, after taking the per-Recording edit lock
+ * (see withRecordingEditLock) it re-reads and re-validates everything the publication depends on:
+ *   - the Recording exists and is not ARCHIVED;
+ *   - it has an open draft that is a DRAFT revision of this Recording, and (if the caller named one)
+ *     that draft is still THE expected one;
+ *   - the draft row is locked (FOR UPDATE) so no concurrent writer changes it between the completeness
+ *     check and the state change, and the REQUIRED completeness categories still hold.
+ * Every write is conditional (the expected state is in the WHERE clause and the row count is checked), so
+ * a stale decision refuses and rolls back instead of overwriting newer state. A refused, stale or failed
+ * attempt changes nothing — the currently published revision stays published — and writes no success audit.
+ * The result is explicit; no database error reaches the caller.
+ */
+export async function publishRecordingDraft(input: PublishRecordingInput): Promise<PublishRecordingResult> {
+  const { recordingId, actorId } = input;
+  try {
+    const recording = await withRecordingEditLock(
+      recordingId,
+      async (tx) => {
+        const current = await tx.recording.findUnique({
+          where: { id: recordingId },
+          include: { currentDraftRevision: true, currentPublishedRevision: true },
+        });
+        if (!current) throw new PublishRefused("RECORDING_NOT_FOUND");
+        if (current.status === "ARCHIVED") throw new PublishRefused("RECORDING_ARCHIVED");
+
+        const draft = current.currentDraftRevision;
+        if (!draft || !canPublishCurrentDraft({ hasOpenDraft: true }) || draft.recordingId !== current.id || draft.revisionStatus !== "DRAFT") {
+          throw new PublishRefused("NO_OPEN_DRAFT");
+        }
+        if (input.expectedDraftRevisionId !== undefined && input.expectedDraftRevisionId !== draft.id) {
+          throw new PublishRefused("STALE_REVISION");
+        }
+
+        // Hold the draft row for the rest of the transaction, then validate against what is committed NOW.
+        await tx.$queryRaw`SELECT id FROM recording_revisions WHERE id = ${draft.id} FOR UPDATE`;
+        if (input.enforceCompleteness !== false) {
+          const completeness = await getRecordingRevisionCompletenessReport(draft.id, tx);
+          if (!completeness || !isReadyToPublish(completeness.report)) {
+            throw new PublishRefused("NOT_READY", completeness ? listMissingRequiredCategories(completeness.report).map((item) => item.category) : []);
+          }
+        }
+
+        const previousPublished = current.currentPublishedRevision;
+
+        const promoted = await tx.recordingRevision.updateMany({
+          where: { id: draft.id, recordingId: current.id, revisionStatus: "DRAFT" },
+          data: { revisionStatus: "PUBLISHED" },
+        });
+        if (promoted.count !== 1) throw new PublishRefused("STATE_CHANGED");
+
+        if (previousPublished) {
+          const superseded = await tx.recordingRevision.updateMany({
+            where: { id: previousPublished.id, revisionStatus: "PUBLISHED" },
+            data: { revisionStatus: "SUPERSEDED" },
+          });
+          if (superseded.count !== 1) throw new PublishRefused("STATE_CHANGED");
+        }
+
+        const moved = await tx.recording.updateMany({
+          where: { id: current.id, currentDraftRevisionId: draft.id, status: { not: "ARCHIVED" } },
+          data: { status: "PUBLISHED", currentPublishedRevisionId: draft.id, currentDraftRevisionId: null, updatedById: actorId },
+        });
+        if (moved.count !== 1) throw new PublishRefused("STATE_CHANGED");
+
+        await writeAuditLog(
+          {
+            actorId,
+            action: "RECORDING_PUBLISHED",
+            entityType: "Recording",
+            entityId: recordingId,
+            beforeSnapshot: previousPublished ? { previousPublishedRevisionId: previousPublished.id } : null,
+            afterSnapshot: { publishedRevisionId: draft.id },
+          },
+          tx
+        );
+
+        return tx.recording.findUniqueOrThrow({
+          where: { id: recordingId },
+          include: { currentDraftRevision: true, currentPublishedRevision: true },
+        });
+      },
+      input.lockTimeoutMs
+    );
+    return { ok: true, recording };
+  } catch (err) {
+    if (err instanceof PublishRefused) return { ok: false, reason: err.reason, missingCategories: err.missingCategories };
+    if (err instanceof RecordingBusyError) return { ok: false, reason: "BUSY", missingCategories: [] };
+    // Unexpected: the transaction rolled back (the published revision is untouched). Log the class only — never the message or values.
+    console.error(`[publish] unexpected failure while publishing recording ${recordingId}: ${err instanceof Error ? err.name : "unknown error"}`);
+    return { ok: false, reason: "FAILED", missingCategories: [] };
+  }
+}
+
+/**
+ * The pointer-move mechanic without the completeness gate (the Studio action uses publishRecordingDraft,
+ * which enforces completeness). Same atomic, race-safe core; throws on refusal, as it always has.
+ */
+export async function publishCurrentDraft(recordingId: string, actorId: string): Promise<RecordingWithRevisions> {
+  const result = await publishRecordingDraft({ recordingId, actorId, enforceCompleteness: false });
+  if (result.ok) return result.recording;
+  if (result.reason === "RECORDING_ARCHIVED") throw new Error(`Recording ${recordingId} is archived. Restore it before publishing.`);
+  if (result.reason === "NO_OPEN_DRAFT" || result.reason === "RECORDING_NOT_FOUND") throw new Error(`Recording ${recordingId} has no open draft revision to publish.`);
+  if (result.reason === "BUSY") throw new RecordingBusyError(recordingId);
+  throw new Error(`Recording ${recordingId} could not be published (${result.reason}).`);
+}
 export function findRecordingById(id: string): Promise<RecordingWithRevisions | null> {
   return prisma.recording.findUnique({
     where: { id },
@@ -454,33 +738,35 @@ export function listRecordingsForStudio(): Promise<RecordingWithRevisions[]> {
  * tells the two apart for display using hasPublishedRevision.
  */
 export async function submitRecordingForReview(recordingId: string, actorId: string): Promise<Recording> {
-  const recording = await prisma.recording.findUnique({ where: { id: recordingId } });
-  if (!recording) {
-    throw new Error(`Recording ${recordingId} does not exist.`);
-  }
-  if (recording.status !== "DRAFT") {
-    throw new Error(`Recording ${recordingId} is not in DRAFT status (currently ${recording.status}).`);
-  }
-  // Phase 6J-4: there must be a draft to review. A Recording that was unpublished has status DRAFT
-  // but NO open draft revision (its last published version is kept as history); "submitting" it
-  // would move it to IN_REVIEW with nothing in review. It must start a new draft first.
-  if (recording.currentDraftRevisionId === null) {
-    throw new Error(`Recording ${recordingId} has no open draft revision to submit for review. Start a new draft first.`);
-  }
+  // Phase 6J-10B: serialized with publish and the other lifecycle changes (see withRecordingEditLock);
+  // the state is re-read under the lock, the write is conditional, and the audit entry commits with it.
+  return withRecordingEditLock(recordingId, async (tx) => {
+    const recording = await tx.recording.findUnique({ where: { id: recordingId } });
+    if (!recording) {
+      throw new Error(`Recording ${recordingId} does not exist.`);
+    }
+    if (recording.status !== "DRAFT") {
+      throw new Error(`Recording ${recordingId} is not in DRAFT status (currently ${recording.status}).`);
+    }
+    // Phase 6J-4: there must be a draft to review. A Recording that was unpublished has status DRAFT
+    // but NO open draft revision (its last published version is kept as history); "submitting" it
+    // would move it to IN_REVIEW with nothing in review. It must start a new draft first.
+    if (recording.currentDraftRevisionId === null) {
+      throw new Error(`Recording ${recordingId} has no open draft revision to submit for review. Start a new draft first.`);
+    }
 
-  const updated = await prisma.recording.update({
-    where: { id: recordingId },
-    data: { status: "IN_REVIEW", updatedById: actorId },
+    const moved = await tx.recording.updateMany({
+      where: { id: recordingId, status: "DRAFT", currentDraftRevisionId: { not: null } },
+      data: { status: "IN_REVIEW", updatedById: actorId },
+    });
+    if (moved.count !== 1) {
+      throw new Error(`Recording ${recordingId} changed while it was being submitted for review. Reload and try again.`);
+    }
+
+    await writeAuditLog({ actorId, action: "RECORDING_SUBMITTED_FOR_REVIEW", entityType: "Recording", entityId: recordingId }, tx);
+
+    return tx.recording.findUniqueOrThrow({ where: { id: recordingId } });
   });
-
-  await writeAuditLog({
-    actorId,
-    action: "RECORDING_SUBMITTED_FOR_REVIEW",
-    entityType: "Recording",
-    entityId: recordingId,
-  });
-
-  return updated;
 }
 
 /**
@@ -494,29 +780,31 @@ export async function submitRecordingForReview(recordingId: string, actorId: str
  * currentPublishedRevisionId still points at real revision history.
  */
 export async function archiveRecording(recordingId: string, actorId: string): Promise<Recording> {
-  const existing = await prisma.recording.findUnique({ where: { id: recordingId } });
-  if (!existing) {
-    throw new Error(`Recording ${recordingId} does not exist.`);
-  }
-  // Phase 6J-1: idempotent — archiving an already-archived Recording (a double-click,
-  // a replayed form) changes nothing and writes no second audit entry.
-  if (existing.status === "ARCHIVED") {
-    return existing;
-  }
+  // Phase 6J-10B: serialized with publish (see withRecordingEditLock): an archive can no longer be
+  // overwritten by a publish that read the Recording before it, and the audit entry commits with it.
+  return withRecordingEditLock(recordingId, async (tx) => {
+    const existing = await tx.recording.findUnique({ where: { id: recordingId } });
+    if (!existing) {
+      throw new Error(`Recording ${recordingId} does not exist.`);
+    }
+    // Phase 6J-1: idempotent — archiving an already-archived Recording (a double-click,
+    // a replayed form) changes nothing and writes no second audit entry.
+    if (existing.status === "ARCHIVED") {
+      return existing;
+    }
 
-  const updated = await prisma.recording.update({
-    where: { id: recordingId },
-    data: { status: "ARCHIVED", updatedById: actorId },
+    const moved = await tx.recording.updateMany({
+      where: { id: recordingId, status: { not: "ARCHIVED" } },
+      data: { status: "ARCHIVED", updatedById: actorId },
+    });
+    if (moved.count !== 1) {
+      throw new Error(`Recording ${recordingId} changed while it was being archived. Reload and try again.`);
+    }
+
+    await writeAuditLog({ actorId, action: "RECORDING_ARCHIVED", entityType: "Recording", entityId: recordingId }, tx);
+
+    return tx.recording.findUniqueOrThrow({ where: { id: recordingId } });
   });
-
-  await writeAuditLog({
-    actorId,
-    action: "RECORDING_ARCHIVED",
-    entityType: "Recording",
-    entityId: recordingId,
-  });
-
-  return updated;
 }
 
 /**
@@ -536,27 +824,28 @@ export async function archiveRecording(recordingId: string, actorId: string): Pr
  * publication remains a separate, intentional action via publishCurrentDraft.
  */
 export async function restoreRecording(recordingId: string, actorId: string): Promise<Recording> {
-  const recording = await prisma.recording.findUnique({ where: { id: recordingId } });
-  if (!recording) {
-    throw new Error(`Recording ${recordingId} does not exist.`);
-  }
-  if (recording.status !== "ARCHIVED") {
-    throw new Error(`Recording ${recordingId} is not ARCHIVED (currently ${recording.status}).`);
-  }
+  // Phase 6J-10B: serialized with publish; conditional write; audit in the same transaction.
+  return withRecordingEditLock(recordingId, async (tx) => {
+    const recording = await tx.recording.findUnique({ where: { id: recordingId } });
+    if (!recording) {
+      throw new Error(`Recording ${recordingId} does not exist.`);
+    }
+    if (recording.status !== "ARCHIVED") {
+      throw new Error(`Recording ${recordingId} is not ARCHIVED (currently ${recording.status}).`);
+    }
 
-  const updated = await prisma.recording.update({
-    where: { id: recordingId },
-    data: { status: "DRAFT", updatedById: actorId },
+    const moved = await tx.recording.updateMany({
+      where: { id: recordingId, status: "ARCHIVED" },
+      data: { status: "DRAFT", updatedById: actorId },
+    });
+    if (moved.count !== 1) {
+      throw new Error(`Recording ${recordingId} changed while it was being restored. Reload and try again.`);
+    }
+
+    await writeAuditLog({ actorId, action: "RECORDING_RESTORED", entityType: "Recording", entityId: recordingId }, tx);
+
+    return tx.recording.findUniqueOrThrow({ where: { id: recordingId } });
   });
-
-  await writeAuditLog({
-    actorId,
-    action: "RECORDING_RESTORED",
-    entityType: "Recording",
-    entityId: recordingId,
-  });
-
-  return updated;
 }
 
 /**
@@ -574,27 +863,28 @@ export async function restoreRecording(recordingId: string, actorId: string): Pr
  * happens next.
  */
 export async function unpublishRecording(recordingId: string, actorId: string): Promise<Recording> {
-  const recording = await prisma.recording.findUnique({ where: { id: recordingId } });
-  if (!recording) {
-    throw new Error(`Recording ${recordingId} does not exist.`);
-  }
-  if (recording.status !== "PUBLISHED") {
-    throw new Error(`Recording ${recordingId} is not PUBLISHED (currently ${recording.status}).`);
-  }
+  // Phase 6J-10B: serialized with publish; conditional write; audit in the same transaction.
+  return withRecordingEditLock(recordingId, async (tx) => {
+    const recording = await tx.recording.findUnique({ where: { id: recordingId } });
+    if (!recording) {
+      throw new Error(`Recording ${recordingId} does not exist.`);
+    }
+    if (recording.status !== "PUBLISHED") {
+      throw new Error(`Recording ${recordingId} is not PUBLISHED (currently ${recording.status}).`);
+    }
 
-  const updated = await prisma.recording.update({
-    where: { id: recordingId },
-    data: { status: "DRAFT", updatedById: actorId },
+    const moved = await tx.recording.updateMany({
+      where: { id: recordingId, status: "PUBLISHED" },
+      data: { status: "DRAFT", updatedById: actorId },
+    });
+    if (moved.count !== 1) {
+      throw new Error(`Recording ${recordingId} changed while it was being unpublished. Reload and try again.`);
+    }
+
+    await writeAuditLog({ actorId, action: "RECORDING_UNPUBLISHED", entityType: "Recording", entityId: recordingId }, tx);
+
+    return tx.recording.findUniqueOrThrow({ where: { id: recordingId } });
   });
-
-  await writeAuditLog({
-    actorId,
-    action: "RECORDING_UNPUBLISHED",
-    entityType: "Recording",
-    entityId: recordingId,
-  });
-
-  return updated;
 }
 
 /**
@@ -609,7 +899,9 @@ export async function attachWorkToRevision(
   musicalWorkId: string,
   actorId: string
 ) {
-  return prisma.$transaction(async (tx) => {
+  // 6J-10C: eligibility (editable draft) is verified inside the same transaction as the write, under the
+  // per-Recording edit lock, so this can never add a work to a published or superseded revision.
+  return withEditableDraftRevision(revisionId, async (tx) => {
     const existingLinks = await tx.recordingRevisionWork.findMany({
       where: { revisionId },
       select: { musicalWorkId: true, order: true },
@@ -647,16 +939,22 @@ export async function detachWorkFromRevision(
   musicalWorkId: string,
   actorId: string
 ): Promise<void> {
-  await prisma.recordingRevisionWork.delete({
-    where: { revisionId_musicalWorkId: { revisionId, musicalWorkId } },
-  });
+  // 6J-10C: same protocol as attach — eligibility, delete and audit are one transaction under the edit lock.
+  await withEditableDraftRevision(revisionId, async (tx) => {
+    await tx.recordingRevisionWork.delete({
+      where: { revisionId_musicalWorkId: { revisionId, musicalWorkId } },
+    });
 
-  await writeAuditLog({
-    actorId,
-    action: "WORK_DETACHED_FROM_RECORDING_REVISION",
-    entityType: "RecordingRevision",
-    entityId: revisionId,
-    beforeSnapshot: { musicalWorkId },
+    await writeAuditLog(
+      {
+        actorId,
+        action: "WORK_DETACHED_FROM_RECORDING_REVISION",
+        entityType: "RecordingRevision",
+        entityId: revisionId,
+        beforeSnapshot: { musicalWorkId },
+      },
+      tx
+    );
   });
 }
 
@@ -747,8 +1045,12 @@ export async function getPublishedRecordingContextBySlug(slug: string) {
 // boundary rule — see that directory's README for the distinction.
 // ---------------------------------------------------------------------------
 
-export async function getCanonicalContextForRevision(revisionId: string) {
-  const revision = await prisma.recordingRevision.findUnique({
+export async function getCanonicalContextForRevision(
+  revisionId: string,
+  /** Phase 6J-10B — optional caller-owned transaction, so publication can validate inside its own transaction. */
+  client: Prisma.TransactionClient | typeof prisma = prisma
+) {
+  const revision = await client.recordingRevision.findUnique({
     where: { id: revisionId },
     include: {
       works: {
@@ -802,9 +1104,10 @@ export interface RecordingRevisionCompletenessReport {
  * each call site.
  */
 export async function getRecordingRevisionCompletenessReport(
-  revisionId: string
+  revisionId: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<RecordingRevisionCompletenessReport | null> {
-  const context = await getCanonicalContextForRevision(revisionId);
+  const context = await getCanonicalContextForRevision(revisionId, client);
   if (!context) {
     return null;
   }

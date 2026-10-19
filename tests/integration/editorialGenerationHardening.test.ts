@@ -263,9 +263,9 @@ describe("D. Source-tier distinction is preserved, never merged", () => {
       },
     });
     try {
-      const { attachMediaToRevision } = await import("../../modules/db/repositories/mediaResourceRepository");
+      const { seedMediaOnRevision } = await import("./helpers/seedRevisionRows");
       const revision = await prisma.recording.findUnique({ where: { id: fixture.recordingId }, select: { currentPublishedRevisionId: true } });
-      await attachMediaToRevision({
+      await seedMediaOnRevision({
         recordingRevisionId: revision!.currentPublishedRevisionId!,
         provider: "YOUTUBE",
         role: "PRIMARY_VIDEO",

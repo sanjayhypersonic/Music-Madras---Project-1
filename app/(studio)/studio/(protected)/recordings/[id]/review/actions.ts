@@ -6,15 +6,12 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import {
   archiveRecording,
-  getRecordingRevisionCompletenessReport,
-  publishCurrentDraft,
-  resolveEditableDraftRevision,
+  publishRecordingDraft,
   restoreRecording,
   submitRecordingForReview,
   unpublishRecording,
 } from "../../../../../../../modules/db/repositories/recordingRepository";
-import { isReadyToPublish, listMissingRequiredCategories } from "../../../../../../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
-import { describeEditableDraftRefusal } from "../../../../../../../modules/publishing/editableDraftRefusal";
+import { describePublishRefusal } from "../../../../../../../modules/publishing/publishRefusal";
 
 // Phase 6J-1 — the lifecycle actions of the Review & Publish step.
 //   - publish validates the Recording's ACTUAL open draft (resolved server-side;
@@ -52,21 +49,16 @@ export async function publishAction(recordingId: string, expectedDraftRevisionId
     back(recordingId, "You do not have permission to publish.");
   }
 
-  const draft = await resolveEditableDraftRevision(recordingId, expectedDraftRevisionId);
-  if (!draft.ok) back(recordingId, describeEditableDraftRefusal(draft.reason));
-
-  const completeness = await getRecordingRevisionCompletenessReport(draft.revisionId);
-  if (!completeness || !isReadyToPublish(completeness.report)) {
-    // Say WHAT is missing (e.g. a Music Madras title), not just that something is.
-    const missing = completeness ? listMissingRequiredCategories(completeness.report).map((item) => item.category) : [];
-    back(recordingId, `This recording is not ready to publish.${missing.length > 0 ? ` Still required: ${missing.join(", ")}.` : ""}`);
-  }
-
-  try {
-    await publishCurrentDraft(recordingId, session!.user.id);
-  } catch {
-    back(recordingId, "The recording could not be published. Nothing was changed. Reload the page and try again.");
-  }
+  // Phase 6J-10B: every publication precondition — not archived, the expected draft still current,
+  // completeness — is re-validated INSIDE the publishing transaction, under the per-Recording lock,
+  // and the writes are conditional (recordingRepository.publishRecordingDraft). The Studio shows the
+  // explicit refusal (it says WHAT is still required); no database error reaches the editor.
+  const result = await publishRecordingDraft({
+    recordingId,
+    actorId: session!.user.id,
+    expectedDraftRevisionId,
+  });
+  if (!result.ok) back(recordingId, describePublishRefusal(result.reason, result.missingCategories));
   back(recordingId);
 }
 

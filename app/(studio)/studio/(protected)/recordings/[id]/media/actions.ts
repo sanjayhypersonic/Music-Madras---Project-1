@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { attachMediaToRevision } from "../../../../../../../modules/db/repositories/mediaResourceRepository";
-import { resolveEditableDraftRevision } from "../../../../../../../modules/db/repositories/recordingRepository";
+import { RecordingBusyError, RevisionNotEditableError, resolveEditableDraftRevision } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { describeEditableDraftRefusal } from "../../../../../../../modules/publishing/editableDraftRefusal";
 import { MediaProvider, MediaRole } from "@prisma/client";
 
@@ -35,14 +35,20 @@ export async function attachMediaAction(recordingId: string, revisionId: string,
   const draft = await resolveEditableDraftRevision(recordingId, revisionId);
   if (!draft.ok) fail(recordingId, describeEditableDraftRefusal(draft.reason));
 
-  await attachMediaToRevision({
-    recordingRevisionId: draft.revisionId,
-    provider: providerRaw as MediaProvider,
-    role: roleRaw as MediaRole,
-    url,
-    providerResourceId: String(formData.get("providerResourceId") ?? "") || undefined,
-    actorId: session!.user.id,
-  });
+  try {
+    await attachMediaToRevision({
+      recordingRevisionId: draft.revisionId,
+      provider: providerRaw as MediaProvider,
+      role: roleRaw as MediaRole,
+      url,
+      providerResourceId: String(formData.get("providerResourceId") ?? "") || undefined,
+      actorId: session!.user.id,
+    });
+  } catch (err) {
+    // 6J-10C: the repository re-verifies eligibility under the edit lock (the draft may have been published since).
+    if (err instanceof RevisionNotEditableError || err instanceof RecordingBusyError) fail(recordingId, err.message);
+    throw err;
+  }
 
   redirect(`/studio/recordings/${recordingId}/media`);
 }

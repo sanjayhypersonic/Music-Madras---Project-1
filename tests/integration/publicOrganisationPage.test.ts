@@ -19,7 +19,7 @@ import {
   publishCurrentDraft,
   updateDraftRevisionContent,
 } from "../../modules/db/repositories/recordingRepository";
-import { attachMediaToRevision } from "../../modules/db/repositories/mediaResourceRepository";
+import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import { createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { createCollection, addRecordingToCollection, publishCollection } from "../../modules/db/repositories/collectionRepository";
 import { createOccasion, attachOccasionToEntity } from "../../modules/db/repositories/occasionRepository";
@@ -331,7 +331,7 @@ describe("Organisation full canonical graph: venue -> performance -> recording -
     const videoPage = await createDraftVideoPage({ youtubeVideoId: video.id, actorId: user.id });
     videoPageId = videoPage.id;
     await publishVideoPage(videoPage.id, user.id);
-    await attachMediaToRevision({
+    await seedMediaOnRevision({
       recordingRevisionId: recording.currentPublishedRevisionId as string,
       provider: "YOUTUBE",
       role: "PRIMARY_VIDEO",

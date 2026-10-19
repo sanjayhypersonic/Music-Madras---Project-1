@@ -4,7 +4,7 @@ import { writeAuditLog } from "../../audit/writeAuditLog";
 import { generatePerformanceSlug } from "../../mmke/slug/generatePerformanceSlug";
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
 import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
-import type { Performance, Programme, Venue } from "@prisma/client";
+import type { Performance, Prisma, Programme, Venue } from "@prisma/client";
 
 // Performance links a Programme to a Venue and its participants (brief §3,
 // §6) via explicit join tables — never free-text participant names.
@@ -30,10 +30,14 @@ export interface CreatePerformanceInput {
  * an id-suffixed slug colliding with another row is not expected in
  * practice.
  */
-export async function createPerformance(input: CreatePerformanceInput): Promise<Performance> {
+export async function createPerformance(
+  input: CreatePerformanceInput,
+  /** Phase 6J-10C — optional caller-owned transaction, so a Performance created for a draft is atomic with linking it. */
+  client: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<Performance> {
   const [programme, venue] = await Promise.all([
-    prisma.programme.findUnique({ where: { id: input.programmeId } }),
-    prisma.venue.findUnique({ where: { id: input.venueId } }),
+    client.programme.findUnique({ where: { id: input.programmeId } }),
+    client.venue.findUnique({ where: { id: input.venueId } }),
   ]);
   if (!programme) {
     throw new Error(`Programme ${input.programmeId} does not exist.`);
@@ -52,7 +56,7 @@ export async function createPerformance(input: CreatePerformanceInput): Promise<
 
   let performance: Performance;
   try {
-    performance = await prisma.performance.create({
+    performance = await client.performance.create({
       data: {
         id,
         slug,
@@ -70,13 +74,16 @@ export async function createPerformance(input: CreatePerformanceInput): Promise<
     throw err;
   }
 
-  await writeAuditLog({
-    actorId: input.actorId,
-    action: "PERFORMANCE_CREATED",
-    entityType: "Performance",
-    entityId: performance.id,
-    afterSnapshot: performance,
-  });
+  await writeAuditLog(
+    {
+      actorId: input.actorId,
+      action: "PERFORMANCE_CREATED",
+      entityType: "Performance",
+      entityId: performance.id,
+      afterSnapshot: performance,
+    },
+    client
+  );
 
   return performance;
 }

@@ -341,7 +341,7 @@ describe("B. Studio actions mutate only the real editable draft", () => {
 
     const before = await prisma.performance.count({ where: { programmeId: programme.id } });
     const message = await redirectOf(() =>
-      createPerformanceAction(rec.recordingId, fork.updatedAt.toISOString(), form({ programmeId: programme.id, venueId: venue.id }))
+      createPerformanceAction(rec.recordingId, fork.id, fork.updatedAt.toISOString(), form({ programmeId: programme.id, venueId: venue.id }))
     );
     expect(message).toMatch(/archived/i);
     expect(await prisma.performance.count({ where: { programmeId: programme.id } })).toBe(before);

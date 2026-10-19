@@ -14,7 +14,7 @@ import {
   updateDraftRevisionContent,
   archiveRecording,
 } from "../../modules/db/repositories/recordingRepository";
-import { attachMediaToRevision } from "../../modules/db/repositories/mediaResourceRepository";
+import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import { createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import {
   createCollection,
@@ -261,8 +261,8 @@ describe("COLLECTION — getPublicCollectionPageData", () => {
       const revisionId = (
         await prisma.recording.findUnique({ where: { id: fixture.recordingId }, select: { currentPublishedRevisionId: true } })
       )!.currentPublishedRevisionId!;
-      await attachMediaToRevision({ recordingRevisionId: revisionId, provider: "YOUTUBE", role: "PRIMARY_VIDEO", youtubeVideoId: publicVideo.id, actorId: fixture.user.id });
-      await attachMediaToRevision({ recordingRevisionId: revisionId, provider: "YOUTUBE", role: "THUMBNAIL", youtubeVideoId: privateVideo.id, actorId: fixture.user.id });
+      await seedMediaOnRevision({ recordingRevisionId: revisionId, provider: "YOUTUBE", role: "PRIMARY_VIDEO", youtubeVideoId: publicVideo.id, actorId: fixture.user.id });
+      await seedMediaOnRevision({ recordingRevisionId: revisionId, provider: "YOUTUBE", role: "THUMBNAIL", youtubeVideoId: privateVideo.id, actorId: fixture.user.id });
 
       const data = await getPublicCollectionPageData(fixture.collectionSlug);
       const slugs = data!.videos.map((v) => v.slug);

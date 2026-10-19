@@ -38,7 +38,7 @@ export default async function EducationalStepPage({ params }: { params: Promise<
           { name: "educationalListeningGuide", label: "Listening guide", type: "textarea" },
           { name: "educationalAnalysis", label: "Analysis", type: "textarea" },
         ]}
-        saveAction={saveEducationalStep}
+        saveAction={saveEducationalStep.bind(null, recording.currentDraftRevision.id)}
       />
     </div>
   );

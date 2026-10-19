@@ -67,7 +67,7 @@ export default async function PerformanceStepPage({
 
       {canWrite && programmes.length > 0 && venues.length > 0 && (
         <form
-          action={createPerformanceAction.bind(null, id, recording.currentDraftRevision.updatedAt.toISOString())}
+          action={createPerformanceAction.bind(null, id, recording.currentDraftRevision.id, recording.currentDraftRevision.updatedAt.toISOString())}
           style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}
         >
           <label>

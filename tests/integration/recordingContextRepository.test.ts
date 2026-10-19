@@ -16,7 +16,7 @@ import {
   publishCurrentDraft,
   updateDraftRevisionContent,
 } from "../../modules/db/repositories/recordingRepository";
-import { attachMediaToRevision } from "../../modules/db/repositories/mediaResourceRepository";
+import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import { createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { createCollection, addRecordingToCollection, publishCollection } from "../../modules/db/repositories/collectionRepository";
 import { approveSource, attachSourceToEntity, createSource, disableSource, rejectSource } from "../../modules/db/repositories/sourceRepository";
@@ -257,7 +257,7 @@ describe("D. YouTube media handling", () => {
       },
     });
     const revision = await prisma.recording.findUnique({ where: { id: fixture.recordingId }, select: { currentPublishedRevisionId: true } });
-    await attachMediaToRevision({
+    await seedMediaOnRevision({
       recordingRevisionId: revision!.currentPublishedRevisionId!,
       provider: "YOUTUBE",
       role: "PRIMARY_VIDEO",

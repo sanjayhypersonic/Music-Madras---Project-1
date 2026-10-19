@@ -38,7 +38,7 @@ export default async function SeoStepPage({ params }: { params: Promise<{ id: st
           { name: "seoMetaDescription", label: "Meta description", type: "textarea" },
           { name: "seoCanonicalPath", label: "Canonical path", type: "text" },
         ]}
-        saveAction={saveSeoStep}
+        saveAction={saveSeoStep.bind(null, recording.currentDraftRevision.id)}
       />
     </div>
   );

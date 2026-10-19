@@ -5,6 +5,8 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import {
   attachWorkToRevision,
+  RecordingBusyError,
+  RevisionNotEditableError,
   detachWorkFromRevision,
   resolveEditableDraftRevision,
 } from "../../../../../../../modules/db/repositories/recordingRepository";
@@ -54,7 +56,9 @@ export async function detachWorkAction(recordingId: string, revisionId: string, 
 
   try {
     await detachWorkFromRevision(draft.revisionId, musicalWorkId, session!.user.id);
-  } catch {
+  } catch (err) {
+    // 6J-10C: the repository re-verifies eligibility under the edit lock; surface a refusal as itself.
+    if (err instanceof RevisionNotEditableError || err instanceof RecordingBusyError) fail(recordingId, err.message);
     fail(recordingId, "That work is no longer attached to this recording.");
   }
   redirect(`/studio/recordings/${recordingId}/works`);
