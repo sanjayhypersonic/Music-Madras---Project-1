@@ -3,7 +3,7 @@
 **Read this first.** This is an **inspection plus a read-only verification of a branch-based copy**, not a restore test. **No true restore (instant restore, point-in-time
 restore, or restore from a historical backup) was executed.** This session created, restored, reset, renamed or deleted nothing in Neon; production and the branches were only read
 (read-only transactions). The owner created the rehearsal branch manually; section 7a records what was verified about it. A child branch created from production is a **branch-based copy of current data** — it shows that a branch can be created and read, **not** that a historical backup or point-in-time recovery works.
-Findings are classified **VERIFIED** (observed in this phase), **UNVERIFIED** (not observable from here, or only documented in general),
+Findings are classified **VERIFIED** (observed by this session), **OWNER-CONFIRMED** (read by the owner in the Neon console; this session cannot see the console, so it records them but did not observe them), **UNVERIFIED** (not observable from here, or only documented in general),
 **FAILED**, or **NOT APPLICABLE**. No connection string, password, key or token appears in this document; identifiers are truncated.
 
 ## 1. Summary
@@ -11,7 +11,7 @@ Findings are classified **VERIFIED** (observed in this phase), **UNVERIFIED** (n
 | Question | Answer |
 |---|---|
 | Is there a current, verified backup of production? | **UNVERIFIED — no.** The only recovery artefact seen is a *pre-sync snapshot* branch that is stale (section 4). |
-| Is point-in-time restore available to this project? | **UNVERIFIED.** Neon documents it, but the plan and the history window cannot be read from SQL and the console was not accessible. |
+| Is point-in-time restore available to this project? | **OWNER-CONFIRMED, and limited: Free plan, 6-hour history window, `production` is the root branch** (section 7b). Point-in-time recovery therefore reaches back **six hours at most**; whether a given restore is actually available must be confirmed in Neon's restore interface. It has **not** been exercised: **backup/restore is not proven**. |
 | Was an isolated restore rehearsal completed? | **Partly.** The owner created a rehearsal branch; this session verified it read-only and found it **identical to production** (section 7a). **No true restore was performed**, so historical-backup and point-in-time recovery remain **UNVERIFIED**. |
 | Was production modified? | **No.** (Verified: read-only transactions; no writes, no migrations, no backfill, no re-projection.) |
 | Cutover blockers | See section 9. The central one: **recoverability is unproven**, and a fresh restore point plus a rehearsal are required first. |
@@ -44,11 +44,11 @@ Observed 2026-10-20 ~15:36 UTC through read-only connections (`transaction_read_
 | Mechanism | What is documented (general Neon documentation, fetched 2026-10-20) | Status for **this** project |
 |---|---|---|
 | **Existing restore branch** | A branch copies data at a point in time | **VERIFIED to exist and open, and to hold a consistent pre-sync state. VERIFIED NOT a current backup:** it predates the final YouTube sync (section 5). Restoring production from it would discard that sync. It must not be used as a test target. |
-| **Instant restore / point-in-time restore (PITR)** | Restores a **root** branch to a timestamp or LSN *in place*; replaces all data and schema; Neon preserves the prior state in an automatic backup branch `{branch}_old_{timestamp}`; connection details stay the same; changes after the restore point are lost | **UNVERIFIED.** Depends on plan and history window (below) and on production being a root branch. |
-| **History window** | Free: 6 hours (1 GB of change history); Launch: up to 7 days; Scale: up to 30 days; paid projects default to 1 day and the window can be shortened | **UNVERIFIED.** The project's plan and configured window are console/API facts. A 6-hour or 1-day window would not cover a cutover investigated the next week. |
+| **Instant restore / point-in-time restore (PITR)** | Restores a **root** branch to a timestamp or LSN *in place*; replaces all data and schema; Neon preserves the prior state in an automatic backup branch `{branch}_old_{timestamp}`; connection details stay the same; changes after the restore point are lost | **OWNER-CONFIRMED prerequisites:** production is a root branch (so the mechanism applies in principle), on the **Free plan with a 6-hour window**. **Not exercised; actual availability UNVERIFIED** — confirm in Neon's restore interface (Time Travel Assist shows what a chosen point holds before anything is restored). |
+| **History window** | Free: 6 hours (capped at 1 GB of change history); Launch: up to 7 days; Scale: up to 30 days; paid projects default to 1 day and the window can be shortened | **OWNER-CONFIRMED: Free plan, 6 hours.** Anything older than six hours (and anything beyond the plan's change-history cap) cannot be point-in-time restored. An incident noticed the next day is **outside** it. |
 | **Create a branch from a past point in time** | Creates a new child branch at a chosen timestamp/LSN without touching the parent | **UNVERIFIED** (permission, quota and cost not checked). This is the safe rehearsal primitive. |
 | **Time Travel Assist** | Read-only queries against a historical point, to confirm the target before restoring | **UNVERIFIED** (console feature; not accessed). |
-| **PITR on the restore branch** | Only root branches support PITR; child branches do not | Applies if the restore branch is a child: **it cannot itself be point-in-time restored.** |
+| **PITR on the existing branches** | Only root branches support PITR; child branches do not | **OWNER-CONFIRMED:** both `pre-final-youtube-sync-2026-10-14` and `music-madras-recovery-rehearsal-20261020` are **children** of `production`, so **neither can itself be point-in-time restored**. They are snapshots of their creation moments, not rolling backups. |
 | **Logical backup (`pg_dump`/`pg_restore`)** | Standard Postgres | `psql`, `pg_dump`, `pg_restore` are **not installed on this machine (VERIFIED)**; none was produced. A dump would also contain credential-bearing tables (`studio_users`, `studio_sessions`, `studio_accounts`), so its storage needs its own decision. |
 | **Neon API / CLI access from this session** | — | **VERIFIED absent:** no API key, no `neonctl`; the console in the built-in browser was **not signed in** (nothing was entered). Hence no branch could be created. |
 
@@ -149,6 +149,25 @@ The gate would have aborted the run before any data query had the endpoint or ti
   Creating a child branch is the same operation as the recommended pre-cutover restore point; it does not exercise PITR or instant restore, which overwrite in place.
 - **Elapsed time:** the owner's branch-creation time was not reported, so **recovery time is UNVERIFIED**. Verification itself took about 9 seconds on a 15 MB database.
 - The rehearsal branch has **not** been deleted (as instructed). Remaining steps: the optional rehearsal of the pending migrations on this branch only (step 6, not run), and the owner's cleanup (step 8) when finished — then delete `.env.rehearsal.txt`.
+### 7b. Owner-confirmed Neon facts (console, 2026-10-20) and what they mean
+
+Confirmed by the owner from the Neon console; **recorded here, not observed by this session** (OWNER-CONFIRMED). Nothing in Neon was changed, created or deleted by this session.
+
+| Fact | Value |
+|---|---|
+| Project | `music-madras-dev` |
+| Plan | **Free** |
+| History window | **6 hours** |
+| `production` | the **root** branch (Parent column `-`) |
+| `music-madras-recovery-rehearsal-20261020` | a **child** of `production` |
+| `pre-final-youtube-sync-2026-10-14` | a **child** of `production` |
+
+**Consequences (no recovery is claimed to be proven):**
+1. **Point-in-time recovery is limited to the configured six-hour history window** (and, per Neon''s plan documentation, to a cap on change history on the Free plan). It cannot reach an event older than six hours. Whether a restore to a chosen point is **actually available** must be confirmed in Neon''s restore interface (Time Travel Assist, then the restore itself); this has **not** been done.
+2. Because `production` is the root branch, instant restore *can* apply to it in principle; Neon documents that it overwrites in place and keeps the previous state in an automatic backup branch. Restoring production **from** a child branch (for example the rehearsal branch) as the source is a variant whose support must also be **confirmed in the restore interface** — do not assume it. The alternative that needs no restore feature is to **repoint the application** to a verified branch (section 8).
+3. The two existing children are **snapshots**, not rolling backups, and child branches have no point-in-time restore of their own. The historical one is stale (it predates the final sync); the rehearsal branch is a **current snapshot as of its creation (verified identical to production at ~16:09 UTC on 2026-10-20)** and is only as fresh as that moment — any later production change is not in it. **Keep it** (do not delete) until a deliberate pre-cutover snapshot replaces it.
+4. A cutover problem noticed **after six hours** has **no point-in-time path** on this plan. The pre-cutover safety net is therefore a **fresh child-branch snapshot taken immediately before the migrations / cutover**, kept until the change has been stable, with its limits stated above. Moving to a plan with a longer window is the owner''s cost decision.
+5. The Free plan''s other limits (storage, branch count, compute) are **not** assessed here.
 ## 8. Exact recovery procedure for an incident (to be verified by the rehearsal above; not yet proven)
 
 1. **Stop the damage:** stop writers (Studio writes, cron/sync jobs, any backfill/re-projection) — set maintenance or revert the release. Do **not** run anything else against production.
@@ -160,24 +179,25 @@ The gate would have aborted the run before any data query had the endpoint or ti
 5. **Verify after recovery:** reconciliation checks, public pages, Studio sign-in, audit trail continuity; compare with the pre-incident counts.
 6. **Record** what was lost (everything after `T`), re-run what can be re-run (e.g. the idempotent YouTube sync *only* by explicit instruction), and delete temporary branches only after confirming identity.
 7. Data written after `T` (editorial edits) is **not** recoverable from the restore; capture it first if it matters.
+Note on the Free plan (section 7b): the point-in-time options in steps 3 and 4 exist **only within the six-hour history window**. Beyond it, recovery means **repointing to, or restoring from, the most recent pre-change branch snapshot**, and everything after that snapshot is lost.
 Status of every step above: **UNVERIFIED for this project** until sections 7 and 10 are completed.
 
 ## 9. Remaining blockers and preconditions before any relationship cutover
 
 | # | Precondition | Status |
 |---|---|---|
-| 1 | Plan and **history window** recorded from the console; production confirmed as a root branch | **UNVERIFIED — manual** |
+| 1 | Plan, history window and root-branch status recorded | **OWNER-CONFIRMED** (Free, 6 hours, root). **Consequence — a genuine launch decision for the owner:** point-in-time recovery covers six hours only. Either move production to a plan with a longer window, or accept that recovery beyond six hours relies on a **pre-change branch snapshot** taken immediately before each risky change (migration, cutover, bulk operation) and kept until the change is stable, with the loss of everything after it |
 | 2 | A **fresh restore point** taken immediately before the cutover window (the existing branch is stale and would discard the final sync) | **NOT DONE** |
 | 3 | A **restore rehearsal** on a disposable branch passes section 7's criteria; elapsed time recorded | **PARTIAL:** a branch copy was verified identical to production (7a). **Not exercised:** point-in-time restore, a historical-backup restore, elapsed time, and the application reading the branch |
 | 4 | Decision on a **logical dump** as an independent fallback (tools not installed here; credential-bearing tables need handling) | **UNVERIFIED / open** |
 | 5 | Migrations `…phase6j10f…` and `…phase6j11b…` applied to production by a person with the direct URL, after the rehearsal, with the restore point in place (forward-only) | **NOT DONE (not approved)** |
 | 6 | Credentials: confirm database credentials were rotated after any earlier exposure, and that restore-branch credentials are managed | **UNVERIFIED** (not checked here) |
 | 7 | Explicit written authorization of the cutover (and of any rollback), as in `recording-publication-safety.md` §12–§14 | **NOT GIVEN** |
-| 8 | A fresh production measurement of the relationship data (the current counts in section 6 are zero) before the readiness decisions in §12 | **Separate, later phase — not started** |
+| 8 | A fresh production measurement of the relationship data before the readiness decisions in §12 | **DONE 2026-10-20 ~16:21 UTC** (read-only): all zero — see `phase-6j-12d-production-anomaly-assessment.md`; re-measure before any execution |
 
 ## 10. Facts for the owner to record (fill in; not known to this session)
 
-- Neon plan: `__________`  History window: `__________`  Production is a root branch: `yes / no`  Branches used / limit: `____ / ____`
+- Neon plan: **Free** (owner-confirmed)  History window: **6 hours** (owner-confirmed)  Production is a root branch: **yes** (owner-confirmed: Parent column `-`)  Branches used / limit: `____ / ____` (not recorded; the Free plan documents a limit of 10 per project)
 - Rehearsal branch name: `music-madras-recovery-rehearsal-20261020` (project `music-madras-dev`, created by the owner)  ID: `__________`  Created at: `__________`  Verified at: 2026-10-20 ~16:09 UTC (read-only)  Elapsed to create: `__________`  Result of the read-only reconciliation: **PASS** (not a PITR or backup test)
 - Rehearsal branch deleted (name and ID confirmed): `__________`  Production unchanged afterwards: `yes / no`
 
@@ -198,7 +218,8 @@ Status of every step above: **UNVERIFIED for this project** until sections 7 and
 | 48/55 tables identical; the 7 differing tables are exactly the final sync | VERIFIED |
 | Production has 0 recordings / 0 legacy relationship rows and lacks the 10F and 11B migrations and tables | VERIFIED (as of 2026-10-20) |
 | Restore branch parentage and "expiry never" | UNVERIFIED (project records only) |
-| Plan, history window, PITR availability, root-branch status, branch quota | UNVERIFIED |
+| Plan = Free; history window = 6 hours; production is the root branch; both other branches are its children | OWNER-CONFIRMED (console; not observed by this session) |
+| Whether a point-in-time restore is actually available and works for this project; branch quota | UNVERIFIED (confirm in Neon's restore interface; not exercised) |
 | Owner-created rehearsal branch is a distinct branch (timeline, endpoint) in the same project/tenant, and matches production on all 55 tables (count and content), migrations and invariants | VERIFIED |
 | Rehearsal branch parent is `production` and it is a separate branch | UNVERIFIED by this session (owner-reported from the console) |
 | True restore: instant restore / point-in-time restore / restore from a historical backup | NOT EXECUTED (and therefore UNVERIFIED) |
