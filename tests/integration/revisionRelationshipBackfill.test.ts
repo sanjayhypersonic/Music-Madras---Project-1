@@ -848,7 +848,7 @@ describe("the backfill cannot reach the application's database configuration by 
         return /\.(ts|tsx|mjs|js|json)$/.test(entry.name) ? [full] : [];
       });
     const outsiders = [...walk(path.join(ROOT, "app")), ...walk(path.join(ROOT, "modules")), ...walk(path.join(ROOT, "components")), ...walk(path.join(ROOT, "scripts"))]
-      .filter((file) => !file.includes(`${path.sep}backfill${path.sep}`) && !file.endsWith("backfillRevisionRelationships.ts"))
+      .filter((file) => !file.includes(`${path.sep}backfill${path.sep}`) && !file.endsWith("backfillRevisionRelationships.ts") && !file.endsWith("reprojectLegacyRelationships.ts")) // the re-projection tool shares the target rules (its own wiring test is in legacyReprojection.test.ts)
       .filter((file) => /revisionRelationships\/backfill|backfillRevisionRelationships/.test(readFileSync(file, "utf8")));
     expect(outsiders).toEqual([]);
     for (const file of ["instrumentation.ts", "next.config.ts", "middleware.ts"]) {

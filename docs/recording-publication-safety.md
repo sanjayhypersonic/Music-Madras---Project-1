@@ -646,8 +646,7 @@ recorded disposition; errors on the new writers.
 **The safe rollback boundary is the first revision-scoped Studio write after the switch.** Before it, reverting the release is
 lossless: legacy rows were never modified, so the old readers/writers resume exactly where they left off, and the extra
 revision-scoped rows are inert. After it, legacy rows no longer receive edits (no dual writes), so a revert loses those edits
-unless they are first re-projected revision-scoped → legacy. That re-projection script **does not exist**; it must be written,
-dry-run-first, and reviewed before the switch is approved, or the switch must be accepted as one-way past that boundary. The
+unless they are first re-projected revision-scoped → legacy. That re-projection tool is **prepared** (Phase 6J-12B, section 14) but is not an approval of anything: it must be reviewed, its backup procedure verified and a rollback explicitly authorized before it is relied on, or the switch must be accepted as one-way past that boundary. The
 backup of section 12 is the recovery for the backfill's inserts only.
 
 **Legacy data:** nothing in this phase, the backfill, or the switch deletes or rewrites a legacy relationship row. Removing
@@ -657,6 +656,87 @@ them, if ever wanted, is a separately approved migration after a soak period, wi
 (section 11). Running it on a real database needs its own reviewed, separately approved allowlist change; this phase adds no
 override of any kind.
 
+## 14. Revision-to-legacy re-projection: rollback preparation (Phase 6J-12B) — prepared, NOT approved, NOT scheduled
+
+**Preparing rollback capability is not approving a cutover, and it is not approving a rollback.** This section describes a dry-run-first
+tool, `npm run reproject:legacy-relationships` (`scripts/reprojectLegacyRelationships.ts`, `modules/backfill/legacyReprojection/`), that
+could put the legacy Recording-level Source / Rights / Occasion rows back in line with the revision-scoped relationships if a *future,
+separately approved* cutover had to be reversed. Nothing here switches a reader or a writer, adds a dual write, or runs against any
+database other than the isolated, marked, loopback test database. Production anomaly counts and dispositions remain **unknown until
+measured from approved production evidence**; every figure in the tests is a fixture fact.
+
+### The projection contract
+
+It is **not** the inverse of the insert-only backfill. The backfill only adds rows; reversing a cutover must also remove the legacy links an
+editor deliberately removed since, and the legacy tables (`id, entityType, entityId, target` — no timestamps, no origin) cannot say why a
+row exists. So the tool removes a legacy row **only when the audit trail proves** it was removed, and otherwise reports a conflict and keeps it.
+
+1. **Authoritative revision** (per Recording; `Recording.status` is not consulted, so unpublished and archived Recordings are projected too):
+
+   | Recording state | Authoritative revision |
+   |---|---|
+   | published pointer present and safe | the **published** revision (legacy rows are what visitors see once readers are rolled back; a draft's unpublished edits must not become public) |
+   | no published pointer, draft pointer present and safe (never published) | the **draft** revision (nothing public is affected) |
+   | published pointer unsafe (revision missing, another Recording's, wrong status — e.g. a superseded revision) | **none: BLOCKING conflict**, Recording skipped; it never falls back to the draft |
+   | draft pointer unsafe next to a good published one | the published revision; reported (`DRAFT_POINTER_UNSAFE`, information) |
+   | no pointers | none: skipped and counted (`NO_REVISION_POINTER`), legacy rows untouched |
+   | superseded revisions | never authoritative |
+
+2. **Representation.** A link is one legacy row `(entityType "RECORDING", entityId = the Recording, source / rights / occasion id)` in
+   `entity_sources` / `entity_rights` / `entity_occasions`. Inserted rows get new ids (legacy rows carry no timestamps to preserve).
+3. **Per Recording and kind**, with D = the authoritative revision's links and L = the legacy links:
+   - D \ L → **insert** (unapproved Sources and archived Occasions are inserted as they are; approval and archival are read-time filters);
+   - D ∩ L → **retained**, untouched (duplicate legacy rows of a retained link are left and counted);
+   - L \ D **with proof** → **remove every legacy row of that link**. Proof is an audit "detached" entry for that link on a revision of the same
+     Recording that was **published** (status `PUBLISHED`, or `SUPERSEDED` after having been published) or on the authoritative revision itself.
+     So a **published detachment is preserved** (it removes the legacy link; a later fork, which lacks the link too, never brings it back), while a
+     **draft-only detachment** is not proof: the published set still holds the link, so it is retained;
+   - L \ D **without proof** → **conflict** (`LEGACY_LINK_NOT_IN_REVISION_SET`): the row is kept and the run is blocked. It may be a link the
+     backfill never projected or one a legacy writer added; the tables cannot tell. An unknown revision status is never proof.
+4. **Never touched:** orphaned legacy rows (no such Recording), links of Recordings with no authoritative revision, revision-scoped rows, and
+   the Source / Rights / Occasion records themselves.
+5. **Blocking conflicts** (no override): `AUTHORITATIVE_POINTER_MISSING`, `_OTHER_RECORDING`, `_STATUS_MISMATCH`, `LEGACY_LINK_NOT_IN_REVISION_SET`.
+   Information only: orphans, duplicates, no pointer, unsafe draft pointer, `UNPUBLISHED_DRAFT_DIFFERENCE`.
+6. **Report:** per kind, legacy rows = orphans + duplicates + distinct links; distinct links = skipped + retained + removed + conflicts;
+   authoritative links = retained + inserts; plus a deterministic **plan fingerprint** (SHA-256 of the sorted inserts, removals and blocking counts).
+
+### What it can and cannot restore
+
+| Can | Cannot |
+|---|---|
+| Re-create legacy links that exist in the published (or never-published draft) revision but not in legacy | **Unpublished draft edits.** Legacy has no draft concept; where a draft's set differs from the published one the Recording is reported (`UNPUBLISHED_DRAFT_DIFFERENCE`) and those edits are *not* carried back |
+| Remove legacy links an editor removed in published history (proven by audit) | The **original ids or order** of rows it removes and re-adds, and any information the legacy rows never held (no timestamps or origin exist) |
+| Leave everything it cannot explain exactly as it is, reported | **Detach history not in the audit trail** (e.g. audit entries that were deleted): such a link is a conflict, not a removal |
+| Be re-run safely (idempotent: a second plan is empty) | Links added by a **legacy writer after cutover**: they look like unexplained links and block the run. The cutover must have frozen legacy writes (section 13 D) |
+| Be undone: the audit entry lists every removed row (restore with the same ids) and every inserted row id (delete) | Anything for Recordings with no safe authoritative revision (skipped) |
+
+### How a run is made safe
+
+- **Target.** `REPROJECT_DATABASE_URL` + `REPROJECT_TARGET_CONFIRM=host:port/database`, under *exactly* the backfill's rules (same function, own variable names, never
+  `BACKFILL_*`, `DATABASE_URL` or `DIRECT_URL`): strict `postgresql://user@host:port/database`, no query string or fragment, explicit port, loopback IP literal only, a "test"
+  database name, not a configured real database (fail-closed `.env*` scan from the repository root), the integration-test marker and the 6J-11B migration verified after connecting.
+  The driver receives the validated fields only, and the destination it will use must equal the confirmed target. **In this phase no remote database is accepted, and there is no override.**
+- **Dry run is the default** and runs in a `READ ONLY` transaction. **`--execute` requires `--plan-fingerprint=<64 hex>`** copied from a reviewed dry run; the plan is recomputed
+  inside the transaction and must have that fingerprint, otherwise nothing is written (exit 2).
+- **Execution** is one transaction: `lock_timeout` 5 s; the backfill's advisory lock and its own (the two tools exclude each other); a share lock on every Recording
+  (no publish/fork/archive moves a pointer underneath it); `SHARE ROW EXCLUSIVE` on the three legacy tables (no legacy writer can interleave; readers are not blocked). Then it deletes the proven
+  removals, inserts the missing links, writes **one audit entry** (`LEGACY_RELATIONSHIPS_REPROJECTED`: removed rows in `beforeSnapshot`, inserted row ids and the fingerprint in `afterSnapshot`) and
+  re-plans: nothing may remain. Any error — including a blocked or stale plan, a lock timeout or a failed post-check — rolls everything back, and a `LEGACY_RELATIONSHIPS_REPROJECTION_FAILED` audit entry is recorded afterwards (best effort).
+- **Recovery if execution fails partway through:** it cannot fail partway — it is atomic, so a failure leaves the legacy tables exactly as they were. If a *committed* run must be undone, use its audit entry
+  (re-insert `removedRows` with their ids, delete `insertedRows`) — a test proves this restores the tables exactly — or restore from the verified backup below. The backup is the primary recovery;
+  the audit entry is the fine-grained one.
+
+### Preconditions and stop conditions (all must hold; none is evidence yet)
+
+1. A **separately approved cutover rollback**: explicit written authorization naming the database and the maintenance window. This section is not that authorization.
+2. A **verified backup and a tested restore** of the target immediately before execution (to a scratch database, never over the live one), with a named owner; Neon point-in-time restore must be shown, not assumed.
+3. Section 11's backfill and section 13 D's switch are the operations being reversed; legacy writers were refused from the cutover onward (otherwise every legacy write shows up as a conflict).
+4. A fresh dry run immediately before the window with **zero blocking conflicts** and a reviewed disposition of every information-level anomaly and of `UNPUBLISHED_DRAFT_DIFFERENCE` (those draft edits will not survive a rollback — a product decision). Production counts: **unknown, to be measured.**
+5. Revision-scoped writers are stopped, so the plan cannot change between the dry run and execution (the fingerprint check refuses a changed plan).
+6. A **tool-target allowlist change** for any real database is a separate, reviewed, separately approved change (as for the backfill); this phase adds none.
+
+**Stop** — do not execute — if: any blocking conflict exists; the fingerprint differs; the backup or restore is unverified; legacy rows changed since cutover without explanation; the run exits non-zero (nothing was written: find out why first);
+or after a run the next dry run reports any insert or removal. After a successful run: the next dry run must be empty, the audit entry's counts must equal the reviewed plan, and the public pages must be compared with their pre-cutover state before readers are switched back.
 ## Limitations
 
 These are not fixed by this work. Published-page immutability is **not** complete.

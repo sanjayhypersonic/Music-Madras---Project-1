@@ -31,7 +31,7 @@ export const BACKFILL_LOCK_KEY = "revision-relationship-backfill";
 const LOCK_TIMEOUT = "5s";
 const BATCH = 1000;
 
-interface KindTables {
+export interface KindTables {
   legacyTable: string;
   legacyTargetColumn: string;
   revisionTable: string;
@@ -40,7 +40,7 @@ interface KindTables {
   detachSnapshotKey: string;
 }
 
-const TABLES: Record<RelationshipKind, KindTables> = {
+export const TABLES: Record<RelationshipKind, KindTables> = {
   source: {
     legacyTable: "entity_sources",
     legacyTargetColumn: "sourceId",

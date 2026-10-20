@@ -186,6 +186,33 @@ export function resolveBackfillTarget(input: BackfillTargetInput): BackfillTarge
   };
 }
 
+/** The environment variable names (and the noun used in messages) of one operator tool that shares these target rules. */
+export interface TargetVariableNames {
+  url: string;
+  confirm: string;
+  noun: string;
+}
+
+/**
+ * The same target rules for another operator tool (Phase 6J-12B re-projection), under that tool's OWN variable names. Only those two
+ * variables (plus NODE_ENV / VERCEL_ENV) are read: a tool never borrows another tool's variables, DATABASE_URL, or DIRECT_URL.
+ * Nothing about the rules differs — it is the same function, with the names substituted in the refusal messages.
+ */
+export function resolveLoopbackTestTarget(names: TargetVariableNames, input: BackfillTargetInput): BackfillTargetResolution {
+  const result = resolveBackfillTarget({
+    env: { BACKFILL_DATABASE_URL: input.env[names.url], BACKFILL_TARGET_CONFIRM: input.env[names.confirm], NODE_ENV: input.env.NODE_ENV, VERCEL_ENV: input.env.VERCEL_ENV },
+    realUrls: input.realUrls,
+  });
+  if (result.ok) return result;
+  return {
+    ok: false,
+    reason: result.reason
+      .replaceAll("BACKFILL_DATABASE_URL", names.url)
+      .replaceAll("BACKFILL_TARGET_CONFIRM", names.confirm)
+      .replaceAll("The backfill", `The ${names.noun}`)
+      .replaceAll("the backfill", `the ${names.noun}`),
+  };
+}
 /** The destination exactly as the driver will use it, in the same `host:port/database` form as the acknowledgement. */
 export function describeClientDestination(config: BackfillClientConfig): string {
   const host = config.host.includes(":") ? `[${config.host}]` : config.host;
