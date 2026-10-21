@@ -2,6 +2,7 @@ import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
 import { isSupportedProvenanceEntityType, UnsupportedProvenanceEntityTypeError } from "../../mmke/provenance/provenanceEntityType";
+import { assertLegacyRecordingWriteAllowed } from "../../mmke/provenance/legacyRecordingRelationshipsFrozen";
 import { canApproveSource, canDisableSource, canRejectSource } from "../../publishing/sourceApprovalTransitions";
 import type { SourceApprovalStateValue } from "../../publishing/sourceApprovalTransitions";
 import type { ProvenanceEntityType } from "../../mmke/provenance/provenanceEntityType";
@@ -323,6 +324,7 @@ export interface AttachSourceInput {
  *   createComposer).
  */
 export async function attachSourceToEntity(input: AttachSourceInput): Promise<EntitySource> {
+  assertLegacyRecordingWriteAllowed(input.entityType); // Phase 6L: Recording-level links are revision-scoped now
   if (!isSupportedProvenanceEntityType(input.entityType)) {
     throw new UnsupportedProvenanceEntityTypeError(input.entityType);
   }
@@ -360,6 +362,7 @@ export async function detachSourceFromEntity(
   sourceId: string,
   actorId: string
 ): Promise<void> {
+  assertLegacyRecordingWriteAllowed(entityType);
   const existing = await prisma.entitySource.findFirst({ where: { entityType, entityId, sourceId } });
   if (!existing) {
     throw new Error(`No Source attachment found for ${entityType} ${entityId} / Source ${sourceId}.`);

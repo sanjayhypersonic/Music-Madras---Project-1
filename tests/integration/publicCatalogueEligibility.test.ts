@@ -19,7 +19,8 @@ import {
   unpublishRecording,
   updateDraftRevisionContent,
 } from "../../modules/db/repositories/recordingRepository";
-import { approveSource, attachSourceToEntity, createSource, rejectSource } from "../../modules/db/repositories/sourceRepository";
+import { approveSource, createSource, rejectSource } from "../../modules/db/repositories/sourceRepository";
+import { attachSourceToRevision } from "../../modules/db/repositories/recordingRevisionRelationshipsRepository";
 import { linkVenueToOrganisation } from "../../modules/db/repositories/venueRepository";
 import {
   getArtistEntityPageData,
@@ -406,7 +407,7 @@ describe("E. Archived related entities are omitted, never rendered as links that
 describe("F. Only APPROVED Sources appear on the public Organisation page", () => {
   it("unreviewed and rejected Sources are hidden; an approved one is shown", async () => {
     const graph = await buildGraph("sources");
-    const recording = await publishedRecordingFor(graph, `Elig Sources Recording ${TOKEN}`);
+    const draft = await draftRecordingFor(graph, `Elig Sources Recording ${TOKEN}`);
 
     const unreviewed = await createSource({ title: `Elig Unreviewed ${TOKEN}`, actorId: userId });
     const rejected = await createSource({ title: `Elig Rejected ${TOKEN}`, actorId: userId });
@@ -414,9 +415,11 @@ describe("F. Only APPROVED Sources appear on the public Organisation page", () =
     sourceIds.push(unreviewed.id, rejected.id, approved.id);
     await rejectSource(rejected.id, userId);
     await approveSource(approved.id, userId);
+    // Phase 6L: a Recording's sources are attached to its draft revision and become public with the publication.
     for (const source of [unreviewed, rejected, approved]) {
-      await attachSourceToEntity({ sourceId: source.id, entityType: "RECORDING", entityId: recording.id, actorId: userId });
+      await attachSourceToRevision(draft.currentDraftRevisionId!, source.id, userId);
     }
+    await publishCurrentDraft(draft.id, userId);
 
     const page = await getPublicOrganisationPageData(graph.organisation.slug);
     expect(page).not.toBeNull();

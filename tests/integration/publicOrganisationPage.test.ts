@@ -23,9 +23,10 @@ import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import { createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
 import { createCollection, addRecordingToCollection, publishCollection } from "../../modules/db/repositories/collectionRepository";
 import { createOccasion, attachOccasionToEntity } from "../../modules/db/repositories/occasionRepository";
-import { approveSource, createSource, attachSourceToEntity } from "../../modules/db/repositories/sourceRepository";
+import { approveSource, createSource } from "../../modules/db/repositories/sourceRepository";
+import { attachRightsToRevision, attachSourceToRevision } from "../../modules/db/repositories/recordingRevisionRelationshipsRepository";
 import { publishedRecordingAtVenue } from "./helpers/publishedContent";
-import { createRightsInformation, attachRightsInformationToEntity } from "../../modules/db/repositories/rightsInformationRepository";
+import { createRightsInformation } from "../../modules/db/repositories/rightsInformationRepository";
 import {
   getPublicOrganisationPageData,
   getVenueEntityPageData,
@@ -211,12 +212,14 @@ describe("Organisation full canonical graph: venue -> performance -> recording -
     }
     if (sourceId) {
       await prisma.entitySource.deleteMany({ where: { sourceId } });
+      await prisma.recordingRevisionSource.deleteMany({ where: { sourceId } }); // Phase 6L: revision-scoped links (RESTRICT on the Source)
       await prisma.auditLogEntry.deleteMany({ where: { entityType: "Source", entityId: sourceId } });
       await prisma.source.delete({ where: { id: sourceId } }).catch(() => {});
       sourceId = null;
     }
     if (rightsId) {
       await prisma.entityRights.deleteMany({ where: { rightsInformationId: rightsId } });
+      await prisma.recordingRevisionRights.deleteMany({ where: { rightsInformationId: rightsId } }); // Phase 6L: revision-scoped links (RESTRICT)
       await prisma.auditLogEntry.deleteMany({ where: { entityType: "RightsInformation", entityId: rightsId } });
       await prisma.rightsInformation.delete({ where: { id: rightsId } }).catch(() => {});
       rightsId = null;
@@ -323,6 +326,17 @@ describe("Organisation full canonical graph: venue -> performance -> recording -
 
     const draft = await createDraftRecording({ slug: uniqueSlug("recording"), actorId: user.id, title: "Org Test Recording" });
     await updateDraftRevisionContent(draft.id, draft.currentDraftRevision!.updatedAt, user.id, { performanceId: performance.id });
+
+    // Phase 6L: a Recording's sources and rights are attached to its DRAFT revision and become public with the publication.
+    const source = await createSource({ title: uniqueName("Org Test Source"), actorId: user.id });
+    sourceId = source.id;
+    // Phase 6J-1: only an APPROVED Source is public provenance.
+    await approveSource(source.id, user.id);
+    await attachSourceToRevision(draft.currentDraftRevision!.id, source.id, user.id);
+    const rights = await createRightsInformation({ holder: uniqueName("Org Test Rights Holder"), actorId: user.id });
+    rightsId = rights.id;
+    await attachRightsToRevision(draft.currentDraftRevision!.id, rights.id, user.id);
+
     const recording = await publishCurrentDraft(draft.id, user.id);
     recordingId = recording.id;
 
@@ -347,16 +361,6 @@ describe("Organisation full canonical graph: venue -> performance -> recording -
     const occasion = await createOccasion({ slug: uniqueSlug("occasion"), name: uniqueName("Org Test Occasion"), actorId: user.id });
     occasionId = occasion.id;
     await attachOccasionToEntity({ entityType: "PERFORMANCE", entityId: performance.id, occasionId: occasion.id, actorId: user.id });
-
-    const source = await createSource({ title: uniqueName("Org Test Source"), actorId: user.id });
-    sourceId = source.id;
-    // Phase 6J-1: only an APPROVED Source is public provenance.
-    await approveSource(source.id, user.id);
-    await attachSourceToEntity({ entityType: "RECORDING", entityId: recording.id, sourceId: source.id, actorId: user.id });
-
-    const rights = await createRightsInformation({ holder: uniqueName("Org Test Rights Holder"), actorId: user.id });
-    rightsId = rights.id;
-    await attachRightsInformationToEntity({ entityType: "RECORDING", entityId: recording.id, rightsInformationId: rights.id, actorId: user.id });
 
     // An unrelated video (no canonical MediaResource link at all) must never appear.
     const unrelatedVideo = await createTestVideo();

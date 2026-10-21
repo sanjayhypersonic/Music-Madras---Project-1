@@ -777,9 +777,9 @@ model RecordingRevision {
   works          RecordingRevisionWork[]
   mediaResources MediaResource[]
 
-  // Phase 6J-11B — revision-scoped relationships (the foundation only: nothing reads or writes these yet except
-  // recordingRevisionRelationshipsRepository's attach/detach functions and the fork copy; public readers and Studio still use the legacy
-  // Recording-level EntitySource/EntityRights/EntityOccasion rows).
+  // Phase 6J-11B / 6L — revision-scoped relationships: written by recordingRevisionRelationshipsRepository (and copied by the fork), read by
+  // recordingRelationshipReadersRepository (Organisation page, AI context, Studio). The legacy Recording-level EntitySource/EntityRights/EntityOccasion
+  // rows (entityType "RECORDING") are frozen history: nothing writes or reads them.
   sourceLinks   RecordingRevisionSource[]
   rightsLinks   RecordingRevisionRights[]
   occasionLinks RecordingRevisionOccasion[]
@@ -813,8 +813,8 @@ model RecordingRevisionWork {
 // Integrity: composite primary keys prevent duplicate links; the revision FK cascades (a revision's links go with it);
 // the catalogue FKs are RESTRICT (a Source/RightsInformation/Occasion that a revision uses cannot be deleted from under
 // it — the application has no delete path for them anyway). The legacy Recording-level rows (EntitySource/
-// EntityRights/EntityOccasion with entityType "RECORDING") are untouched and remain what public pages read until the
-// separately approved cutover.
+// EntityRights/EntityOccasion with entityType "RECORDING") are frozen since Phase 6L: kept as history (and as the input of the rollback
+// re-projection), never written or read by the application.
 // ---------------------------------------------------------------------------
 
 model RecordingRevisionSource {

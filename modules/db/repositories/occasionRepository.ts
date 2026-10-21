@@ -4,6 +4,7 @@ import { DuplicateEntityError, findExactNormalizedDuplicate } from "../../mmke/d
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
 import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
 import { isSupportedOccasionEntityType, UnsupportedOccasionEntityTypeError } from "../../mmke/occasion/occasionEntityType";
+import { assertLegacyRecordingWriteAllowed } from "../../mmke/provenance/legacyRecordingRelationshipsFrozen";
 import type { OccasionEntityType } from "../../mmke/occasion/occasionEntityType";
 import type { EntityOccasion, Occasion } from "@prisma/client";
 
@@ -209,6 +210,7 @@ export interface AttachOccasionInput {
  *   second, race-prone pre-check query.
  */
 export async function attachOccasionToEntity(input: AttachOccasionInput): Promise<EntityOccasion> {
+  assertLegacyRecordingWriteAllowed(input.entityType); // Phase 6L: Recording-level links are revision-scoped now
   if (!isSupportedOccasionEntityType(input.entityType)) {
     throw new UnsupportedOccasionEntityTypeError(input.entityType);
   }
@@ -250,6 +252,7 @@ export async function detachOccasionFromEntity(
   occasionId: string,
   actorId: string
 ): Promise<void> {
+  assertLegacyRecordingWriteAllowed(entityType);
   const existing = await prisma.entityOccasion.findFirst({
     where: { entityType, entityId, occasionId },
     include: { occasion: true },

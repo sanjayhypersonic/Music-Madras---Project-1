@@ -4,6 +4,7 @@ import { prisma } from "../../modules/db/client";
 import { DuplicateEntityError } from "../../modules/mmke/duplicate-detection/detectDuplicateName";
 import { SlugConflictError } from "../../modules/mmke/slug/SlugConflictError";
 import { UnsupportedOccasionEntityTypeError } from "../../modules/mmke/occasion/occasionEntityType";
+import { LegacyRecordingRelationshipsFrozenError } from "../../modules/mmke/provenance/legacyRecordingRelationshipsFrozen";
 import {
   archiveOccasion,
   attachOccasionToEntity,
@@ -241,15 +242,17 @@ describe("Occasion attachment (EntityOccasion) against a real database", () => {
 
     await attachOccasionToEntity({ entityType: "PROGRAMME", entityId: programme.id, occasionId: occasion.id, actorId: user.id });
     await attachOccasionToEntity({ entityType: "PERFORMANCE", entityId: performance.id, occasionId: occasion.id, actorId: user.id });
-    await attachOccasionToEntity({ entityType: "RECORDING", entityId: recording.id, occasionId: occasion.id, actorId: user.id });
     await attachOccasionToEntity({ entityType: "COLLECTION", entityId: collection.id, occasionId: occasion.id, actorId: user.id });
+    // Phase 6L: a Recording's occasions belong to a draft revision; the generic writers refuse the frozen legacy entity type and write nothing.
+    await expect(attachOccasionToEntity({ entityType: "RECORDING", entityId: recording.id, occasionId: occasion.id, actorId: user.id })).rejects.toBeInstanceOf(LegacyRecordingRelationshipsFrozenError);
+    await expect(detachOccasionFromEntity("RECORDING", recording.id, occasion.id, user.id)).rejects.toBeInstanceOf(LegacyRecordingRelationshipsFrozenError);
+    expect(await prisma.entityOccasion.count({ where: { entityType: "RECORDING", entityId: recording.id } })).toBe(0);
 
     expect((await listOccasionsForEntity("PROGRAMME", programme.id)).map((l) => l.occasionId)).toEqual([occasion.id]);
     expect((await listOccasionsForEntity("PERFORMANCE", performance.id)).map((l) => l.occasionId)).toEqual([occasion.id]);
-    expect((await listOccasionsForEntity("RECORDING", recording.id)).map((l) => l.occasionId)).toEqual([occasion.id]);
     expect((await listOccasionsForEntity("COLLECTION", collection.id)).map((l) => l.occasionId)).toEqual([occasion.id]);
 
-    for (const entityType of ["PROGRAMME", "PERFORMANCE", "RECORDING", "COLLECTION"]) {
+    for (const entityType of ["PROGRAMME", "PERFORMANCE", "COLLECTION"]) {
       const audit = await prisma.auditLogEntry.findMany({ where: { entityType, action: "OCCASION_ATTACHED" } });
       expect(audit.length).toBeGreaterThanOrEqual(1);
     }

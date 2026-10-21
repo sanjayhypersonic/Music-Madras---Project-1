@@ -1,6 +1,7 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { isSupportedProvenanceEntityType, UnsupportedProvenanceEntityTypeError } from "../../mmke/provenance/provenanceEntityType";
+import { assertLegacyRecordingWriteAllowed } from "../../mmke/provenance/legacyRecordingRelationshipsFrozen";
 import type { ProvenanceEntityType } from "../../mmke/provenance/provenanceEntityType";
 import type { EntityRights, RightsInformation } from "@prisma/client";
 
@@ -128,6 +129,7 @@ export interface AttachRightsInformationInput {
  *   existing schema; adding one is a migration this phase avoids).
  */
 export async function attachRightsInformationToEntity(input: AttachRightsInformationInput): Promise<EntityRights> {
+  assertLegacyRecordingWriteAllowed(input.entityType); // Phase 6L: Recording-level links are revision-scoped now
   if (!isSupportedProvenanceEntityType(input.entityType)) {
     throw new UnsupportedProvenanceEntityTypeError(input.entityType);
   }
@@ -165,6 +167,7 @@ export async function detachRightsInformationFromEntity(
   rightsInformationId: string,
   actorId: string
 ): Promise<void> {
+  assertLegacyRecordingWriteAllowed(entityType);
   const existing = await prisma.entityRights.findFirst({ where: { entityType, entityId, rightsInformationId } });
   if (!existing) {
     throw new Error(`No Rights Information attachment found for ${entityType} ${entityId} / RightsInformation ${rightsInformationId}.`);

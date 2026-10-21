@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
 import { UnsupportedProvenanceEntityTypeError } from "../../modules/mmke/provenance/provenanceEntityType";
+import { LegacyRecordingRelationshipsFrozenError } from "../../modules/mmke/provenance/legacyRecordingRelationshipsFrozen";
 import {
   approveSource,
   attachSourceToEntity,
@@ -333,20 +334,25 @@ describe("Provenance attachment (EntitySource / EntityRights) against a real dat
     for (const [entityType, entityId] of [
       ["COMPOSER", composer.id],
       ["WORK", work.id],
-      ["RECORDING", recording.id],
     ] as const) {
       await attachSourceToEntity({ entityType, entityId, sourceId: source.id, actorId: user.id });
       await attachRightsInformationToEntity({ entityType, entityId, rightsInformationId: rights.id, actorId: user.id });
     }
 
+    // Phase 6L: a Recording's sources and rights belong to a draft revision; the generic writers refuse the frozen legacy entity type and write nothing.
+    await expect(attachSourceToEntity({ entityType: "RECORDING", entityId: recording.id, sourceId: source.id, actorId: user.id })).rejects.toBeInstanceOf(LegacyRecordingRelationshipsFrozenError);
+    await expect(attachRightsInformationToEntity({ entityType: "RECORDING", entityId: recording.id, rightsInformationId: rights.id, actorId: user.id })).rejects.toBeInstanceOf(LegacyRecordingRelationshipsFrozenError);
+    await expect(detachSourceFromEntity("RECORDING", recording.id, source.id, user.id)).rejects.toBeInstanceOf(LegacyRecordingRelationshipsFrozenError);
+    await expect(detachRightsInformationFromEntity("RECORDING", recording.id, rights.id, user.id)).rejects.toBeInstanceOf(LegacyRecordingRelationshipsFrozenError);
+    expect(await prisma.entitySource.count({ where: { entityType: "RECORDING", entityId: recording.id } })).toBe(0);
+    expect(await prisma.entityRights.count({ where: { entityType: "RECORDING", entityId: recording.id } })).toBe(0);
+
     expect((await listSourcesForEntity("COMPOSER", composer.id)).map((l) => l.sourceId)).toEqual([source.id]);
     expect((await listSourcesForEntity("WORK", work.id)).map((l) => l.sourceId)).toEqual([source.id]);
-    expect((await listSourcesForEntity("RECORDING", recording.id)).map((l) => l.sourceId)).toEqual([source.id]);
     expect((await listRightsForEntity("COMPOSER", composer.id)).map((l) => l.rightsInformationId)).toEqual([rights.id]);
     expect((await listRightsForEntity("WORK", work.id)).map((l) => l.rightsInformationId)).toEqual([rights.id]);
-    expect((await listRightsForEntity("RECORDING", recording.id)).map((l) => l.rightsInformationId)).toEqual([rights.id]);
 
-    for (const entityType of ["COMPOSER", "WORK", "RECORDING"]) {
+    for (const entityType of ["COMPOSER", "WORK"]) {
       expect((await prisma.auditLogEntry.findMany({ where: { entityType, action: "SOURCE_ATTACHED" } })).length).toBeGreaterThanOrEqual(1);
       expect((await prisma.auditLogEntry.findMany({ where: { entityType, action: "RIGHTS_INFORMATION_ATTACHED" } })).length).toBeGreaterThanOrEqual(1);
     }

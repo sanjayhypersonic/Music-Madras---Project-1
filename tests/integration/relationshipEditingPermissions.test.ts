@@ -48,6 +48,7 @@ const userIds = {} as Record<Role, string>;
 const recordingIds: string[] = [];
 const collectionIds: string[] = [];
 const rec = {} as Record<"draft" | "published", string>;
+const rev = {} as Record<"draft" | "published", string>; // the revision each Recording's Relationships step is bound to
 const col = {} as Record<"draft" | "published", string>;
 let sourceId: string;
 let rightsId: string;
@@ -77,17 +78,56 @@ const form = (name: string, value: string) => {
   return data;
 };
 
+// Phase 6L: a Recording's Source / Rights / Occasion links live on its REVISIONS. `sources`, `rights` and `occasions` count the revision-scoped rows;
+// `legacy*` count the frozen Recording-level rows, which no action may touch any more.
 async function counts() {
+  const revisionIds = (await prisma.recordingRevision.findMany({ where: { recordingId: { in: recordingIds } }, select: { id: true } })).map((r) => r.id);
   return {
     memberships: await prisma.collectionRecording.count({ where: { collectionId: { in: collectionIds } } }),
-    sources: await prisma.entitySource.count({ where: { entityId: { in: recordingIds } } }),
-    rights: await prisma.entityRights.count({ where: { entityId: { in: recordingIds } } }),
-    occasions: await prisma.entityOccasion.count({ where: { entityId: { in: recordingIds } } }),
+    sources: await prisma.recordingRevisionSource.count({ where: { revisionId: { in: revisionIds } } }),
+    rights: await prisma.recordingRevisionRights.count({ where: { revisionId: { in: revisionIds } } }),
+    occasions: await prisma.recordingRevisionOccasion.count({ where: { revisionId: { in: revisionIds } } }),
+    legacySources: await prisma.entitySource.count({ where: { entityId: { in: recordingIds } } }),
+    legacyRights: await prisma.entityRights.count({ where: { entityId: { in: recordingIds } } }),
+    legacyOccasions: await prisma.entityOccasion.count({ where: { entityId: { in: recordingIds } } }),
     audits: await prisma.auditLogEntry.count({ where: { actorId: { in: Object.values(userIds) } } }),
   };
 }
 
+/**
+ * Removes this file's own fixtures by their naming prefix (never anything else), so a run that was interrupted before its own clean-up (a hook that timed
+ * out, a machine that went to sleep) cannot leave rows behind for the tests that count whole tables. Runs before the file's setup and after its tests.
+ */
+async function purgeLeftovers() {
+  const recordings = (await prisma.recording.findMany({ where: { slug: { startsWith: `${TAG}-` } }, select: { id: true } })).map((r) => r.id);
+  const revisionIds = (await prisma.recordingRevision.findMany({ where: { recordingId: { in: recordings } }, select: { id: true } })).map((r) => r.id);
+  const collections = (await prisma.collection.findMany({ where: { slug: { startsWith: `${TAG}-` } }, select: { id: true } })).map((r) => r.id);
+  const sources = (await prisma.source.findMany({ where: { title: { startsWith: "Perm source" } }, select: { id: true } })).map((r) => r.id);
+  const rights = (await prisma.rightsInformation.findMany({ where: { holder: { startsWith: "Perm holder" } }, select: { id: true } })).map((r) => r.id);
+  const occasions = (await prisma.occasion.findMany({ where: { slug: { startsWith: `${TAG}-` } }, select: { id: true } })).map((r) => r.id);
+  const composers = (await prisma.composer.findMany({ where: { slug: { startsWith: `${TAG}-` } }, select: { id: true } })).map((r) => r.id);
+  const works = (await prisma.musicalWork.findMany({ where: { slug: { startsWith: `${TAG}-` } }, select: { id: true } })).map((r) => r.id);
+  const users = (await prisma.studioUser.findMany({ where: { email: { startsWith: `${TAG}-` } }, select: { id: true } })).map((r) => r.id);
+
+  await prisma.collectionWork.deleteMany({ where: { collectionId: { in: collections } } });
+  await prisma.collectionRecording.deleteMany({ where: { collectionId: { in: collections } } });
+  await prisma.entitySource.deleteMany({ where: { OR: [{ entityId: { in: recordings } }, { sourceId: { in: sources } }] } });
+  await prisma.entityRights.deleteMany({ where: { OR: [{ entityId: { in: recordings } }, { rightsInformationId: { in: rights } }] } });
+  await prisma.entityOccasion.deleteMany({ where: { OR: [{ entityId: { in: recordings } }, { occasionId: { in: occasions } }] } });
+  await prisma.auditLogEntry.deleteMany({ where: { OR: [{ entityId: { in: [...recordings, ...revisionIds, ...collections, ...sources, ...rights, ...occasions, ...composers, ...works] } }, { actorId: { in: users } }] } });
+  await prisma.recording.updateMany({ where: { id: { in: recordings } }, data: { currentPublishedRevisionId: null, currentDraftRevisionId: null } });
+  await prisma.recording.deleteMany({ where: { id: { in: recordings } } });
+  await prisma.collection.deleteMany({ where: { id: { in: collections } } });
+  await prisma.musicalWork.deleteMany({ where: { id: { in: works } } });
+  await prisma.composer.deleteMany({ where: { id: { in: composers } } });
+  await prisma.source.deleteMany({ where: { id: { in: sources } } });
+  await prisma.rightsInformation.deleteMany({ where: { id: { in: rights } } });
+  await prisma.occasion.deleteMany({ where: { id: { in: occasions } } });
+  await prisma.studioUser.deleteMany({ where: { id: { in: users } } });
+}
+
 beforeAll(async () => {
+  await purgeLeftovers();
   for (const role of ["CONTRIBUTOR", "EDITOR", "ADMINISTRATOR"] as const) {
     userIds[role] = (await prisma.studioUser.create({ data: { id: randomUUID(), email: `${TAG}-${role.toLowerCase()}-${TOKEN}@musicmadras.test`, name: `Perm ${role}`, role, status: "ACTIVE" } })).id;
   }
@@ -97,6 +137,8 @@ beforeAll(async () => {
   rec.draft = draft.id;
   rec.published = published.id;
   recordingIds.push(draft.id, published.id);
+  rev.draft = (await prisma.recording.findUniqueOrThrow({ where: { id: draft.id } })).currentDraftRevisionId!;
+  rev.published = (await prisma.recording.findUniqueOrThrow({ where: { id: published.id } })).currentPublishedRevisionId!;
 
   col.draft = (await createCollection({ slug: `${TAG}-cd-${TOKEN}`, title: "Perm draft collection", actorId: userIds.ADMINISTRATOR })).id;
   col.published = (await createCollection({ slug: `${TAG}-cp-${TOKEN}`, title: "Perm published collection", actorId: userIds.ADMINISTRATOR })).id;
@@ -115,15 +157,17 @@ afterAll(async () => {
   await prisma.entityOccasion.deleteMany({ where: { entityId: { in: recordingIds } } });
   const revisionIds = (await prisma.recordingRevision.findMany({ where: { recordingId: { in: recordingIds } }, select: { id: true } })).map((r) => r.id);
   await prisma.auditLogEntry.deleteMany({
-    where: { OR: [{ entityId: { in: [...recordingIds, ...revisionIds, ...collectionIds, sourceId, rightsId, occasionId] } }, { actorId: { in: Object.values(userIds) } }] },
+    where: { OR: [{ entityId: { in: [...recordingIds, ...revisionIds, ...collectionIds, sourceId, rightsId, occasionId].filter((id): id is string => typeof id === "string") } }, { actorId: { in: Object.values(userIds).filter(Boolean) } }] },
   });
   await prisma.recording.updateMany({ where: { id: { in: recordingIds } }, data: { currentPublishedRevisionId: null, currentDraftRevisionId: null } });
   await prisma.recording.deleteMany({ where: { id: { in: recordingIds } } });
   await prisma.collection.deleteMany({ where: { id: { in: collectionIds } } });
-  await prisma.source.deleteMany({ where: { id: sourceId } });
-  await prisma.rightsInformation.deleteMany({ where: { id: rightsId } });
-  await prisma.occasion.deleteMany({ where: { id: occasionId } });
-  await prisma.studioUser.deleteMany({ where: { id: { in: Object.values(userIds) } } });
+  // Guarded: `where: { id: undefined }` matches EVERY row in Prisma, and these ids are unset when setup failed part-way.
+  if (sourceId) await prisma.source.deleteMany({ where: { id: sourceId } });
+  if (rightsId) await prisma.rightsInformation.deleteMany({ where: { id: rightsId } });
+  if (occasionId) await prisma.occasion.deleteMany({ where: { id: occasionId } });
+  await prisma.studioUser.deleteMany({ where: { id: { in: Object.values(userIds).filter(Boolean) } } });
+  await purgeLeftovers(); // backstop: anything this file created and its own clean-up missed
 }, T);
 
 describe("A. the permission model behind the Relationships step", () => {
@@ -137,31 +181,46 @@ describe("A. the permission model behind the Relationships step", () => {
   it("a Contributor can use none of the Relationships mutations: nothing is written and no audit entry is made", async () => {
     as("CONTRIBUTOR");
     const before = await counts();
-    const target = rec.published;
-    const results = await Promise.all([
-      redirectOf(() => attachSourceAction(target, form("sourceId", sourceId))),
-      redirectOf(() => detachSourceAction(target, sourceId)),
-      redirectOf(() => attachRightsAction(target, form("rightsInformationId", rightsId))),
-      redirectOf(() => detachRightsAction(target, rightsId)),
-      redirectOf(() => attachOccasionAction(target, form("occasionId", occasionId))),
-      redirectOf(() => detachOccasionAction(target, occasionId)),
-      redirectOf(() => addToCollectionAction(target, form("collectionId", col.draft))),
-    ]);
-    for (const path of results) expect(path).toMatch(/do not have permission/i);
+    // Both a Recording's published revision and its open draft: a Contributor is refused before the repository is reached, whatever the target.
+    for (const [target, revisionId] of [[rec.published, rev.published], [rec.draft, rev.draft]] as const) {
+      const results = await Promise.all([
+        redirectOf(() => attachSourceAction(target, revisionId, form("sourceId", sourceId))),
+        redirectOf(() => detachSourceAction(target, revisionId, sourceId)),
+        redirectOf(() => attachRightsAction(target, revisionId, form("rightsInformationId", rightsId))),
+        redirectOf(() => detachRightsAction(target, revisionId, rightsId)),
+        redirectOf(() => attachOccasionAction(target, revisionId, form("occasionId", occasionId))),
+        redirectOf(() => detachOccasionAction(target, revisionId, occasionId)),
+        redirectOf(() => addToCollectionAction(target, form("collectionId", col.draft))),
+      ]);
+      for (const path of results) expect(path).toMatch(/do not have permission/i);
+    }
     expect(await counts()).toEqual(before);
   }, T);
 
-  it("an Editor can attach and detach Source, Rights and Occasion (the workflow the cutover must keep working)", async () => {
+  it("an Editor can attach and detach Source, Rights and Occasion on the open draft (the workflow the cutover keeps working), without touching the legacy rows", async () => {
     as("EDITOR");
     const target = rec.draft;
-    await redirectOf(() => attachSourceAction(target, form("sourceId", sourceId)));
-    await redirectOf(() => attachRightsAction(target, form("rightsInformationId", rightsId)));
-    await redirectOf(() => attachOccasionAction(target, form("occasionId", occasionId)));
-    expect(await counts()).toMatchObject({ sources: 1, rights: 1, occasions: 1 });
-    await redirectOf(() => detachSourceAction(target, sourceId));
-    await redirectOf(() => detachRightsAction(target, rightsId));
-    await redirectOf(() => detachOccasionAction(target, occasionId));
-    expect(await counts()).toMatchObject({ sources: 0, rights: 0, occasions: 0 });
+    await redirectOf(() => attachSourceAction(target, rev.draft, form("sourceId", sourceId)));
+    await redirectOf(() => attachRightsAction(target, rev.draft, form("rightsInformationId", rightsId)));
+    await redirectOf(() => attachOccasionAction(target, rev.draft, form("occasionId", occasionId)));
+    expect(await counts()).toMatchObject({ sources: 1, rights: 1, occasions: 1, legacySources: 0, legacyRights: 0, legacyOccasions: 0 });
+    await redirectOf(() => detachSourceAction(target, rev.draft, sourceId));
+    await redirectOf(() => detachRightsAction(target, rev.draft, rightsId));
+    await redirectOf(() => detachOccasionAction(target, rev.draft, occasionId));
+    expect(await counts()).toMatchObject({ sources: 0, rights: 0, occasions: 0, legacySources: 0, legacyRights: 0, legacyOccasions: 0 });
+  }, T);
+
+  it("an Editor cannot change a published revision: every attach and detach is refused as no longer editable, and nothing is written", async () => {
+    as("EDITOR");
+    const before = await counts();
+    const results = await Promise.all([
+      redirectOf(() => attachSourceAction(rec.published, rev.published, form("sourceId", sourceId))),
+      redirectOf(() => attachRightsAction(rec.published, rev.published, form("rightsInformationId", rightsId))),
+      redirectOf(() => attachOccasionAction(rec.published, rev.published, form("occasionId", occasionId))),
+      redirectOf(() => detachSourceAction(rec.published, rev.published, sourceId)),
+    ]);
+    for (const path of results) expect(path).toMatch(/error=|\?error/i);
+    expect(await counts()).toEqual(before);
   }, T);
 });
 

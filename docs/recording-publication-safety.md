@@ -276,14 +276,14 @@ migration **before** deploying the code that uses the column; rolling the code b
 applied and tested only against the isolated test database. Existing published recordings, drafts and recordings with
 no draft read and publish exactly as before (covered by tests).
 
-## 10. Revision-scoped relationships: the foundation (Phase 6J-11B) — NOT yet in use
+## 10. Revision-scoped relationships: the foundation (Phase 6J-11B) — in use since Phase 6L
 
-**Status: inert.** This phase adds the storage and the write functions only. **Public readers, the Studio Relationships
-step, Content Intelligence and every existing writer still use the legacy Recording-level rows** (`entity_sources`,
-`entity_rights`, `entity_occasions` with `entityType = "RECORDING"`), which are untouched. Nothing is backfilled, nothing is
-dual-written, and no public behavior changes. The leak described in the Limitations section (Recording-level source,
-rights and occasion links change live pages at once) is therefore **still present** until the separately approved
-cutover. The design and cutover plan are in the Phase 6J-11A audit.
+**Status (Phase 6L): in use.** The text below describes the foundation as built in 6J-11B (storage and write functions). It was
+inert then; **the cutover was implemented in Phase 6L (§15)**: the Studio Relationships step writes these tables, and the Organisation
+page, the AI context and the Studio read them. The legacy Recording-level rows (`entity_sources`, `entity_rights`,
+`entity_occasions` with `entityType = "RECORDING"`) are now frozen history. The leak described in the Limitations section is closed
+for Recording-level Sources, Rights and Occasions in code; **it is closed in production only once the migrations are applied and
+the release is deployed** (§15, "Deployment sequence"). The original design and cutover plan are in the Phase 6J-11A audit.
 
 **Decisions this foundation implements.** A Recording's sources, rights information and occasions become revision-scoped.
 Source, RightsInformation and Occasion stay shared catalogue identities (links are stored, rows are never copied).
@@ -542,7 +542,9 @@ pointer to a superseded revision). The same script against an empty database rep
 - Cutover itself (switching writers/readers, the RBAC decision, the Collection-membership guard, the rollback
   re-projection script) is a later, separately approved phase.
 
-## 13. Cutover design: decisions, controls and the rollback boundary (Phase 6J-12) — preparation only
+## 13. Cutover design: decisions, controls and the rollback boundary (Phase 6J-12) — implemented in Phase 6L (§15)
+
+*Phase 6L implemented this design; §15 records what was built and how it differs, if at all. The text below is the design as approved.*
 
 Nothing in this section switches a reader or a writer to revision-scoped relationships. (The one behaviour change made in code is the Collection-membership guard of B, which applies to the existing Collection tables.) The legacy Recording-level rows stay authoritative until a separate,
 approved cutover. The decisions below come from reading the code, the grant matrix and the tests; the first two are pinned by
@@ -737,17 +739,51 @@ row exists. So the tool removes a legacy row **only when the audit trail proves*
 
 **Stop** — do not execute — if: any blocking conflict exists; the fingerprint differs; the backup or restore is unverified; legacy rows changed since cutover without explanation; the run exits non-zero (nothing was written: find out why first);
 or after a run the next dry run reports any insert or removal. After a successful run: the next dry run must be empty, the audit entry's counts must equal the reviewed plan, and the public pages must be compared with their pre-cutover state before readers are switched back.
+## 15. Phase 6L — the relationship cutover (implemented; not yet applied to any real database)
+
+**What changed.** A Recording's Sources, Rights information and Occasions are those of its **revisions**:
+
+| Concern | Before | Now |
+|---|---|---|
+| Studio Relationships step (writes) | generic `…ToEntity({entityType:"RECORDING"})`, live at once | `attach/detach…ToRevision` on the **open draft** the editor was looking at (`recordingRevisionRelationshipsRepository.ts`); `CATALOGUE_WRITE` unchanged |
+| Studio Relationships step (reads) | legacy rows | `loadRecordingRelationshipWorkspace`: published set and draft set side by side, each link marked *In the published version* / *Added in this draft* / *Removed in this draft* |
+| Public Organisation page (occasions, approved sources, rights) | legacy rows | `loadPublishedRecordingRelationships`: the **published revision's** links |
+| AI evidence (Recording-level sources and rights) | legacy rows | the links of the **revision being assembled** (draft in `DRAFT` mode, published in `PUBLISHED` mode), read with the revision |
+| Legacy writes (`entityType "RECORDING"`) | allowed | **refused** (`LegacyRecordingRelationshipsFrozenError`) by the generic attach/detach functions; other entity types unaffected; legacy rows are kept, never deleted or rewritten |
+
+**Decisions implemented (owner-approved).** D1 no read-time fallback to legacy rows (a Recording whose published revision has no link rows shows none; the backfill is a prerequisite, not something a reader hides). D2 with no open draft the published links are shown **read-only** and a draft is
+started by an explicit action (`startNewDraftAction`, `RECORDING_WRITE`); an archived Recording is read-only too. D3 legacy Recording-level writes are rejected. D4 the three link states are displayed.
+
+**Consistency under concurrent publication.** Which revision is "the published one" is read from the Recording's pointer; the pointer and the revision's status are verified together and re-read (three attempts) if a publication moved the pointer between the two reads, and the links are then read for exactly
+the verified revisions. A published revision is immutable (`withEditableDraftRevision` refuses it), so the set read is one coherent published version, never a mixture of two. Tested with 40 reads racing a publication, and with attaches racing a publication (an attach either lands before the publication and is part of
+the published set, or is refused; it never reaches the published revision afterwards).
+
+**Inconsistent data is an error, never a silently incomplete set.** A published pointer naming a revision of another Recording or one that is not `PUBLISHED`, or a draft pointer likewise, is `RevisionRelationshipDataError` (internal; the message carries no secret). Where it surfaces differs on purpose:
+Studio shows it as itself and offers nothing editable; the AI context and the default reader throw, because an editor must see it. The **public Organisation page degrades per Recording**: the reader runs in `onInconsistent: "omit"` mode, the affected Recording's unverified Sources, Rights and Occasions are **omitted** (never shown unverified, and
+never replaced by legacy rows), every other Recording keeps rendering, and each omission is logged on the server (`Organisation page: … recording <id> were omitted … (<reason code>)`: ids and a code only). The result is typed (`inconsistent: [{recordingId, reason}]`), not a swallowed exception. A Recording with **no** published pointer is simply not published (reported, not an error).
+Remaining gap: the log line is the only signal (no alert or counter; project register R-11).
+**Static guard.** `tests/unit/recordingRelationshipsStaticGuard.test.ts` fails if any code under `app/`, `modules/`, `components/` or `scripts/` calls a legacy reader or writer for `"RECORDING"` or touches the legacy tables, except the three generic repositories (which carry the write guard) and the guarded backfill and
+re-projection tools. It also asserts the Studio step is wired to the revision writers with the unchanged permission.
+
+**Tests (loopback test database only).** `recordingRelationshipsCutover.test.ts` (immutability across Organisation page, published reader and AI context; publication swap; no writes to published revisions; detach semantics; workspace states; filters; no fallback; inconsistent-data errors; concurrency),
+`relationshipCutoverRehearsal.test.ts` (below), `relationshipEditingPermissions.test.ts` (updated: Contributor refused, Editor allowed on the draft, refused on a published revision, legacy rows untouched), plus the updated provenance, occasion, organisation-page and eligibility tests.
+
+**Rollback and recovery rehearsal (`relationshipCutoverRehearsal.test.ts`).** On the loopback test database only: legacy-only Recording (readers show nothing) → backfill dry run, execute, second dry run plans nothing, legacy rows unchanged → the new Studio actions edit a draft (published set and legacy rows do not move) →
+publication makes the detach canonical → **re-projection dry run** plans exactly the insert and the proven removal → a wrong fingerprint is refused and writes nothing → the reviewed run executes atomically with an audit entry → a second plan is empty → the legacy rows equal the published set → **recovery from the audit entry restores the
+legacy tables exactly**. The runbook is `docs/runbooks/relationship-cutover.md`.
+
+**Rollback boundary (unchanged from §13D).** Before the first revision-scoped Studio write after the switch, reverting the release is lossless. After it, legacy rows no longer receive edits, so a revert needs the re-projection (which cannot carry **unpublished draft** edits back) or the switch is accepted as one-way.
+
+**Deployment sequence (none of it done; each step needs the owner).** (1) Recovery policy decided and a fresh pre-change snapshot taken (project register O-01). (2) Pending migrations applied by a person with the direct URL (O-02). (3) Re-measure production relationship data read-only; with zero Recordings the backfill is not needed, otherwise
+run the dry run and follow §12 (a real database needs the separate, reviewed allowlist change). (4) Deploy this release (readers and writers switch together). (5) Reconciliation per §13D.
+
 ## Limitations
 
 These are not fixed by this work. Published-page immutability is **not** complete.
 
-- **Recording-level links are not revision-versioned (storage foundation since 6J-11B and a backfill utility since 6J-11C exist; neither is in use by the application).** Sources, rights information, occasions and
-  collection membership attached to a Recording (`entityType: "RECORDING"`, Studio > Relationships step) are keyed to
-  the Recording, shown on public pages (for example the Organisation page aggregates APPROVED sources and rights of its
-  Recordings) and take effect **immediately**, whatever the draft state. Making them draft-scoped needs revision-scoped
-  link rows (or a new `RECORDING_REVISION` entity type), copy on fork, readers switched to the published revision, and
-  a backfill of existing links for published revisions; that touches several public readers and the AI context and was
-  not attempted here.
+- **Recording-level Sources, Rights and Occasions are revision-versioned since Phase 6L (§15) — only in code until the release is deployed.** **Collection membership is still not versioned** (collection-owned; live
+  changes need `RECORDING_PUBLISH`, 6J-12A), and so are Learning Guide membership, Sheet Music Requests and `MediaResource` rights links. Occasions on Performance, Programme and Collection stay live shared-catalogue
+  links (project register R-02).
 - **A refused promotion has no merge.** When the original changed since the clone, the editor discards the participant
   changes and re-applies them; there is no automatic three-way merge. The fingerprint covers participants only (performers
   with roles, choirs, conductors) — not the Programme, Venue, date or instruments, none of which promotion writes.

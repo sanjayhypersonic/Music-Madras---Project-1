@@ -4,9 +4,40 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { CollectionMembershipPublishRequiredError, addRecordingToCollection } from "../../../../../../../modules/db/repositories/collectionRepository";
-import { attachOccasionToEntity, detachOccasionFromEntity } from "../../../../../../../modules/db/repositories/occasionRepository";
-import { attachSourceToEntity, detachSourceFromEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
-import { attachRightsInformationToEntity, detachRightsInformationFromEntity } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
+import { RecordingBusyError, RevisionNotEditableError } from "../../../../../../../modules/db/repositories/recordingRepository";
+import {
+  DuplicateRevisionRelationshipError,
+  RevisionRelationshipNotFoundError,
+  attachOccasionToRevision,
+  attachRightsToRevision,
+  attachSourceToRevision,
+  detachOccasionFromRevision,
+  detachRightsFromRevision,
+  detachSourceFromRevision,
+} from "../../../../../../../modules/db/repositories/recordingRevisionRelationshipsRepository";
+
+// Phase 6L — the Relationships step edits a DRAFT REVISION's Sources, Rights information and Occasions (recording_revision_* tables). Nothing here
+// touches the legacy Recording-level rows (the generic writers now refuse entityType "RECORDING"), and nothing here can change a published version:
+// the repository only writes to the Recording's current, editable draft and refuses a published, superseded or archived-Recording revision.
+//
+//   - Permission is unchanged: CATALOGUE_WRITE, checked here before the repository (the repository performs no role check). Starting a draft is the
+//     separate, existing RECORDING_WRITE action (../draftActions.ts).
+//   - Each action is bound to the revision id the editor was LOOKING AT. If that draft was published or replaced meanwhile, the write is refused as stale
+//     instead of landing on a different draft than the one on screen.
+//   - Collection membership is not versioned and keeps its own guard (RECORDING_PUBLISH for a live change, Phase 6J-12A).
+
+const back = (recordingId: string, error?: string): never => redirect(`/studio/recordings/${recordingId}/relationships${error ? `?error=${encodeURIComponent(error)}` : ""}`);
+
+async function requireCatalogueWrite(recordingId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) back(recordingId, "You do not have permission.");
+  return session!;
+}
+
+function messageFor(err: unknown, fallback: string): string {
+  if (err instanceof RevisionNotEditableError || err instanceof RecordingBusyError || err instanceof DuplicateRevisionRelationshipError || err instanceof RevisionRelationshipNotFoundError) return err.message;
+  return err instanceof Error ? err.message : fallback;
+}
 
 export async function addToCollectionAction(recordingId: string, formData: FormData) {
   const session = await getCurrentStudioSession();
@@ -31,92 +62,68 @@ export async function addToCollectionAction(recordingId: string, formData: FormD
   redirect(`/studio/recordings/${recordingId}/relationships`);
 }
 
-export async function attachOccasionAction(recordingId: string, formData: FormData) {
-  const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=You+do+not+have+permission.`);
-  }
-
+export async function attachOccasionAction(recordingId: string, revisionId: string, formData: FormData) {
+  const session = await requireCatalogueWrite(recordingId);
   const occasionId = String(formData.get("occasionId") ?? "");
-  if (!occasionId) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=Select+an+occasion.`);
-  }
-
+  if (!occasionId) back(recordingId, "Select an occasion.");
   try {
-    await attachOccasionToEntity({ entityType: "RECORDING", entityId: recordingId, occasionId, actorId: session!.user.id });
+    await attachOccasionToRevision(revisionId, occasionId, session.user.id);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not attach the occasion.";
-    redirect(`/studio/recordings/${recordingId}/relationships?error=${encodeURIComponent(message)}`);
+    back(recordingId, messageFor(err, "Could not attach the occasion."));
   }
-  redirect(`/studio/recordings/${recordingId}/relationships`);
+  back(recordingId);
 }
 
-export async function detachOccasionAction(recordingId: string, occasionId: string) {
-  const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=You+do+not+have+permission.`);
+export async function detachOccasionAction(recordingId: string, revisionId: string, occasionId: string) {
+  const session = await requireCatalogueWrite(recordingId);
+  try {
+    await detachOccasionFromRevision(revisionId, occasionId, session.user.id);
+  } catch (err) {
+    back(recordingId, messageFor(err, "Could not remove the occasion."));
   }
-
-  await detachOccasionFromEntity("RECORDING", recordingId, occasionId, session!.user.id);
-  redirect(`/studio/recordings/${recordingId}/relationships`);
+  back(recordingId);
 }
 
-export async function attachSourceAction(recordingId: string, formData: FormData) {
-  const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=You+do+not+have+permission.`);
-  }
-
+export async function attachSourceAction(recordingId: string, revisionId: string, formData: FormData) {
+  const session = await requireCatalogueWrite(recordingId);
   const sourceId = String(formData.get("sourceId") ?? "");
-  if (!sourceId) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=Select+a+source.`);
-  }
-
+  if (!sourceId) back(recordingId, "Select a source.");
   try {
-    await attachSourceToEntity({ entityType: "RECORDING", entityId: recordingId, sourceId, actorId: session!.user.id });
+    await attachSourceToRevision(revisionId, sourceId, session.user.id);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not attach the source.";
-    redirect(`/studio/recordings/${recordingId}/relationships?error=${encodeURIComponent(message)}`);
+    back(recordingId, messageFor(err, "Could not attach the source."));
   }
-  redirect(`/studio/recordings/${recordingId}/relationships`);
+  back(recordingId);
 }
 
-export async function detachSourceAction(recordingId: string, sourceId: string) {
-  const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=You+do+not+have+permission.`);
+export async function detachSourceAction(recordingId: string, revisionId: string, sourceId: string) {
+  const session = await requireCatalogueWrite(recordingId);
+  try {
+    await detachSourceFromRevision(revisionId, sourceId, session.user.id);
+  } catch (err) {
+    back(recordingId, messageFor(err, "Could not remove the source."));
   }
-
-  await detachSourceFromEntity("RECORDING", recordingId, sourceId, session!.user.id);
-  redirect(`/studio/recordings/${recordingId}/relationships`);
+  back(recordingId);
 }
 
-export async function attachRightsAction(recordingId: string, formData: FormData) {
-  const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=You+do+not+have+permission.`);
-  }
-
+export async function attachRightsAction(recordingId: string, revisionId: string, formData: FormData) {
+  const session = await requireCatalogueWrite(recordingId);
   const rightsInformationId = String(formData.get("rightsInformationId") ?? "");
-  if (!rightsInformationId) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=Select+a+rights+information+record.`);
-  }
-
+  if (!rightsInformationId) back(recordingId, "Select rights information.");
   try {
-    await attachRightsInformationToEntity({ entityType: "RECORDING", entityId: recordingId, rightsInformationId, actorId: session!.user.id });
+    await attachRightsToRevision(revisionId, rightsInformationId, session.user.id);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not attach the rights information.";
-    redirect(`/studio/recordings/${recordingId}/relationships?error=${encodeURIComponent(message)}`);
+    back(recordingId, messageFor(err, "Could not attach the rights information."));
   }
-  redirect(`/studio/recordings/${recordingId}/relationships`);
+  back(recordingId);
 }
 
-export async function detachRightsAction(recordingId: string, rightsInformationId: string) {
-  const session = await getCurrentStudioSession();
-  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
-    redirect(`/studio/recordings/${recordingId}/relationships?error=You+do+not+have+permission.`);
+export async function detachRightsAction(recordingId: string, revisionId: string, rightsInformationId: string) {
+  const session = await requireCatalogueWrite(recordingId);
+  try {
+    await detachRightsFromRevision(revisionId, rightsInformationId, session.user.id);
+  } catch (err) {
+    back(recordingId, messageFor(err, "Could not remove the rights information."));
   }
-
-  await detachRightsInformationFromEntity("RECORDING", recordingId, rightsInformationId, session!.user.id);
-  redirect(`/studio/recordings/${recordingId}/relationships`);
+  back(recordingId);
 }

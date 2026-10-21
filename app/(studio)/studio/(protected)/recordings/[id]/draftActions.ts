@@ -25,7 +25,7 @@ import { RecordingBusyError, RevisionNotEditableError, findRecordingById, forkDr
 //     nothing and simply lands the editor on the page;
 //   - `step` is checked against an allow-list, never used as a free-form redirect.
 
-const LANDING_STEPS = new Set(["source", "review"]);
+const LANDING_STEPS = new Set(["source", "review", "relationships"]);
 
 function land(recordingId: string, step: string, error?: string): never {
   const safeStep = LANDING_STEPS.has(step) ? step : "review";

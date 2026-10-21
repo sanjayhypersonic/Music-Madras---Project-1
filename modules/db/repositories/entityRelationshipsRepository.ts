@@ -32,8 +32,7 @@ import type { CollectionPageData } from "../../mmke/collectionPage/collectionPag
 import { assembleOrganisationPageData } from "../../mmke/organisationPage/assembleOrganisationPageData";
 import type { OrganisationPageData } from "../../mmke/organisationPage/organisationPageContract";
 import { listOccasionsForEntity } from "./occasionRepository";
-import { listApprovedSourcesForEntity } from "./sourceRepository";
-import { listRightsForEntity } from "./rightsInformationRepository";
+import { loadPublishedRecordingRelationships } from "./recordingRelationshipReadersRepository";
 import { listPublicLearningGuidesForRecording, listPublicLearningGuidesForWorkIds } from "./learningGuideRepository";
 import { assembleLearningGuidePageData } from "../../mmke/learningGuidePage/assembleLearningGuidePageData";
 import type { LearningGuidePageData } from "../../mmke/learningGuidePage/learningGuidePageContract";
@@ -861,10 +860,20 @@ export async function getPublicOrganisationPageData(slug: string): Promise<Organ
   // Organisation-level attachment, which does not exist. Only active
   // (non-archived) Occasions are surfaced publicly, the same convention
   // every other public page already applies to its own entities.
+  // Phase 6L: a Recording's occasions, sources and rights are those of its PUBLISHED REVISION (one verified published version per Recording, read
+  // through its pointer), never the legacy Recording-level rows and never a draft. A Recording whose revision data is INCONSISTENT contributes nothing
+  // (its unverified links are omitted, and there is no legacy fallback) and is reported on the server log, so one bad Recording cannot take down
+  // the whole public page; a Recording that is no longer published when this runs simply contributes nothing either.
+  const publishedRecordings = await loadPublishedRecordingRelationships(content.recordings.map((r) => r.id), undefined, { onInconsistent: "omit" });
+  for (const problem of publishedRecordings.inconsistent) {
+    // Ids and a reason code only: nothing from the data itself. Observable, never silently swallowed.
+    console.error(`Organisation page: the sources, rights and occasions of recording ${problem.recordingId} were omitted because its revision data is inconsistent (${problem.reason}).`);
+  }
+  const publishedRecordingSets = [...publishedRecordings.byRecording.values()];
   const occasionLinkLists = await Promise.all([
     ...content.performances.map((p) => listOccasionsForEntity("PERFORMANCE", p.id)),
     ...content.programmes.map((p) => listOccasionsForEntity("PROGRAMME", p.id)),
-    ...content.recordings.map((r) => listOccasionsForEntity("RECORDING", r.id)),
+    ...publishedRecordingSets.map((set) => Promise.resolve(set.occasions)),
     ...content.collections.map((c) => listOccasionsForEntity("COLLECTION", c.id)),
   ]);
   const occasions = dedupeById(occasionLinkLists.flat().map((link) => link.occasion))
@@ -878,10 +887,8 @@ export async function getPublicOrganisationPageData(slug: string): Promise<Organ
   // attachment is added here). Phase 6J-1: only APPROVED Sources are public
   // provenance — the same approval rule the AI evidence uses (Phase 6H-8); an
   // unreviewed, rejected or disabled Source is never shown.
-  const [sourceLinkLists, rightsLinkLists] = await Promise.all([
-    Promise.all(content.recordings.map((r) => listApprovedSourcesForEntity("RECORDING", r.id))),
-    Promise.all(content.recordings.map((r) => listRightsForEntity("RECORDING", r.id))),
-  ]);
+  const sourceLinkLists = publishedRecordingSets.map((set) => set.sources.filter((link) => link.source.approvalState === "APPROVED"));
+  const rightsLinkLists = publishedRecordingSets.map((set) => set.rights);
   const sources = dedupeById(sourceLinkLists.flat().map((link) => link.source)).map((source) => ({
     id: source.id,
     title: source.title,

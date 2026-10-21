@@ -6,6 +6,7 @@ import type { RecordingContext, RecordingContextMode } from "../../mmke/contentI
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
 import { findPublicCollectionsByIds } from "./collectionRepository";
 import { listPublicLearningGuidesForRecording } from "./learningGuideRepository";
+import { RevisionRelationshipDataError } from "./recordingRelationshipReadersRepository";
 import { listApprovedSourcesForEntity } from "./sourceRepository";
 import { listRightsForEntity } from "./rightsInformationRepository";
 import { CitationBackedSourceRetrievalAdapter } from "../../ai/retrieval/citationBackedSourceRetrievalAdapter";
@@ -87,6 +88,12 @@ export async function getRecordingContext(
         include: { youtubeVideo: true },
         orderBy: { createdAt: "asc" },
       },
+      // Phase 6L — the Recording's own Sources and Rights are those of THIS revision (the draft in DRAFT mode, the published revision in PUBLISHED
+      // mode), read with the revision itself so they can never come from a different version than the rest of the context. An UNREVIEWED /
+      // REJECTED / DISABLED Source must never reach the AI gateway, so only APPROVED ones are included (Phase 6H-8). The legacy Recording-level
+      // rows are not read.
+      sourceLinks: { where: { source: { approvalState: "APPROVED" } }, include: { source: true }, orderBy: [{ createdAt: "asc" }, { sourceId: "asc" }] },
+      rightsLinks: { include: { rightsInformation: true }, orderBy: [{ createdAt: "asc" }, { rightsInformationId: "asc" }] },
       performance: {
         include: {
           venue: { include: { organisation: true } },
@@ -106,6 +113,10 @@ export async function getRecordingContext(
     // so this should not happen given the existing onDelete rules. Never
     // fabricate content if it does.
     return { ok: false, reason: mode === "DRAFT" ? "NO_DRAFT_REVISION" : "NO_PUBLISHED_REVISION" };
+  }
+  // Phase 6L: the Recording's own links come from this revision, so a pointer to another Recording's revision is inconsistent data, never a context.
+  if (revision.recordingId !== recording.id) {
+    throw new RevisionRelationshipDataError(recording.id, mode === "DRAFT" ? "DRAFT_REVISION_OF_OTHER_RECORDING" : "PUBLISHED_REVISION_OF_OTHER_RECORDING");
   }
 
   // A YouTube video's title/description/duration are included as source
@@ -139,11 +150,12 @@ export async function getRecordingContext(
   const composerIds = dedupeById(revision.works.map((link) => link.musicalWork.composer)).map((c) => c.id);
   const workIds = revision.works.map((link) => link.musicalWorkId);
 
-  const [recordingSources, workSources, composerSources, recordingRights, workRights, composerRights] = await Promise.all([
-    listApprovedSourcesForEntity("RECORDING", recordingId),
+  // The link shape the assembler consumes ({entityType, entityId, source}) is kept: a revision's link is reported as attached to the RECORDING.
+  const recordingSources = revision.sourceLinks.map((link) => ({ entityType: "RECORDING", entityId: recordingId, sourceId: link.sourceId, source: link.source }));
+  const recordingRights = revision.rightsLinks.map((link) => ({ entityType: "RECORDING", entityId: recordingId, rightsInformationId: link.rightsInformationId, rightsInformation: link.rightsInformation }));
+  const [workSources, composerSources, workRights, composerRights] = await Promise.all([
     Promise.all(workIds.map((id) => listApprovedSourcesForEntity("WORK", id))).then((lists) => lists.flat()),
     Promise.all(composerIds.map((id) => listApprovedSourcesForEntity("COMPOSER", id))).then((lists) => lists.flat()),
-    listRightsForEntity("RECORDING", recordingId),
     Promise.all(workIds.map((id) => listRightsForEntity("WORK", id))).then((lists) => lists.flat()),
     Promise.all(composerIds.map((id) => listRightsForEntity("COMPOSER", id))).then((lists) => lists.flat()),
   ]);

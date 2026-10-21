@@ -25,9 +25,11 @@ vi.mock("../../modules/audit/writeAuditLog", async (importOriginal) => {
 
 import { prisma } from "../../modules/db/client";
 import { isUniqueConstraintViolation } from "../../modules/db/isUniqueConstraintViolation";
-import { createOccasion, archiveOccasion, attachOccasionToEntity, listOccasionsForEntity } from "../../modules/db/repositories/occasionRepository";
-import { createRightsInformation, attachRightsInformationToEntity, listRightsForEntity } from "../../modules/db/repositories/rightsInformationRepository";
-import { createSource, approveSource, attachSourceToEntity, listSourcesForEntity } from "../../modules/db/repositories/sourceRepository";
+import { createOccasion, archiveOccasion, attachOccasionToEntity, detachOccasionFromEntity } from "../../modules/db/repositories/occasionRepository";
+import { createRightsInformation, attachRightsInformationToEntity, detachRightsInformationFromEntity } from "../../modules/db/repositories/rightsInformationRepository";
+import { createSource, approveSource, attachSourceToEntity, detachSourceFromEntity } from "../../modules/db/repositories/sourceRepository";
+import { LegacyRecordingRelationshipsFrozenError } from "../../modules/mmke/provenance/legacyRecordingRelationshipsFrozen";
+import { loadPublishedRecordingRelationships } from "../../modules/db/repositories/recordingRelationshipReadersRepository";
 import { getRecordingContext } from "../../modules/db/repositories/recordingContextRepository";
 import {
   DuplicateRevisionRelationshipError,
@@ -52,9 +54,9 @@ import {
   publishRecordingDraft,
 } from "../../modules/db/repositories/recordingRepository";
 
-// Phase 6J-11B — the INERT foundation for revision-scoped relationships (sources, rights information, occasions).
-// Nothing reads or writes these tables outside the repository functions under test and the fork copy; the legacy
-// Recording-level rows and every public reader are unchanged (section H).
+// Phase 6J-11B — revision-scoped relationships (sources, rights information, occasions): the repository functions under test.
+// Since Phase 6L they are the ONLY way a Recording gets these links (Studio writers, the Organisation page and the AI context read them);
+// the legacy Recording-level rows are frozen history that nothing writes or reads (section H).
 
 const T = 120000;
 const TOKEN = randomUUID().slice(0, 8);
@@ -517,55 +519,67 @@ describe("occasion-specific rules", () => {
   }, T);
 });
 
-describe("H. legacy data and public readers are unchanged (no dual write, no cutover)", () => {
-  it("revision-scoped writes and the fork never touch the legacy Recording-level rows or their readers", async () => {
+describe("H. cutover (Phase 6L): the legacy Recording-level rows are frozen history, and nothing reads them", () => {
+  const legacyRows = (recordingId: string) =>
+    Promise.all([
+      prisma.entitySource.findMany({ where: { entityType: "RECORDING", entityId: recordingId }, orderBy: { id: "asc" } }),
+      prisma.entityRights.findMany({ where: { entityType: "RECORDING", entityId: recordingId }, orderBy: { id: "asc" } }),
+      prisma.entityOccasion.findMany({ where: { entityType: "RECORDING", entityId: recordingId }, orderBy: { id: "asc" } }),
+    ]);
+
+  it("revision-scoped writes and the fork never touch pre-existing legacy rows, and the assembled context does not read them", async () => {
     const rec = await liveOnly("legacy-untouched");
     const legacySource = await newSource(true);
     const legacyRights = await newRights();
     const legacyOccasion = await newOccasion();
-    await attachSourceToEntity({ entityType: "RECORDING", entityId: rec.id, sourceId: legacySource, actorId: userIds.editor });
-    await attachRightsInformationToEntity({ entityType: "RECORDING", entityId: rec.id, rightsInformationId: legacyRights, actorId: userIds.editor });
-    await attachOccasionToEntity({ entityType: "RECORDING", entityId: rec.id, occasionId: legacyOccasion, actorId: userIds.editor });
-    const legacyRowsBefore = {
-      sources: await prisma.entitySource.findMany({ where: { entityType: "RECORDING", entityId: rec.id } }),
-      rights: await prisma.entityRights.findMany({ where: { entityType: "RECORDING", entityId: rec.id } }),
-      occasions: await prisma.entityOccasion.findMany({ where: { entityType: "RECORDING", entityId: rec.id } }),
-    };
+    // Legacy rows as they exist from before the cutover (history), seeded the way the backfill tests do: directly.
+    await prisma.entitySource.create({ data: { entityType: "RECORDING", entityId: rec.id, sourceId: legacySource } });
+    await prisma.entityRights.create({ data: { entityType: "RECORDING", entityId: rec.id, rightsInformationId: legacyRights } });
+    await prisma.entityOccasion.create({ data: { entityType: "RECORDING", entityId: rec.id, occasionId: legacyOccasion } });
+    const legacyBefore = await legacyRows(rec.id);
     const contextBefore = await getRecordingContext(rec.id, "PUBLISHED");
     expect(contextBefore.ok).toBe(true);
+    expect(JSON.stringify(contextBefore)).not.toContain(legacySource); // the frozen row is not evidence
 
     const draft = await forkDraftFromPublished(rec.id, userIds.editor);
     await attachSourceToRevision(draft.id, await newSource(true), userIds.editor);
     await attachRightsToRevision(draft.id, await newRights(), userIds.editor);
     await attachOccasionToRevision(draft.id, await newOccasion(), userIds.editor);
 
-    expect({
-      sources: await prisma.entitySource.findMany({ where: { entityType: "RECORDING", entityId: rec.id } }),
-      rights: await prisma.entityRights.findMany({ where: { entityType: "RECORDING", entityId: rec.id } }),
-      occasions: await prisma.entityOccasion.findMany({ where: { entityType: "RECORDING", entityId: rec.id } }),
-    }).toEqual(legacyRowsBefore); // identical rows: nothing created, changed or removed
-    expect((await listSourcesForEntity("RECORDING", rec.id)).map((l) => l.sourceId)).toEqual([legacySource]);
-    expect((await listRightsForEntity("RECORDING", rec.id)).map((l) => l.rightsInformationId)).toEqual([legacyRights]);
-    expect((await listOccasionsForEntity("RECORDING", rec.id)).map((l) => l.occasionId)).toEqual([legacyOccasion]);
-    // Content Intelligence still reads the legacy rows: the assembled context is byte-identical
-    expect(JSON.stringify(await getRecordingContext(rec.id, "PUBLISHED"))).toBe(JSON.stringify(contextBefore));
+    expect(await legacyRows(rec.id)).toEqual(legacyBefore); // identical rows: nothing created, changed or removed
+    expect(JSON.stringify(await getRecordingContext(rec.id, "PUBLISHED"))).toBe(JSON.stringify(contextBefore)); // a draft edit does not change the published context
   }, T);
 
-  it("legacy attaches create no revision-scoped rows (the two representations are independent; there is no mirror)", async () => {
-    const rec = await newDraft("legacy-no-mirror");
-    await attachSourceToEntity({ entityType: "RECORDING", entityId: rec.id, sourceId: await newSource(), actorId: userIds.editor });
-    await attachOccasionToEntity({ entityType: "RECORDING", entityId: rec.id, occasionId: await newOccasion(), actorId: userIds.editor });
-    await attachRightsInformationToEntity({ entityType: "RECORDING", entityId: rec.id, rightsInformationId: await newRights(), actorId: userIds.editor });
+  it("legacy writes for a Recording are refused (attach and detach, all three kinds) and create nothing; other entity types are unaffected", async () => {
+    const rec = await newDraft("legacy-refused");
+    const source = await newSource();
+    const rights = await newRights();
+    const occasion = await newOccasion();
+    const frozen = LegacyRecordingRelationshipsFrozenError;
+    await expect(attachSourceToEntity({ entityType: "RECORDING", entityId: rec.id, sourceId: source, actorId: userIds.editor })).rejects.toBeInstanceOf(frozen);
+    await expect(attachRightsInformationToEntity({ entityType: "RECORDING", entityId: rec.id, rightsInformationId: rights, actorId: userIds.editor })).rejects.toBeInstanceOf(frozen);
+    await expect(attachOccasionToEntity({ entityType: "RECORDING", entityId: rec.id, occasionId: occasion, actorId: userIds.editor })).rejects.toBeInstanceOf(frozen);
+    await expect(detachSourceFromEntity("RECORDING", rec.id, source, userIds.editor)).rejects.toBeInstanceOf(frozen);
+    await expect(detachRightsInformationFromEntity("RECORDING", rec.id, rights, userIds.editor)).rejects.toBeInstanceOf(frozen);
+    await expect(detachOccasionFromEntity("RECORDING", rec.id, occasion, userIds.editor)).rejects.toBeInstanceOf(frozen);
+    expect(await legacyRows(rec.id)).toEqual([[], [], []]);
     expect(await prisma.recordingRevisionSource.count({ where: { revisionId: rec.draftId } })).toBe(0);
     expect(await prisma.recordingRevisionRights.count({ where: { revisionId: rec.draftId } })).toBe(0);
     expect(await prisma.recordingRevisionOccasion.count({ where: { revisionId: rec.draftId } })).toBe(0);
+    // Not frozen: a different entity type still attaches through the generic writer (a Work is the Recording's neighbour in the catalogue).
+    const otherEntityId = randomUUID();
+    await expect(attachSourceToEntity({ entityType: "WORK", entityId: otherEntityId, sourceId: source, actorId: userIds.editor })).resolves.toBeDefined();
+    await prisma.entitySource.deleteMany({ where: { entityType: "WORK", entityId: otherEntityId } });
+    await prisma.auditLogEntry.deleteMany({ where: { entityType: "WORK", entityId: otherEntityId } });
   }, T);
 
-  it("a legacy-only Recording (no revision-scoped rows at all) still forks and publishes exactly as before", async () => {
+  it("a Recording whose only links are legacy rows (no backfill) forks and publishes, and its published revision has NO links: there is no read-time fallback", async () => {
     const rec = await liveOnly("legacy-only");
-    await attachSourceToEntity({ entityType: "RECORDING", entityId: rec.id, sourceId: await newSource(true), actorId: userIds.editor });
+    await prisma.entitySource.create({ data: { entityType: "RECORDING", entityId: rec.id, sourceId: await newSource(true) } });
     const draft = await forkDraftFromPublished(rec.id, userIds.editor);
     expect((await publishRecordingDraft({ recordingId: rec.id, actorId: userIds.admin, expectedDraftRevisionId: draft.id, enforceCompleteness: false })).ok).toBe(true);
-    expect((await listSourcesForEntity("RECORDING", rec.id)).length).toBe(1);
+    expect((await legacyRows(rec.id))[0]).toHaveLength(1); // kept as history
+    const published = await loadPublishedRecordingRelationships([rec.id]);
+    expect(published.byRecording.get(rec.id)?.sources).toEqual([]); // the reader shows the revision's (empty) set, not the legacy row
   }, T);
 });

@@ -7,10 +7,10 @@ import type { Prisma } from "@prisma/client";
 // Phase 6J-11B — revision-scoped Recording relationships: a RecordingRevision's own Sources, RightsInformation and
 // Occasions (tables recording_revision_sources / _rights / _occasions).
 //
-// THIS IS THE INERT FOUNDATION. Nothing in the public site, the Studio Relationships step or Content Intelligence calls
-// these functions yet: they still read and write the legacy Recording-level EntitySource / EntityRights / EntityOccasion
-// rows (entityType "RECORDING"), which this module never touches. There is deliberately NO dual write. The cutover
-// (writers, readers, backfill) is a separate, separately approved phase; see docs/recording-publication-safety.md.
+// Since Phase 6L these are the WRITERS of a Recording's Sources, Rights and Occasions: the Studio Relationships step calls them (behind CATALOGUE_WRITE),
+// and the readers (recordingRelationshipReadersRepository.ts: Organisation page, AI context, Studio workspace) read these tables. The legacy
+// Recording-level rows (entityType "RECORDING") are frozen history that nothing writes or reads; there is deliberately NO dual write and NO read-time
+// fallback. See docs/recording-publication-safety.md §15 and docs/runbooks/relationship-cutover.md.
 //
 // Protocol: every write goes through withEditableDraftRevision — the per-Recording edit lock, then a check, inside the
 // same transaction, that the revision is a DRAFT, is the Recording's current draft, and the Recording is not archived
