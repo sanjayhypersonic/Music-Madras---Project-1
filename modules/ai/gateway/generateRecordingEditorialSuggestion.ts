@@ -10,10 +10,10 @@ import {
 } from "../../db/repositories/contentSuggestionRepository";
 import { computeContextFingerprint } from "../../mmke/contentIntelligence/computeContextFingerprint";
 import {
-  RECORDING_EDITORIAL_OUTPUT_SCHEMA_V2,
-  RECORDING_EDITORIAL_PROMPT_V2,
-  RECORDING_EDITORIAL_SYSTEM_INSTRUCTIONS_V2,
-} from "../prompts/recordingEditorial/recordingEditorialPromptV2";
+  RECORDING_EDITORIAL_OUTPUT_SCHEMA_V3,
+  RECORDING_EDITORIAL_PROMPT_V3,
+  RECORDING_EDITORIAL_SYSTEM_INSTRUCTIONS_V3,
+} from "../prompts/recordingEditorial/recordingEditorialPromptV3";
 import { validateRecordingEditorialOutput } from "../structuredOutput/validateRecordingEditorialOutput";
 import { getConfiguredAIProvider } from "../provider/aiProviderRegistry";
 import type { AIProvider } from "../provider/aiProvider";
@@ -98,7 +98,7 @@ export async function generateRecordingEditorialSuggestion(
     suggestionType: "EDITORIAL_PROSE",
     contextFingerprint,
     provider: provider.providerName,
-    promptVersion: RECORDING_EDITORIAL_PROMPT_V2,
+    promptVersion: RECORDING_EDITORIAL_PROMPT_V3,
     requestedById: input.requestedById,
   });
 
@@ -110,10 +110,10 @@ export async function generateRecordingEditorialSuggestion(
   await markGenerationRequestGenerating(generationRequest.id);
 
   const aiResult = await provider.generate({
-    systemInstructions: RECORDING_EDITORIAL_SYSTEM_INSTRUCTIONS_V2,
+    systemInstructions: RECORDING_EDITORIAL_SYSTEM_INSTRUCTIONS_V3,
     contextPayload: contextResult.context,
-    outputSchema: RECORDING_EDITORIAL_OUTPUT_SCHEMA_V2,
-    promptVersion: RECORDING_EDITORIAL_PROMPT_V2,
+    outputSchema: RECORDING_EDITORIAL_OUTPUT_SCHEMA_V3,
+    promptVersion: RECORDING_EDITORIAL_PROMPT_V3,
     targetEntityType: "RECORDING",
     targetEntityId: input.recordingId,
     suggestionType: "EDITORIAL_PROSE",

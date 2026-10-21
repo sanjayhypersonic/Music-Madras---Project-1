@@ -58,7 +58,14 @@ describe("build and environment hygiene", () => {
     });
 
     it("lists no variable that no code reads (obsolete placeholders are removed)", () => {
-      for (const name of ["BLOB_READ_WRITE_TOKEN", "CRON_SECRET", "EMAIL_PROVIDER_API_KEY"]) expect(declared.has(name), name).toBe(false);
+      for (const name of ["BLOB_READ_WRITE_TOKEN", "EMAIL_PROVIDER_API_KEY"]) expect(declared.has(name), name).toBe(false);
+    });
+
+    it("declares CRON_SECRET now that code reads it: the scheduled-maintenance endpoint authenticates with it, and that endpoint exists", () => {
+      // It was once listed here as an obsolete placeholder because nothing read it. Phase 6K fix F7 added /api/cron/stewardship, which does.
+      expect(declared.has("CRON_SECRET")).toBe(true);
+      expect(readFileSync(path.join(root, "modules/jobs/cronAuth.ts"), "utf8")).toMatch(/env\.CRON_SECRET/);
+      expect(existsSync(path.join(root, "app/api/cron/stewardship/route.ts"))).toBe(true);
     });
 
     it("contains placeholders only — no value that looks like a real secret or connection string", () => {

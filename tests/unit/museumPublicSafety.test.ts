@@ -20,8 +20,8 @@ const root = path.resolve(__dirname, "../..");
 const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");
 
 describe("public navigation never points at a page that does not exist", () => {
-  it("lists exactly the five V1 destinations", () => {
-    expect(MUSEUM_NAV_LINKS.map((l) => l.label)).toEqual(["Archive", "Collections", "Learning", "Discover", "About"]);
+  it("lists exactly the seven destinations", () => {
+    expect(MUSEUM_NAV_LINKS.map((l) => l.label)).toEqual(["Archive", "Videos", "Playlists", "Collections", "Learning", "Discover", "About"]);
   });
 
   it("every path link resolves to a real route, and every anchor to a real homepage section", () => {
@@ -59,7 +59,7 @@ describe("MobileNav", () => {
     expect(button).toContain('type="button"');
   });
 
-  it("offers every public destination (Archive, Collections, Learning, Discover, About)", () => {
+  it("offers every public destination (Archive, Videos, Playlists, Collections, Learning, Discover, About)", () => {
     for (const link of MUSEUM_NAV_LINKS) {
       expect(markup).toContain(`href="${link.href}"`);
       expect(markup).toContain(`>${link.label}<`);

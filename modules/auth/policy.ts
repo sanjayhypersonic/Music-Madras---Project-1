@@ -59,6 +59,28 @@ export function can(role: StudioRoleName, action: StudioAction): boolean {
   return ROLE_PERMISSIONS[role].has(action);
 }
 
+// Most senior first (the order Studio copy lists roles in, reversed below so a sentence reads from the most junior role that may do something upward).
+const ROLE_ORDER: readonly StudioRoleName[] = ["FOUNDER", "SUPER_ADMINISTRATOR", "ADMINISTRATOR", "REVIEWER", "EDITOR", "CONTRIBUTOR"];
+const ROLE_PLURAL: Record<StudioRoleName, string> = {
+  FOUNDER: "Founders",
+  SUPER_ADMINISTRATOR: "Super Administrators",
+  ADMINISTRATOR: "Administrators",
+  EDITOR: "Editors",
+  REVIEWER: "Reviewers",
+  CONTRIBUTOR: "Contributors",
+};
+
+/**
+ * Who may do an action, in words for Studio copy ("Administrators, Super Administrators and Founders"), derived from the policy itself so that text
+ * about permissions can never drift from the permissions. Ordered from the most junior role to the most senior.
+ */
+export function describeRolesThatCan(action: StudioAction): string {
+  const names = [...ROLE_ORDER].reverse().filter((role) => can(role, action)).map((role) => ROLE_PLURAL[role]);
+  if (names.length === 0) return "no one";
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 /**
  * Role management itself is restricted to Founder/Super Administrator
  * (ADR §7.6) — a Founder account is never revocable via this check, which

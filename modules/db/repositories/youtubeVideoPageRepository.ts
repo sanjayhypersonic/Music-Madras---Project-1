@@ -1,7 +1,10 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { generateVideoSlug } from "../../mmke/slug/generateVideoSlug";
-import { isYouTubeVideoPagePublic } from "../../mmke/catalogue/isYouTubeVideoPagePublic";
+import { isVideoExposed, type ActiveApproval, type ExposureHoldName } from "../../mmke/catalogue/videoExposure";
+import { exposedVideoPageWhere } from "../../mmke/catalogue/videoExposureQuery";
+import { approveExposure, revokeExposure } from "./videoExposureRepository";
+import { revokeForArchiveIn } from "./videoLifecycleRepository";
 import { canPublishVideoPage, canUnpublishVideoPage } from "../../publishing/videoPageTransitions";
 import type { YouTubeVideo, YouTubeVideoPage } from "@prisma/client";
 
@@ -74,6 +77,33 @@ export function findBySlug(slug: string): Promise<YouTubeVideoPage | null> {
 export interface PublicVideoPageResult {
   page: YouTubeVideoPage;
   youtubeVideo: YouTubeVideo;
+  /** Phase 6K-2: whether the video may also be LISTED (catalogue, search, sitemap, homepage). False for an approved-but-unlisted-from-discovery video, which is reachable by its URL only. */
+  discoverable: boolean;
+}
+
+type PageWithApprovals = YouTubeVideoPage & {
+  youtubeVideo: YouTubeVideo & { exposureReview: { holdReason: ExposureHoldName | null } | null };
+  exposureApprovals: { scope: ActiveApproval["scope"]; playlistPageId: string | null }[];
+};
+
+const ACTIVE_APPROVALS = { where: { revokedAt: null }, select: { scope: true, playlistPageId: true } } as const;
+/** The video plus the one fact the shared rule needs from its review row: an active hold. */
+const VIDEO_WITH_HOLD = { include: { exposureReview: { select: { holdReason: true } } } } as const;
+
+function facts(page: PageWithApprovals) {
+  return {
+    page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
+    youtubeVideo: { privacyStatus: page.youtubeVideo.privacyStatus, observabilityState: page.youtubeVideo.observabilityState },
+    activeApprovals: page.exposureApprovals,
+    hold: page.youtubeVideo.exposureReview?.holdReason ?? null,
+  };
+}
+
+/** Public callers get the plain video row, never the review row that carries the hold. */
+function stripReview(video: PageWithApprovals["youtubeVideo"]): YouTubeVideo {
+  const { exposureReview: _review, ...plain } = video;
+  void _review;
+  return plain;
 }
 
 /**
@@ -85,19 +115,15 @@ export interface PublicVideoPageResult {
  * returned here without anyone needing to remember to unpublish it.
  */
 export async function findPublishedBySlug(slug: string): Promise<PublicVideoPageResult | null> {
-  const page = await prisma.youTubeVideoPage.findUnique({ where: { slug }, include: { youtubeVideo: true } });
-  if (!page) return null;
+  const found = await prisma.youTubeVideoPage.findUnique({ where: { slug }, include: { youtubeVideo: VIDEO_WITH_HOLD, exposureApprovals: ACTIVE_APPROVALS } });
+  if (!found) return null;
 
-  const eligible = isYouTubeVideoPagePublic({
-    page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
-    youtubeVideo: {
-      privacyStatus: page.youtubeVideo.privacyStatus,
-      observabilityState: page.youtubeVideo.observabilityState,
-    },
-  });
-  if (!eligible) return null;
+  // The PAGE surface: reachable by its URL. Whether it is also LISTED is `discoverable`.
+  if (!isVideoExposed(facts(found), { kind: "PAGE" })) return null;
 
-  return { page, youtubeVideo: page.youtubeVideo };
+  const { youtubeVideo, exposureApprovals: _approvals, ...page } = found;
+  void _approvals;
+  return { page, youtubeVideo: stripReview(youtubeVideo), discoverable: isVideoExposed(facts(found), { kind: "DISCOVERY" }) };
 }
 
 /**
@@ -110,21 +136,15 @@ export async function findPublishedBySlug(slug: string): Promise<PublicVideoPage
  * surfaces without depending on a separate "featured" concept.
  */
 export async function listPublishedVideoPages(limit: number): Promise<PublicVideoPageResult[]> {
+  // DISCOVERY surface (homepage, sitemap): an unlisted video additionally needs its own recorded DISCOVERY approval. Filtered in SQL by the
+  // twin of isVideoExposed (modules/mmke/catalogue/videoExposureQuery.ts; parity-tested), so the limit applies to eligible rows only.
   const pages = await prisma.youTubeVideoPage.findMany({
-    where: { status: "PUBLISHED", archivedAt: null },
+    where: exposedVideoPageWhere({ kind: "DISCOVERY" }),
     include: { youtubeVideo: true },
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    take: Number.isFinite(limit) && limit < 1_000_000 ? Math.max(0, Math.floor(limit)) : undefined,
   });
-
-  return pages
-    .filter((page) =>
-      isYouTubeVideoPagePublic({
-        page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
-        youtubeVideo: { privacyStatus: page.youtubeVideo.privacyStatus, observabilityState: page.youtubeVideo.observabilityState },
-      })
-    )
-    .slice(0, limit)
-    .map((page) => ({ page, youtubeVideo: page.youtubeVideo }));
+  return pages.map(({ youtubeVideo, ...page }) => ({ page, youtubeVideo, discoverable: true }));
 }
 
 /**
@@ -139,19 +159,12 @@ export async function listPublishedVideoPages(limit: number): Promise<PublicVide
 export async function findPublicVideoPagesByYouTubeVideoIds(youtubeVideoIds: string[]): Promise<PublicVideoPageResult[]> {
   if (youtubeVideoIds.length === 0) return [];
 
+  // Related-video sections on entity pages are a DISCOVERY surface.
   const pages = await prisma.youTubeVideoPage.findMany({
-    where: { youtubeVideoId: { in: youtubeVideoIds }, status: "PUBLISHED", archivedAt: null },
+    where: { AND: [{ youtubeVideoId: { in: youtubeVideoIds } }, exposedVideoPageWhere({ kind: "DISCOVERY" })] },
     include: { youtubeVideo: true },
   });
-
-  return pages
-    .filter((page) =>
-      isYouTubeVideoPagePublic({
-        page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
-        youtubeVideo: { privacyStatus: page.youtubeVideo.privacyStatus, observabilityState: page.youtubeVideo.observabilityState },
-      })
-    )
-    .map((page) => ({ page, youtubeVideo: page.youtubeVideo }));
+  return pages.map(({ youtubeVideo, ...page }) => ({ page, youtubeVideo, discoverable: true }));
 }
 
 export interface UpdateVideoPageEditorialFieldsInput {
@@ -273,31 +286,45 @@ export async function unpublishVideoPage(id: string, actorId: string): Promise<Y
  * those cases.
  */
 export async function approveUnlistedPublication(id: string, actorId: string): Promise<YouTubeVideoPage> {
+  // Phase 6K-2: this is the PAGE-scope approval (a recorded, revocable approval row plus the legacy flag). It does NOT list the video on
+  // discovery surfaces or in any playlist: those are separate scopes (videoExposureRepository.approveExposure).
+  await approveExposure({ videoPageId: id, scope: "PAGE", actorId });
+  return prisma.youTubeVideoPage.findUniqueOrThrow({ where: { id } });
+}
+
+/** Revoking never touches status/archivedAt — it revokes the PAGE approval and, with it, every other exposure scope of the page. */
+export async function revokeUnlistedApproval(id: string, actorId: string): Promise<YouTubeVideoPage> {
+  await revokeExposure({ videoPageId: id, scope: "PAGE", actorId });
+  return prisma.youTubeVideoPage.findUniqueOrThrow({ where: { id } });
+}
+/**
+ * Archives a page. One transaction, under the page's row lock: the archive, the end of the page's public-exposure approvals (Phase 6K F11: an archived
+ * page cannot hold an approval, and restoring it never brings one back), and every audit entry commit together or not at all. Archiving an already
+ * archived page changes nothing.
+ */
+export async function archiveVideoPage(id: string, actorId: string): Promise<YouTubeVideoPage> {
   return prisma.$transaction(async (tx) => {
-    const page = await tx.youTubeVideoPage.findUnique({ where: { id }, include: { youtubeVideo: true } });
-    if (!page) {
+    await tx.$queryRaw`select id from youtube_video_pages where id = ${id} for update`;
+    const before = await tx.youTubeVideoPage.findUnique({ where: { id } });
+    if (!before) {
       throw new Error(`YouTubeVideoPage ${id} does not exist.`);
     }
-    if (page.youtubeVideo.privacyStatus !== "unlisted") {
-      throw new Error(
-        `YouTubeVideoPage ${id} cannot be approved for unlisted publication: the linked YouTube video's privacy status is "${page.youtubeVideo.privacyStatus}", not "unlisted".`
-      );
-    }
+    if (before.archivedAt) return before;
 
-    const approvedAt = new Date();
     const updated = await tx.youTubeVideoPage.update({
       where: { id },
-      data: { unlistedPublicationApprovedAt: approvedAt, updatedById: actorId },
+      data: { archivedAt: new Date(), updatedById: actorId },
     });
+    await revokeForArchiveIn(tx, id, actorId);
 
     await writeAuditLog(
       {
         actorId,
-        action: "VIDEO_PAGE_UNLISTED_PUBLICATION_APPROVED",
+        action: "VIDEO_PAGE_ARCHIVED",
         entityType: "YouTubeVideoPage",
         entityId: id,
-        beforeSnapshot: { unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
-        afterSnapshot: { unlistedPublicationApprovedAt: approvedAt },
+        beforeSnapshot: { archivedAt: before.archivedAt },
+        afterSnapshot: { archivedAt: updated.archivedAt },
       },
       tx
     );
@@ -306,74 +333,35 @@ export async function approveUnlistedPublication(id: string, actorId: string): P
   });
 }
 
-/** Revoking never touches status/archivedAt — only the approval timestamp. */
-export async function revokeUnlistedApproval(id: string, actorId: string): Promise<YouTubeVideoPage> {
-  const before = await prisma.youTubeVideoPage.findUnique({ where: { id } });
-  if (!before) {
-    throw new Error(`YouTubeVideoPage ${id} does not exist.`);
-  }
-
-  const updated = await prisma.youTubeVideoPage.update({
-    where: { id },
-    data: { unlistedPublicationApprovedAt: null, updatedById: actorId },
-  });
-
-  await writeAuditLog({
-    actorId,
-    action: "VIDEO_PAGE_UNLISTED_PUBLICATION_REVOKED",
-    entityType: "YouTubeVideoPage",
-    entityId: id,
-    beforeSnapshot: { unlistedPublicationApprovedAt: before.unlistedPublicationApprovedAt },
-    afterSnapshot: { unlistedPublicationApprovedAt: null },
-  });
-
-  return updated;
-}
-
-export async function archiveVideoPage(id: string, actorId: string): Promise<YouTubeVideoPage> {
-  const before = await prisma.youTubeVideoPage.findUnique({ where: { id } });
-  if (!before) {
-    throw new Error(`YouTubeVideoPage ${id} does not exist.`);
-  }
-
-  const updated = await prisma.youTubeVideoPage.update({
-    where: { id },
-    data: { archivedAt: new Date(), updatedById: actorId },
-  });
-
-  await writeAuditLog({
-    actorId,
-    action: "VIDEO_PAGE_ARCHIVED",
-    entityType: "YouTubeVideoPage",
-    entityId: id,
-    beforeSnapshot: { archivedAt: before.archivedAt },
-    afterSnapshot: { archivedAt: updated.archivedAt },
-  });
-
-  return updated;
-}
-
+/** Restores an archived page. It does NOT restore any approval: exposure of an unlisted video needs a fresh, explicit approval afterwards. */
 export async function unarchiveVideoPage(id: string, actorId: string): Promise<YouTubeVideoPage> {
-  const before = await prisma.youTubeVideoPage.findUnique({ where: { id } });
-  if (!before) {
-    throw new Error(`YouTubeVideoPage ${id} does not exist.`);
-  }
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`select id from youtube_video_pages where id = ${id} for update`;
+    const before = await tx.youTubeVideoPage.findUnique({ where: { id } });
+    if (!before) {
+      throw new Error(`YouTubeVideoPage ${id} does not exist.`);
+    }
+    if (!before.archivedAt) return before;
 
-  const updated = await prisma.youTubeVideoPage.update({
-    where: { id },
-    data: { archivedAt: null, updatedById: actorId },
+    const updated = await tx.youTubeVideoPage.update({
+      where: { id },
+      data: { archivedAt: null, updatedById: actorId },
+    });
+
+    await writeAuditLog(
+      {
+        actorId,
+        action: "VIDEO_PAGE_UNARCHIVED",
+        entityType: "YouTubeVideoPage",
+        entityId: id,
+        beforeSnapshot: { archivedAt: before.archivedAt },
+        afterSnapshot: { archivedAt: null, note: "Restoring does not restore any approval; an unlisted video needs a fresh approval." },
+      },
+      tx
+    );
+
+    return updated;
   });
-
-  await writeAuditLog({
-    actorId,
-    action: "VIDEO_PAGE_UNARCHIVED",
-    entityType: "YouTubeVideoPage",
-    entityId: id,
-    beforeSnapshot: { archivedAt: before.archivedAt },
-    afterSnapshot: { archivedAt: null },
-  });
-
-  return updated;
 }
 
 /** Studio-facing list (Phase 6G-1B): every catalogue page regardless of status, mirroring listCollections's "drafts too" convention. */

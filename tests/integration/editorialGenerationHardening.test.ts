@@ -8,7 +8,7 @@ import { getRecordingContext } from "../../modules/db/repositories/recordingCont
 import { checkContentSuggestionFreshness } from "../../modules/db/repositories/contentSuggestionRepository";
 import { generateRecordingEditorialSuggestion } from "../../modules/ai/gateway/generateRecordingEditorialSuggestion";
 import { FakeAIProvider } from "../../modules/ai/providers/fake/fakeAIProvider";
-import { RECORDING_EDITORIAL_PROMPT_V2 } from "../../modules/ai/prompts/recordingEditorial/recordingEditorialPromptV2";
+import { RECORDING_EDITORIAL_PROMPT_V3 } from "../../modules/ai/prompts/recordingEditorial/recordingEditorialPromptV3";
 
 // Phase 6H-7 — hardening tests for the truthfulness/trust boundary. These
 // exercise scenarios genuinely NOT covered by 6H-5/6H-6's own test files:
@@ -115,7 +115,7 @@ describe("A. EDITORIAL_PROSE contract enforcement", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.generationRequest.promptVersion).toBe(RECORDING_EDITORIAL_PROMPT_V2);
+      expect(result.generationRequest.promptVersion).toBe(RECORDING_EDITORIAL_PROMPT_V3);
       expect(result.generationRequest.suggestionType).toBe("EDITORIAL_PROSE");
       expect(result.suggestion.suggestionType).toBe("EDITORIAL_PROSE");
       // N: generation never self-approves.

@@ -1,22 +1,22 @@
 import Link from "next/link";
-import { MUSEUM_NAV_LINKS } from "./museumNavigation";
+import { MUSEUM_NAV_LINKS, type MuseumNavLink } from "./museumNavigation";
 
 // Phase 6J-1 — the Museum footer: the same real destinations as the header,
-// plus the brand line. No About/Contact/Privacy PAGES are linked that do not
+// plus the tagline (an editorial block, 6K-3 — not hard-coded). No About/Contact/Privacy PAGES are linked that do not
 // exist (see museumNavigation.ts — Contact and Privacy wait on real copy).
-export function MuseumFooter() {
+export function MuseumFooter({ tagline, links = MUSEUM_NAV_LINKS }: { tagline: string | null; links?: readonly MuseumNavLink[] }) {
   return (
     <footer className="museum-footer">
       <nav aria-label="Footer">
         <ul className="museum-footer__nav">
-          {MUSEUM_NAV_LINKS.map((link) => (
+          {links.map((link) => (
             <li key={link.href}>
               <Link href={link.href}>{link.label}</Link>
             </li>
           ))}
         </ul>
       </nav>
-      <p>Music Madras — Music. People. Heritage. Chennai.</p>
+      {tagline && <p>{tagline}</p>}
     </footer>
   );
 }

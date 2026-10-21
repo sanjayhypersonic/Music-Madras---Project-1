@@ -1,5 +1,6 @@
 import { prisma } from "../client";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { likeNeedle } from "../../mmke/search/searchText";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
 import {
   eligibleArtistWhere,
@@ -58,7 +59,7 @@ export async function searchComposers(
   const currentPage = clampPage(page);
   const where = {
     ...eligibleComposerWhere,
-    ...(query ? { name: { contains: query, mode: "insensitive" as const } } : {}),
+    ...(query ? { name: { contains: likeNeedle(query), mode: "insensitive" as const } } : {}),
   };
 
   const [rows, total] = await Promise.all([
@@ -98,7 +99,7 @@ export async function searchWorks(
         ? [
             {
               OR: [
-                { title: { contains: query, mode: "insensitive" as const } },
+                { title: { contains: likeNeedle(query), mode: "insensitive" as const } },
                 { alternateTitles: { has: query } },
               ],
             },
@@ -142,9 +143,9 @@ export async function searchVenues(
     ...(query
       ? {
           OR: [
-            { name: { contains: query, mode: "insensitive" as const } },
-            { city: { contains: query, mode: "insensitive" as const } },
-            { country: { contains: query, mode: "insensitive" as const } },
+            { name: { contains: likeNeedle(query), mode: "insensitive" as const } },
+            { city: { contains: likeNeedle(query), mode: "insensitive" as const } },
+            { country: { contains: likeNeedle(query), mode: "insensitive" as const } },
           ],
         }
       : {}),
@@ -192,8 +193,8 @@ export async function searchRecordings(
       ? {
           currentPublishedRevision: {
             OR: [
-              { title: { contains: query, mode: "insensitive" as const } },
-              { description: { contains: query, mode: "insensitive" as const } },
+              { title: { contains: likeNeedle(query), mode: "insensitive" as const } },
+              { description: { contains: likeNeedle(query), mode: "insensitive" as const } },
             ],
           },
         }
@@ -278,8 +279,8 @@ export async function searchProgrammes(
     ...(query
       ? {
           OR: [
-            { title: { contains: query, mode: "insensitive" as const } },
-            { notes: { contains: query, mode: "insensitive" as const } },
+            { title: { contains: likeNeedle(query), mode: "insensitive" as const } },
+            { notes: { contains: likeNeedle(query), mode: "insensitive" as const } },
           ],
         }
       : {}),
@@ -334,8 +335,8 @@ export async function searchPerformances(
     ...(query
       ? {
           OR: [
-            { programme: { title: { contains: query, mode: "insensitive" as const } } },
-            { venue: { name: { contains: query, mode: "insensitive" as const } } },
+            { programme: { title: { contains: likeNeedle(query), mode: "insensitive" as const } } },
+            { venue: { name: { contains: likeNeedle(query), mode: "insensitive" as const } } },
           ],
         }
       : {}),
@@ -383,8 +384,8 @@ export async function searchArtists(
     ...(query
       ? {
           OR: [
-            { name: { contains: query, mode: "insensitive" as const } },
-            { instrument: { contains: query, mode: "insensitive" as const } },
+            { name: { contains: likeNeedle(query), mode: "insensitive" as const } },
+            { instrument: { contains: likeNeedle(query), mode: "insensitive" as const } },
           ],
         }
       : {}),
@@ -423,8 +424,8 @@ export async function searchChoirs(
     ...(query
       ? {
           OR: [
-            { name: { contains: query, mode: "insensitive" as const } },
-            { directorName: { contains: query, mode: "insensitive" as const } },
+            { name: { contains: likeNeedle(query), mode: "insensitive" as const } },
+            { directorName: { contains: likeNeedle(query), mode: "insensitive" as const } },
           ],
         }
       : {}),
@@ -460,7 +461,7 @@ export async function searchConductors(
   const currentPage = clampPage(page);
   const where = {
     ...eligibleConductorWhere,
-    ...(query ? { name: { contains: query, mode: "insensitive" as const } } : {}),
+    ...(query ? { name: { contains: likeNeedle(query), mode: "insensitive" as const } } : {}),
   };
 
   const [rows, total] = await Promise.all([
@@ -501,8 +502,8 @@ export async function searchOrganisations(
     ...(query
       ? {
           OR: [
-            { name: { contains: query, mode: "insensitive" as const } },
-            { description: { contains: query, mode: "insensitive" as const } },
+            { name: { contains: likeNeedle(query), mode: "insensitive" as const } },
+            { description: { contains: likeNeedle(query), mode: "insensitive" as const } },
           ],
         }
       : {}),

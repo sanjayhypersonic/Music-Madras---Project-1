@@ -173,43 +173,66 @@ model StudioUser {
   invitationsSent     Invitation[]         @relation("InvitationInvitedBy")
   passwordResetTokens PasswordResetToken[]
 
-  composersCreated          Composer[]           @relation("ComposerCreatedBy")
-  composersUpdated          Composer[]           @relation("ComposerUpdatedBy")
-  worksCreated              MusicalWork[]        @relation("MusicalWorkCreatedBy")
-  worksUpdated              MusicalWork[]        @relation("MusicalWorkUpdatedBy")
-  programmesCreated         Programme[]          @relation("ProgrammeCreatedBy")
-  programmesUpdated         Programme[]          @relation("ProgrammeUpdatedBy")
-  performancesCreated       Performance[]        @relation("PerformanceCreatedBy")
-  performancesUpdated       Performance[]        @relation("PerformanceUpdatedBy")
-  recordingsCreated         Recording[]          @relation("RecordingCreatedBy")
-  recordingsUpdated         Recording[]          @relation("RecordingUpdatedBy")
-  revisionsCreated          RecordingRevision[]  @relation("RevisionCreatedBy")
-  revisionsUpdated          RecordingRevision[]  @relation("RevisionUpdatedBy")
-  artistsCreated            Artist[]             @relation("ArtistCreatedBy")
-  artistsUpdated            Artist[]             @relation("ArtistUpdatedBy")
-  choirsCreated             Choir[]              @relation("ChoirCreatedBy")
-  choirsUpdated             Choir[]              @relation("ChoirUpdatedBy")
-  conductorsCreated         Conductor[]          @relation("ConductorCreatedBy")
-  conductorsUpdated         Conductor[]          @relation("ConductorUpdatedBy")
-  organisationsCreated      Organisation[]       @relation("OrganisationCreatedBy")
-  organisationsUpdated      Organisation[]       @relation("OrganisationUpdatedBy")
-  venuesCreated             Venue[]              @relation("VenueCreatedBy")
-  venuesUpdated             Venue[]              @relation("VenueUpdatedBy")
-  instrumentsCreated        Instrument[]         @relation("InstrumentCreatedBy")
-  instrumentsUpdated        Instrument[]         @relation("InstrumentUpdatedBy")
-  collectionsCreated        Collection[]         @relation("CollectionCreatedBy")
-  collectionsUpdated        Collection[]         @relation("CollectionUpdatedBy")
-  occasionsCreated          Occasion[]           @relation("OccasionCreatedBy")
-  occasionsUpdated          Occasion[]           @relation("OccasionUpdatedBy")
-  learningGuidesCreated     LearningGuide[]      @relation("LearningGuideCreatedBy")
-  learningGuidesUpdated     LearningGuide[]      @relation("LearningGuideUpdatedBy")
-  educationalContentCreated EducationalContent[] @relation("EducationalContentCreatedBy")
-  educationalContentUpdated EducationalContent[] @relation("EducationalContentUpdatedBy")
-  editorialContentCreated   EditorialContent[]   @relation("EditorialContentCreatedBy")
-  editorialContentUpdated   EditorialContent[]   @relation("EditorialContentUpdatedBy")
-  videoPagesCreated         YouTubeVideoPage[]   @relation("YouTubeVideoPageCreatedBy")
-  videoPagesUpdated         YouTubeVideoPage[]   @relation("YouTubeVideoPageUpdatedBy")
-  auditLogEntries           AuditLogEntry[]      @relation("AuditLogActor")
+  composersCreated          Composer[]                    @relation("ComposerCreatedBy")
+  composersUpdated          Composer[]                    @relation("ComposerUpdatedBy")
+  worksCreated              MusicalWork[]                 @relation("MusicalWorkCreatedBy")
+  worksUpdated              MusicalWork[]                 @relation("MusicalWorkUpdatedBy")
+  programmesCreated         Programme[]                   @relation("ProgrammeCreatedBy")
+  programmesUpdated         Programme[]                   @relation("ProgrammeUpdatedBy")
+  performancesCreated       Performance[]                 @relation("PerformanceCreatedBy")
+  performancesUpdated       Performance[]                 @relation("PerformanceUpdatedBy")
+  recordingsCreated         Recording[]                   @relation("RecordingCreatedBy")
+  recordingsUpdated         Recording[]                   @relation("RecordingUpdatedBy")
+  revisionsCreated          RecordingRevision[]           @relation("RevisionCreatedBy")
+  revisionsUpdated          RecordingRevision[]           @relation("RevisionUpdatedBy")
+  artistsCreated            Artist[]                      @relation("ArtistCreatedBy")
+  artistsUpdated            Artist[]                      @relation("ArtistUpdatedBy")
+  choirsCreated             Choir[]                       @relation("ChoirCreatedBy")
+  choirsUpdated             Choir[]                       @relation("ChoirUpdatedBy")
+  conductorsCreated         Conductor[]                   @relation("ConductorCreatedBy")
+  conductorsUpdated         Conductor[]                   @relation("ConductorUpdatedBy")
+  organisationsCreated      Organisation[]                @relation("OrganisationCreatedBy")
+  organisationsUpdated      Organisation[]                @relation("OrganisationUpdatedBy")
+  venuesCreated             Venue[]                       @relation("VenueCreatedBy")
+  venuesUpdated             Venue[]                       @relation("VenueUpdatedBy")
+  instrumentsCreated        Instrument[]                  @relation("InstrumentCreatedBy")
+  instrumentsUpdated        Instrument[]                  @relation("InstrumentUpdatedBy")
+  collectionsCreated        Collection[]                  @relation("CollectionCreatedBy")
+  collectionsUpdated        Collection[]                  @relation("CollectionUpdatedBy")
+  occasionsCreated          Occasion[]                    @relation("OccasionCreatedBy")
+  occasionsUpdated          Occasion[]                    @relation("OccasionUpdatedBy")
+  learningGuidesCreated     LearningGuide[]               @relation("LearningGuideCreatedBy")
+  learningGuidesUpdated     LearningGuide[]               @relation("LearningGuideUpdatedBy")
+  educationalContentCreated EducationalContent[]          @relation("EducationalContentCreatedBy")
+  educationalContentUpdated EducationalContent[]          @relation("EducationalContentUpdatedBy")
+  // Phase 6K-1 — typed site settings, editorial content lifecycle, notifications
+  siteSettingsUpdated       SiteSetting[]                 @relation("SiteSettingUpdatedBy")
+  editorialContentPublished EditorialContent[]            @relation("EditorialContentPublishedBy")
+  editorialPublications     EditorialContentPublication[] @relation("EditorialPublicationActor")
+  notificationReads         StudioNotificationRead[]
+  notificationDeliveries    StudioNotificationDelivery[]
+  videoExposureApproved     VideoExposureApproval[]       @relation("VideoExposureApprovedBy")
+  videoExposureRevoked      VideoExposureApproval[]       @relation("VideoExposureRevokedBy")
+  videoExposureConfirmed    VideoExposureApproval[]       @relation("VideoExposureConfirmedBy")
+  videoMetadataResolved     VideoMetadataChange[]         @relation("VideoMetadataChangeResolvedBy")
+  videoReviewsDecided       VideoExposureReview[]         @relation("VideoReviewDecidedBy")
+  videoReviewDecisionsMade  VideoExposureReviewDecision[] @relation("VideoReviewDecisionActor")
+  featuredVideosPinned      FeaturedVideo[]               @relation("FeaturedVideoPinnedBy")
+  playlistPagesCreated      PlaylistPage[]                @relation("PlaylistPageCreatedBy")
+  playlistPagesUpdated      PlaylistPage[]                @relation("PlaylistPageUpdatedBy")
+  playlistPagesPublished    PlaylistPage[]                @relation("PlaylistPagePublishedBy")
+  playlistItemsAdded        PlaylistPageItem[]            @relation("PlaylistPageItemAddedBy")
+  playlistPublications      PlaylistPagePublication[]     @relation("PlaylistPublicationActor")
+  playlistInputsCreated     PlaylistContextInput[]        @relation("PlaylistInputCreatedBy")
+  playlistInputsAnswered    PlaylistContextInput[]        @relation("PlaylistInputAnsweredBy")
+  playlistInputsWithdrawn   PlaylistContextInput[]        @relation("PlaylistInputWithdrawnBy")
+  playlistDraftsRequested   PlaylistDraftProposal[]       @relation("PlaylistDraftRequestedBy")
+  playlistDraftsDecided     PlaylistDraftProposal[]       @relation("PlaylistDraftDecidedBy")
+  editorialContentCreated   EditorialContent[]            @relation("EditorialContentCreatedBy")
+  editorialContentUpdated   EditorialContent[]            @relation("EditorialContentUpdatedBy")
+  videoPagesCreated         YouTubeVideoPage[]            @relation("YouTubeVideoPageCreatedBy")
+  videoPagesUpdated         YouTubeVideoPage[]            @relation("YouTubeVideoPageUpdatedBy")
+  auditLogEntries           AuditLogEntry[]               @relation("AuditLogActor")
 
   // Phase 6B (ADR §16.3) — an editor changing a synced field's ownership,
   // and an editor resolving a sync conflict, are both meaningful actorial
@@ -449,17 +472,17 @@ model Performance {
   // Performance that a published revision also uses, the draft gets its own copy (this row) so the live page does not
   // change until publication; publishing copies the clone's participants back onto the original (keeping its slug and
   // public URL) and deletes the clone. Null on every ordinary Performance (all existing rows).
-  draftOfPerformanceId String?
+  draftOfPerformanceId     String?
   // A fingerprint (sha256) of the original's participants (performers with roles, choirs, conductors) at the moment this
   // clone was made. Promotion compares it with the original's participants at publication: if they differ, someone else
   // changed the original since, and the publication is refused instead of overwriting their change. Null on every
   // ordinary Performance.
   draftBaseParticipantsKey String?
 
-  programme Programme  @relation(fields: [programmeId], references: [id], onDelete: Restrict)
-  venue     Venue      @relation(fields: [venueId], references: [id], onDelete: Restrict)
-  createdBy StudioUser @relation("PerformanceCreatedBy", fields: [createdById], references: [id])
-  updatedBy StudioUser @relation("PerformanceUpdatedBy", fields: [updatedById], references: [id])
+  programme   Programme     @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  venue       Venue         @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  createdBy   StudioUser    @relation("PerformanceCreatedBy", fields: [createdById], references: [id])
+  updatedBy   StudioUser    @relation("PerformanceUpdatedBy", fields: [updatedById], references: [id])
   draftOf     Performance?  @relation("PerformanceDraftClone", fields: [draftOfPerformanceId], references: [id], onDelete: SetNull)
   draftClones Performance[] @relation("PerformanceDraftClone")
 
@@ -915,7 +938,7 @@ model Occasion {
   createdBy StudioUser @relation("OccasionCreatedBy", fields: [createdById], references: [id])
   updatedBy StudioUser @relation("OccasionUpdatedBy", fields: [updatedById], references: [id])
 
-  entityLinks EntityOccasion[]
+  entityLinks   EntityOccasion[]
   // Phase 6J-11B: the revisions that carry this occasion (revision-scoped links).
   revisionLinks RecordingRevisionOccasion[]
 
@@ -1012,6 +1035,25 @@ model EditorialContent {
   updatedBy      StudioUser      @relation("EditorialContentUpdatedBy", fields: [updatedById], references: [id])
   mediaResources MediaResource[]
 
+  // Phase 6K-1 — draft/publish lifecycle for site-level editorial copy (homepage introduction, story, section introductions,
+  // footer tagline, site SEO). The draft columns above are edited freely; the PUBLISHED SNAPSHOT columns below are the only
+  // thing the public site reads, so a draft edit can never silently change the live website. `version` counts draft edits
+  // (optimistic concurrency); `publishedVersion` is the draft version that was published.
+  status                  EditorialContentStatus @default(DRAFT)
+  seoTitle                String?
+  seoDescription          String?                @db.Text
+  version                 Int                    @default(1)
+  publishedTitle          String?
+  publishedBody           String?                @db.Text
+  publishedSeoTitle       String?
+  publishedSeoDescription String?                @db.Text
+  publishedVersion        Int?
+  publishedAt             DateTime?
+  publishedById           String?
+
+  publishedBy  StudioUser?                   @relation("EditorialContentPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  publications EditorialContentPublication[]
+
   @@index([archivedAt])
   @@map("editorial_content")
 }
@@ -1107,6 +1149,7 @@ model YouTubeVideo {
   mediaResources        MediaResource[]
   analyticsObservations YouTubeAnalyticsObservation[]
   videoPage             YouTubeVideoPage?
+  exposureReview        VideoExposureReview?
 
   @@map("youtube_videos")
 }
@@ -1130,8 +1173,9 @@ model YouTubePlaylist {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  items       YouTubePlaylistItem[]
-  collections Collection[]
+  items        YouTubePlaylistItem[]
+  collections  Collection[]
+  playlistPage PlaylistPage?
 
   @@map("youtube_playlists")
 }
@@ -1187,10 +1231,21 @@ model YouTubeVideoPage {
   updatedAt                     DateTime        @updatedAt
   createdById                   String
   updatedById                   String
+  // Phase 6K lifecycle hardening (F12) — the YouTube-side metadata an editor last reviewed for an APPROVED page (the normalised material fields,
+  // see modules/mmke/catalogue/metadataFingerprint.ts), and when. A later difference is recorded as a pending VideoMetadataChange; it never
+  // revokes the approval by itself. NULL until a baseline is recorded (at approval, or the first observation of an already approved page).
+  metadataReviewedSnapshot      Json?
+  metadataReviewedAt            DateTime?
 
   youtubeVideo YouTubeVideo @relation(fields: [youtubeVideoId], references: [id], onDelete: Cascade)
   createdBy    StudioUser   @relation("YouTubeVideoPageCreatedBy", fields: [createdById], references: [id])
   updatedBy    StudioUser   @relation("YouTubeVideoPageUpdatedBy", fields: [updatedById], references: [id])
+
+  // Phase 6K-2 — recorded, scoped, revocable exposure approvals (used only for UNLISTED videos).
+  exposureApprovals VideoExposureApproval[]
+  featured          FeaturedVideo?
+  playlistItems     PlaylistPageItem[]
+  metadataChanges   VideoMetadataChange[]
 
   @@index([archivedAt])
   @@map("youtube_video_pages")
@@ -1589,8 +1644,8 @@ model Source {
 
   approvedBy StudioUser? @relation("SourceApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
 
-  citations   Citation[]
-  entityLinks EntitySource[]
+  citations     Citation[]
+  entityLinks   EntitySource[]
   // Phase 6J-11B
   revisionLinks RecordingRevisionSource[]
 
@@ -1795,8 +1850,8 @@ model ContentGenerationRequest {
   // Generation/model metadata (6H-2 §30) — reproducibility/auditability
   // only. No provider is integrated in this phase; these stay null until
   // a future phase actually calls one. Never a place for secrets/API keys.
-  provider     String?
-  model        String?
+  provider      String?
+  model         String?
   promptVersion String?
 
   requestedById String
@@ -1822,7 +1877,7 @@ model ContentSuggestion {
   // e.g. "educationalListeningGuide" — null for suggestion types with no
   // single field target (INFORMATION_GAP, SEARCH_TERMINOLOGY,
   // CANONICAL_RELATIONSHIP_CANDIDATE).
-  targetField String?
+  targetField      String?
 
   // The proposal as originally produced — plain text for prose-shaped
   // types, JSON-serialized text for structured types (e.g.
@@ -1844,8 +1899,8 @@ model ContentSuggestion {
   reviewNote     String?                          @db.Text
   // The editor's own final wording, populated only when reviewDecision is
   // EDIT_AND_ACCEPT — proposedContent above is never overwritten.
-  finalContent String? @db.Text
-  reviewedAt   DateTime?
+  finalContent   String?                          @db.Text
+  reviewedAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1881,4 +1936,602 @@ model AuditLogEntry {
   @@index([entityType, entityId])
   @@index([timestamp])
   @@map("audit_log_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6K-1 — site settings, editorial publication history, notifications.
+// ---------------------------------------------------------------------------
+
+enum EditorialContentStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum EditorialPublicationKind {
+  PUBLISHED
+  UNPUBLISHED
+}
+
+/// One row per publish or unpublish of an EditorialContent block: the exact snapshot that became (or stopped being) public.
+model EditorialContentPublication {
+  id             String                   @id @default(uuid())
+  contentId      String
+  kind           EditorialPublicationKind
+  version        Int
+  title          String
+  body           String?                  @db.Text
+  seoTitle       String?
+  seoDescription String?                  @db.Text
+  actorId        String
+  createdAt      DateTime                 @default(now())
+
+  content EditorialContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  actor   StudioUser       @relation("EditorialPublicationActor", fields: [actorId], references: [id])
+
+  @@index([contentId, createdAt])
+  @@map("editorial_content_publications")
+}
+
+/// Typed site/editorial setting VALUES. The definitions (name, type, default, validation, owner, who may change it) live in code
+/// (modules/settings/settingsRegistry.ts); a row is only ever written for a key the registry defines, and a stored value that no
+/// longer validates is ignored in favour of the default. Never holds a secret. `version` is an optimistic-concurrency counter.
+model SiteSetting {
+  key           String   @id
+  valueJson     Json
+  schemaVersion Int      @default(1)
+  version       Int      @default(1)
+  updatedAt     DateTime @updatedAt
+  updatedById   String
+
+  updatedBy StudioUser @relation("SiteSettingUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("site_settings")
+}
+
+enum NotificationSeverity {
+  INFO
+  ACTION_REQUIRED
+  WARNING
+}
+
+enum NotificationStatus {
+  OPEN
+  RESOLVED
+}
+
+enum NotificationChannel {
+  IN_STUDIO
+  EMAIL
+}
+
+enum NotificationDeliveryStatus {
+  DELIVERED
+  PENDING
+  FAILED
+  SKIPPED
+}
+
+/// An in-Studio notification about ONE distinct condition. `dedupeKey` is unique: raising the same condition again never creates a
+/// second row, and re-notifies only when `contentFingerprint` shows the condition materially changed. `audienceAction` is the
+/// StudioAction a user needs in order to see it.
+model StudioNotification {
+  id                 String               @id @default(uuid())
+  kind               String
+  dedupeKey          String               @unique
+  severity           NotificationSeverity
+  title              String
+  body               String               @db.Text
+  href               String?
+  audienceAction     String
+  contentFingerprint String?
+  status             NotificationStatus   @default(OPEN)
+  occurrenceCount    Int                  @default(1)
+  firstRaisedAt      DateTime             @default(now())
+  lastRaisedAt       DateTime             @default(now())
+  resolvedAt         DateTime?
+  resolvedReason     String?
+
+  reads      StudioNotificationRead[]
+  deliveries StudioNotificationDelivery[]
+
+  @@index([status, audienceAction])
+  @@map("studio_notifications")
+}
+
+model StudioNotificationRead {
+  notificationId String
+  userId         String
+  readAt         DateTime @default(now())
+
+  notification StudioNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         StudioUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([notificationId, userId])
+  @@map("studio_notification_reads")
+}
+
+/// What was actually done to deliver a notification to a person on a channel: never "delivered" unless it was.
+model StudioNotificationDelivery {
+  id              String                     @id @default(uuid())
+  notificationId  String
+  channel         NotificationChannel
+  recipientUserId String
+  status          NotificationDeliveryStatus @default(PENDING)
+  attempts        Int                        @default(0)
+  lastAttemptAt   DateTime?
+  nextAttemptAt   DateTime?
+  reason          String?
+  /// A worker CLAIMS a delivery before sending: while claimedUntil is in the future no other worker will take it, and the claim token proves which
+  /// worker may record the outcome. An expired claim (a crashed worker) is simply retaken. Delivery is therefore at-least-once, never exactly-once.
+  claimedUntil    DateTime?
+  claimToken      String?
+  /// The notification was raised again (a new episode) while a worker held the claim: the claim stays valid, and once the in-flight send is recorded
+  /// the delivery returns to PENDING so the newer text is sent too.
+  requeueAfterClaim Boolean                  @default(false)
+  /// Non-sensitive description of the last failure (an error class and a bounded, scrubbed message); never credentials, addresses or message bodies.
+  lastError       String?
+  lastErrorAt     DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  notification StudioNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  recipient    StudioUser         @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel, recipientUserId])
+  @@index([status, nextAttemptAt])
+  @@map("studio_notification_deliveries")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6K lifecycle hardening (F10) — durable state of the scheduled stewardship job. Nothing here chooses a scheduler: whatever calls
+// /api/cron/stewardship leaves a record, so Studio can say when the job last ran, which step failed and why, and whether it has stopped running.
+// ---------------------------------------------------------------------------
+
+enum StewardshipRunStatus {
+  RUNNING
+  /// Every step succeeded.
+  SUCCEEDED
+  /// At least one step failed and at least one succeeded (or the run lost its lease part-way).
+  PARTIAL
+  /// Every step failed.
+  FAILED
+  /// The run stopped reporting (its lease expired while RUNNING) and was closed by a later run.
+  ABANDONED
+}
+
+enum StewardshipStepStatus {
+  RUNNING
+  SUCCEEDED
+  /// The step did part of its work: some batches completed and others failed (or its time budget ran out). Not a success, not a total failure.
+  PARTIAL
+  FAILED
+  /// Not started: the run lost its lease or was stopped first.
+  SKIPPED
+}
+
+model StewardshipRun {
+  id         String               @id @default(uuid())
+  trigger    String
+  status     StewardshipRunStatus @default(RUNNING)
+  startedAt  DateTime             @default(now())
+  finishedAt DateTime?
+
+  steps StewardshipStepRun[]
+
+  @@index([startedAt])
+  @@map("stewardship_runs")
+}
+
+model StewardshipStepRun {
+  id           String                @id @default(uuid())
+  runId        String
+  step         String
+  status       StewardshipStepStatus @default(RUNNING)
+  startedAt    DateTime              @default(now())
+  finishedAt   DateTime?
+  /// Counts only (items examined, changed, batches, batches that failed ...): never titles, addresses or other content.
+  counts       Json?
+  /// An error class and a bounded, scrubbed message for the failure: never a connection string, credential, address or stack trace.
+  errorKind    String?
+  errorSummary String?
+
+  run StewardshipRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([step, startedAt])
+  @@map("stewardship_step_runs")
+}
+
+/// A named lease so overlapping invocations cannot run the job twice at once. A lease expires by itself (a crashed run never blocks the next one).
+model StewardshipLease {
+  name        String   @id
+  holder      String
+  leaseUntil  DateTime
+  acquiredAt  DateTime @default(now())
+  heartbeatAt DateTime @default(now())
+
+  @@map("stewardship_leases")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6K-2 — explicit, scoped, recorded exposure of UNLISTED YouTube videos, and the review queue that decides it.
+//
+// Five things are kept distinct: (1) YouTube visibility (YouTubeVideo.privacyStatus, owned by the sync); (2) whether a Music Madras
+// page exists (YouTubeVideoPage); (3) whether that page is approved/published (YouTubeVideoPage.status, plus — for an unlisted
+// video — an active PAGE approval); (4) whether the video is approved for a specific public playlist (PLAYLIST approval);
+// (5) whether it may appear on discovery surfaces: catalogue, search, sitemap, homepage, featured (DISCOVERY approval).
+// An approval is never inferred from YouTube playlist membership or from any setting, and revoking one changes nothing on YouTube.
+// ---------------------------------------------------------------------------
+
+enum VideoExposureScope {
+  PAGE
+  DISCOVERY
+  PLAYLIST
+}
+
+/// A recorded approval (or revocation) of one scope of public exposure for one video page. Rows are never deleted: revocation sets
+/// revokedAt. At most one ACTIVE approval per (videoPageId, scope, playlistPageId) is enforced in code under a row lock on the page AND in the
+/// database by the partial unique index video_exposure_approvals_one_active_target_key (raw SQL in migration 20261022120000: Prisma cannot
+/// express a partial index, so it is not declared here).
+model VideoExposureApproval {
+  id             String              @id @default(uuid())
+  videoPageId    String
+  scope          VideoExposureScope
+  /// Set only for PLAYLIST scope: the Music Madras playlist page this approval applies to.
+  playlistPageId String?
+  /// Who approved. NULL only for an approval carried over from the old single flag, which recorded no approver: the platform never guesses one.
+  approvedById   String?
+  approvedAt     DateTime            @default(now())
+  note           String?             @db.Text
+  revokedById    String?
+  revokedAt      DateTime?
+  revokeNote     String?             @db.Text
+  /// Why it was revoked, so Studio can tell an editor's decision from a lifecycle invalidation (the video went private, the page was archived).
+  revokedReason  VideoExposureRevokeReason?
+  /// Who made this approval: an editor deciding in Studio, or the platform carrying a legacy approval over (6K-fix).
+  origin         VideoExposureOrigin @default(EDITOR)
+  /// For a carried-over approval: when (and by whom) an editor reconsidered it and chose to keep it. Null = not yet reconsidered.
+  confirmedAt    DateTime?
+  confirmedById  String?
+
+  confirmedBy  StudioUser?      @relation("VideoExposureConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  videoPage    YouTubeVideoPage @relation(fields: [videoPageId], references: [id], onDelete: Cascade)
+  playlistPage PlaylistPage?    @relation(fields: [playlistPageId], references: [id], onDelete: Restrict)
+  approvedBy   StudioUser?      @relation("VideoExposureApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  revokedBy    StudioUser?      @relation("VideoExposureRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([videoPageId, scope])
+  @@index([scope, revokedAt])
+  @@map("video_exposure_approvals")
+}
+
+/// Why an approval was revoked. EDITOR and REVIEW_DECISION and HOLD are people's decisions; VIDEO_PRIVATE, VIDEO_UNAVAILABLE and PAGE_ARCHIVED are
+/// lifecycle invalidations (the approval no longer describes the video's situation, so a FRESH approval is needed); RECONCILED and MIGRATION are
+/// housekeeping by the platform. VIDEO_UNAVAILABLE is RETIRED: no code writes it (an unavailable or deleted video is hidden by the exposure rule but
+/// keeps its approvals); the value stays only because removing an enum value needs a migration and any row carrying it is history.
+enum VideoExposureRevokeReason {
+  EDITOR
+  REVIEW_DECISION
+  HOLD
+  VIDEO_PRIVATE
+  VIDEO_UNAVAILABLE
+
+  PAGE_ARCHIVED
+  RECONCILED
+  MIGRATION
+}
+
+/// Where an approval came from. EDITOR: a person approved it in Studio. MIGRATED_LEGACY: carried over by the migration from the old single
+/// approval flag so nothing was delisted. RECONCILED_LEGACY: carried over by the reconciliation procedure from a flag set by an earlier
+/// version of the software. The two legacy origins appear in Studio for reconsideration (confirm, or withdraw).
+enum VideoExposureOrigin {
+  EDITOR
+  MIGRATED_LEGACY
+  RECONCILED_LEGACY
+}
+
+enum VideoMetadataChangeStatus {
+  /// A material change was detected after approval and no editor has looked at it yet. The page stays public meanwhile.
+  PENDING
+  /// An editor reviewed the changed metadata and accepted it.
+  ACKNOWLEDGED
+  /// The metadata went back to what was reviewed, so there is nothing to review.
+  REVERTED
+  /// The approval ended (revoked, or lifecycle invalidation) before the change was reviewed, so the review no longer applies.
+  VOIDED
+}
+
+/// One detected material change to an approved page's YouTube-side metadata, from first detection to resolution. At most one PENDING row exists per
+/// page (partial unique index video_metadata_changes_one_pending_key, raw SQL in migration 20261022110000); further changes while it is pending update
+/// it instead of creating another, so repeated syncs never multiply reviews.
+model VideoMetadataChange {
+  id                  String                    @id @default(uuid())
+  videoPageId         String
+  status              VideoMetadataChangeStatus @default(PENDING)
+  /// Fingerprint of what was last reviewed, and of what is there now.
+  baselineFingerprint String
+  observedFingerprint String
+  /// Names of the material fields that differ from what was reviewed (title, description, thumbnail, ...).
+  changedFields       String[]
+  /// For each changed field: the reviewed value and the current value, shortened, so an editor sees what changed without opening YouTube.
+  changeSummary       Json?
+  detectedAt          DateTime                  @default(now())
+  lastObservedAt      DateTime                  @default(now())
+  resolvedAt          DateTime?
+  resolvedById        String?
+  resolutionNote      String?                   @db.Text
+
+  videoPage  YouTubeVideoPage @relation(fields: [videoPageId], references: [id], onDelete: Cascade)
+  resolvedBy StudioUser?      @relation("VideoMetadataChangeResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([videoPageId, status])
+  @@index([status, detectedAt])
+  @@map("video_metadata_changes")
+}
+
+enum VideoReviewState {
+  PENDING
+  INFO_REQUESTED
+  DEFERRED
+  DECLINED
+  APPROVED
+}
+
+enum VideoExposureHold {
+  RIGHTS
+  COPYRIGHT
+  PRIVACY
+  OTHER
+}
+
+enum VideoReviewDecisionKind {
+  APPROVE
+  REQUEST_INFO
+  DEFER
+  DECLINE
+  REVOKE
+  /// A rights/copyright/privacy hold was recorded (earlier versions stored this as DECLINE).
+  HOLD_SET
+  /// A hold was cleared (earlier versions stored this as REQUEST_INFO).
+  HOLD_CLEARED
+}
+
+/// The review state of one unlisted video (keyed by YouTubeVideo.id). `proposalFingerprint` hashes the facts that matter to the
+/// decision, so an unchanged item is never surfaced again as new and a changed one is. A `holdReason` (rights, copyright, ...) blocks
+/// approval until a person clears it.
+model VideoExposureReview {
+  id                  String             @id @default(uuid())
+  youtubeVideoId      String             @unique
+  state               VideoReviewState   @default(PENDING)
+  proposalFingerprint String
+  deferUntil          DateTime?
+  infoRequest         String?            @db.Text
+  holdReason          VideoExposureHold?
+  holdNote            String?            @db.Text
+  decidedById         String?
+  decidedAt           DateTime?
+  firstSurfacedAt     DateTime           @default(now())
+  lastSurfacedAt      DateTime           @default(now())
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  youtubeVideo YouTubeVideo                  @relation(fields: [youtubeVideoId], references: [id], onDelete: Cascade)
+  decidedBy    StudioUser?                   @relation("VideoReviewDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisions    VideoExposureReviewDecision[]
+
+  @@index([state, deferUntil])
+  @@map("video_exposure_reviews")
+}
+
+/// The history of decisions on a review: who decided what, when, and with what note and scopes.
+model VideoExposureReviewDecision {
+  id        String                  @id @default(uuid())
+  reviewId  String
+  kind      VideoReviewDecisionKind
+  note      String?                 @db.Text
+  scopes    Json?
+  actorId   String
+  createdAt DateTime                @default(now())
+
+  review VideoExposureReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  actor  StudioUser          @relation("VideoReviewDecisionActor", fields: [actorId], references: [id])
+
+  @@index([reviewId, createdAt])
+  @@map("video_exposure_review_decisions")
+}
+
+/// An editorially PINNED featured video (Phase 6K-3). Featured content is hybrid: pinned rows come first, in `position` order, and any
+/// remaining slots are filled automatically from the shared eligible set (modules/mmke/featured). A pin never overrides eligibility: a
+/// pinned video that is no longer listable (draft, archived, private, unavailable, approval revoked, on hold) is simply not shown, and
+/// Studio says so. Unfeaturing deletes the row (the audit log keeps the history).
+model FeaturedVideo {
+  id          String   @id @default(uuid())
+  videoPageId String   @unique
+  /// 1..n, unique: reordering renumbers in two phases (see featuredVideoRepository.ts) so a legitimate multi-row reorder never trips it.
+  position    Int      @unique
+  note        String?  @db.Text
+  pinnedById  String
+  pinnedAt    DateTime @default(now())
+
+  videoPage YouTubeVideoPage @relation(fields: [videoPageId], references: [id], onDelete: Cascade)
+  pinnedBy  StudioUser       @relation("FeaturedVideoPinnedBy", fields: [pinnedById], references: [id])
+
+  @@map("featured_videos")
+}
+
+enum PlaylistPageStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// A Music Madras PLAYLIST PAGE (Phase 6K-4): a curated, editorial page about a themed set of videos. It is NOT a mirror of a YouTube playlist —
+/// membership (`items`) is curated here and is a separate fact from YouTube's own playlist membership, which grants nothing. The draft columns are
+/// edited freely; the `published*` snapshot (including the member list) is the only thing the public site reads. A page may be published only
+/// when the CURRENT draft passes the configurable quality rubric; a page that fails stays a draft.
+model PlaylistPage {
+  id                      String             @id @default(uuid())
+  slug                    String             @unique
+  /// Optional provenance: the synced YouTube playlist this page was started from.
+  youtubePlaylistId       String?            @unique
+  status                  PlaylistPageStatus @default(DRAFT)
+  title                   String
+  summary                 String?            @db.Text
+  body                    String?            @db.Text
+  seoTitle                String?
+  seoDescription          String?            @db.Text
+  /// Counts draft edits, including membership changes (optimistic concurrency; publishing names the version reviewed).
+  version                 Int                @default(1)
+  archivedAt              DateTime?
+  publishedTitle          String?
+  publishedSummary        String?            @db.Text
+  publishedBody           String?            @db.Text
+  publishedSeoTitle       String?
+  publishedSeoDescription String?            @db.Text
+  /// Ordered video-page ids at publish time.
+  publishedMemberIds      Json?
+  /// The editor's per-member notes AS PUBLISHED ({ videoPageId: note }). The public page reads notes from here, never from the editable draft rows.
+  publishedMemberNotes    Json?
+  /// The texts of the human-supplied context that stood behind the page when it was published (NULL for a page published before this was recorded).
+  publishedContextTexts   Json?
+  /// The normalised published title, set only while the page is published and not archived. Unique, so two pages can never be live under the same
+  /// title even if both publish at the same moment (NULLs do not collide). Maintained by playlistPageRepository.
+  publishedTitleKey       String?            @unique
+  publishedVersion        Int?
+  publishedAt             DateTime?
+  publishedById           String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  createdById             String
+  updatedById             String
+
+  youtubePlaylist   YouTubePlaylist?          @relation(fields: [youtubePlaylistId], references: [id], onDelete: SetNull)
+  createdBy         StudioUser                @relation("PlaylistPageCreatedBy", fields: [createdById], references: [id])
+  updatedBy         StudioUser                @relation("PlaylistPageUpdatedBy", fields: [updatedById], references: [id])
+  publishedBy       StudioUser?               @relation("PlaylistPagePublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  items             PlaylistPageItem[]
+  publications      PlaylistPagePublication[]
+  exposureApprovals VideoExposureApproval[]
+  contextInputs     PlaylistContextInput[]
+  draftProposals    PlaylistDraftProposal[]
+
+  @@index([status, archivedAt])
+  @@map("playlist_pages")
+}
+
+/// One curated member of a playlist page, in order.
+model PlaylistPageItem {
+  id             String   @id @default(uuid())
+  playlistPageId String
+  videoPageId    String
+  position       Int
+  note           String?  @db.Text
+  addedById      String
+  addedAt        DateTime @default(now())
+
+  playlistPage PlaylistPage     @relation(fields: [playlistPageId], references: [id], onDelete: Cascade)
+  videoPage    YouTubeVideoPage @relation(fields: [videoPageId], references: [id], onDelete: Cascade)
+  addedBy      StudioUser       @relation("PlaylistPageItemAddedBy", fields: [addedById], references: [id])
+
+  @@unique([playlistPageId, videoPageId])
+  /// Positions are 1..n and unique per playlist page; reordering renumbers in two phases so it never trips this (see playlistPageRepository.ts).
+  @@unique([playlistPageId, position])
+  @@map("playlist_page_items")
+}
+
+/// Every publish and unpublish of a playlist page, with the exact snapshot, so what was live at any time is reconstructable.
+model PlaylistPagePublication {
+  id             String                   @id @default(uuid())
+  playlistPageId String
+  kind           EditorialPublicationKind
+  version        Int
+  snapshot       Json
+  actorId        String
+  createdAt      DateTime                 @default(now())
+
+  playlistPage PlaylistPage @relation(fields: [playlistPageId], references: [id], onDelete: Cascade)
+  actor        StudioUser   @relation("PlaylistPublicationActor", fields: [actorId], references: [id])
+
+  @@index([playlistPageId, createdAt])
+  @@map("playlist_page_publications")
+}
+
+enum PlaylistInputSource {
+  AI_QUESTION
+  EDITOR_NOTE
+}
+
+enum PlaylistInputStatus {
+  AWAITING_ANSWER
+  ACTIVE
+  SKIPPED
+  WITHDRAWN
+}
+
+/// Context a PERSON has supplied about a playlist page: an answer to an interview question (the AI proposes one question at a time; it never
+/// supplies answers) or a note an editor wrote. Only ACTIVE inputs are evidence — for the quality rubric and for drafting. An unanswered question
+/// is AWAITING_ANSWER (at most one per page); SKIPPED and WITHDRAWN inputs are kept for the record but are never evidence.
+model PlaylistContextInput {
+  id             String              @id @default(uuid())
+  playlistPageId String
+  source         PlaylistInputSource
+  status         PlaylistInputStatus
+  question       String?             @db.Text
+  body           String?             @db.Text
+  /// Set for AI-proposed questions: which provider/model/prompt produced the question.
+  provider       String?
+  model          String?
+  promptVersion  String?
+  createdById    String
+  createdAt      DateTime            @default(now())
+  answeredById   String?
+  answeredAt     DateTime?
+  withdrawnById  String?
+  withdrawnAt    DateTime?
+
+  playlistPage PlaylistPage @relation(fields: [playlistPageId], references: [id], onDelete: Cascade)
+  createdBy    StudioUser   @relation("PlaylistInputCreatedBy", fields: [createdById], references: [id])
+  answeredBy   StudioUser?  @relation("PlaylistInputAnsweredBy", fields: [answeredById], references: [id], onDelete: SetNull)
+  withdrawnBy  StudioUser?  @relation("PlaylistInputWithdrawnBy", fields: [withdrawnById], references: [id], onDelete: SetNull)
+
+  @@index([playlistPageId, status])
+  @@map("playlist_context_inputs")
+}
+
+enum PlaylistDraftTarget {
+  SUMMARY
+  BODY
+}
+
+enum PlaylistDraftStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+}
+
+/// A DRAFT of a playlist page's summary or body proposed by the AI from approved evidence only. It changes nothing by itself: a person accepts it
+/// into the page's draft (which then still has to pass the quality rubric and be published by someone who may publish). `claims` records, for each
+/// statement, the evidence it rests on; `evidenceFingerprint` identifies the evidence set it was written from, so a proposal made from evidence
+/// that has since changed cannot be accepted.
+model PlaylistDraftProposal {
+  id                  String              @id @default(uuid())
+  playlistPageId      String
+  target              PlaylistDraftTarget
+  proposedContent     String              @db.Text
+  claims              Json
+  evidenceFingerprint String
+  provider            String
+  model               String
+  promptVersion       String
+  status              PlaylistDraftStatus @default(PROPOSED)
+  requestedById       String
+  createdAt           DateTime            @default(now())
+  decidedById         String?
+  decidedAt           DateTime?
+
+  playlistPage PlaylistPage @relation(fields: [playlistPageId], references: [id], onDelete: Cascade)
+  requestedBy  StudioUser   @relation("PlaylistDraftRequestedBy", fields: [requestedById], references: [id])
+  decidedBy    StudioUser?  @relation("PlaylistDraftDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([playlistPageId, status])
+  @@map("playlist_draft_proposals")
 }

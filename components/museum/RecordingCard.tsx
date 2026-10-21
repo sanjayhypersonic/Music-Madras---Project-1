@@ -31,7 +31,7 @@ export function RecordingCard({ page, video }: RecordingCardProps) {
           <span className="museum-media__placeholder" aria-hidden="true" />
         )}
       </span>
-      <span className="museum-recording-card__title">{video.title ?? "Untitled recording"}</span>
+      <span className="museum-recording-card__title">{video.title ?? "Untitled video"}</span>
     </Link>
   );
 }

@@ -15,6 +15,10 @@ const ENTITY_LINKS = [
   { href: "/studio/catalogue/learning-guides", label: "Learning Guides" },
   { href: "/studio/catalogue/sources", label: "Sources" },
   { href: "/studio/catalogue/rights", label: "Rights Information" },
+  { href: "/studio/catalogue/site-content", label: "Site content (homepage, footer, SEO)" },
+  { href: "/studio/catalogue/unlisted-review", label: "Unlisted videos awaiting a decision" },
+  { href: "/studio/catalogue/featured", label: "Featured videos" },
+  { href: "/studio/catalogue/playlists", label: "Playlist pages" },
 ];
 
 export default function CataloguePage() {

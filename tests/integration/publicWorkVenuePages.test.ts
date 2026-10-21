@@ -20,6 +20,7 @@ import {
 } from "../../modules/db/repositories/recordingRepository";
 import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import { approveUnlistedPublication, createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
+import { approveExposure } from "../../modules/db/repositories/videoExposureRepository";
 import { createCollection, addRecordingToCollection, publishCollection, archiveCollection } from "../../modules/db/repositories/collectionRepository";
 import { getComposerEntityPageData, getPublicRecordingPageData, getPublicWorkPageData, getVenueEntityPageData } from "../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveMusicalWork } from "../../modules/db/repositories/musicalWorkRepository";
@@ -255,6 +256,9 @@ describe("WORK — getPublicWorkPageData", () => {
       expect(slugsBefore).not.toContain(pages[3].slug); // unavailable
 
       await approveUnlistedPublication(pages[2].id, fixture.user.id);
+      expect((await getPublicWorkPageData(fixture.work.slug))!.videos.map((v) => v.slug)).not.toContain(pages[2].slug); // page approval alone does not list it (6K-2)
+
+      await approveExposure({ videoPageId: pages[2].id, scope: "DISCOVERY", actorId: fixture.user.id });
       const afterApproval = await getPublicWorkPageData(fixture.work.slug);
       expect(afterApproval!.videos.map((v) => v.slug)).toContain(pages[2].slug);
     } finally {

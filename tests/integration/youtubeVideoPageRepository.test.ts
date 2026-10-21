@@ -1,3 +1,4 @@
+import { approveExposure } from "../../modules/db/repositories/videoExposureRepository";
 import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
@@ -419,8 +420,15 @@ describe("YouTubeVideoPage repository against a real database", () => {
 
     await approveUnlistedPublication(created.id, user.id);
 
-    const afterApproval = await listPublishedVideoPages(50);
-    expect(afterApproval.some((r) => r.page.id === created.id)).toBe(true);
+    // Phase 6K-2: the page approval alone makes the PAGE public by its URL; LISTING needs its own recorded DISCOVERY approval.
+    const afterPageApproval = await listPublishedVideoPages(50);
+    expect(afterPageApproval.some((r) => r.page.id === created.id)).toBe(false);
+    expect((await findPublishedBySlug(created.slug))?.discoverable).toBe(false);
+
+    await approveExposure({ videoPageId: created.id, scope: "DISCOVERY", actorId: user.id });
+    const afterDiscoveryApproval = await listPublishedVideoPages(50);
+    expect(afterDiscoveryApproval.some((r) => r.page.id === created.id)).toBe(true);
+    expect((await findPublishedBySlug(created.slug))?.discoverable).toBe(true);
   });
 
   it("listPublishedVideoPages excludes an archived page even if it was published", async () => {

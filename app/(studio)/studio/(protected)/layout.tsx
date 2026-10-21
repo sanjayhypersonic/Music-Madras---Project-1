@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { StudioNav } from "../../../../components/studio/StudioNav";
 import { getCurrentStudioSession, signOutCurrentUser } from "../../../../modules/auth/authService";
 import { can, canManageUsers } from "../../../../modules/auth/policy";
+import { countUnreadNotifications } from "../../../../modules/db/repositories/studioNotificationRepository";
+import { runStewardshipSweepIfStale } from "../../../../modules/stewardship/runStewardshipSweepIfStale";
 
 // Phase 6J-3B: the layout is a sidebar + content grid; StudioNav (client) adds the\n// current-page marker and the mobile disclosure, with the account block and the\n// sign-out Server Action passed in as server-rendered children.\n//\n// The authentication + account-status gate for every real Studio screen
 // (brief §2/§3: "no fake functionality" also means no page that merely
@@ -16,7 +18,9 @@ export default async function ProtectedStudioLayout({ children }: { children: Re
     redirect("/studio/signin");
   }
 
-  const { role, name, email } = session.user;
+  const { id: userId, role, name, email } = session.user;
+  await runStewardshipSweepIfStale();
+  const unread = await countUnreadNotifications({ userId, role });
 
   async function signOut() {
     "use server";
@@ -26,6 +30,7 @@ export default async function ProtectedStudioLayout({ children }: { children: Re
 
   const navLinks: Array<{ href: string; label: string }> = [
     { href: "/studio/dashboard", label: "Dashboard" },
+    { href: "/studio/notifications", label: unread > 0 ? `Notifications (${unread})` : "Notifications" },
     { href: "/studio/catalogue/videos", label: "YouTube Videos" },
     { href: "/studio/recordings", label: "Recordings" },
     { href: "/studio/catalogue", label: "Catalogue" },
@@ -40,6 +45,9 @@ export default async function ProtectedStudioLayout({ children }: { children: Re
   }
   if (can(role, "AUDIT_VIEW")) {
     navLinks.push({ href: "/studio/audit", label: "Audit Log" });
+  }
+  if (can(role, "SETTINGS_MANAGE")) {
+    navLinks.push({ href: "/studio/health", label: "Health" });
   }
   navLinks.push({ href: "/studio/settings", label: "Settings" });
 

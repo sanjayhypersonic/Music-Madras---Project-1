@@ -3,46 +3,52 @@ import type { Metadata } from "next";
 import { after } from "next/server";
 import Image from "next/image";
 import Link from "next/link";
-import { listPublishedVideoPages } from "../../modules/db/repositories/youtubeVideoPageRepository";
+import { getHomepageFeatured } from "../../modules/db/repositories/featuredVideoRepository";
+import { resolveEditorialBlocks } from "../../modules/db/repositories/editorialContentRepository";
 import { listPublishedCollections } from "../../modules/db/repositories/collectionRepository";
 import { ARCHIVE_CATEGORIES, CONTINUE_EXPLORING_LINKS } from "../../modules/mmke/homepage/archiveCategories";
 import { RecordingCard } from "../../components/museum/RecordingCard";
+import { EditorialBlockBody } from "../../components/museum/EditorialBlockBody";
 import { trackPublicPageView } from "../../modules/analytics/trackPublicPageView";
 
 // Phase 6G-3 — the real Museum homepage. "Archive at the foundation,
 // discovery at the surface": every fact rendered here comes from MMKE
-// repositories (listPublishedVideoPages, listPublishedCollections), never
-// from a hardcoded array or the legacy GAIS prototype. Server Component —
-// no client-side data fetching, only ThemeToggle (already client) is
-// interactive.
+// repositories, never from a hardcoded array or the legacy GAIS prototype.
+// Server Component — no client-side data fetching.
+//
+// Phase 6K-3 — the words on this page are editorial blocks (published snapshots, with the transitional built-in wording only until a block
+// is first published), the featured videos come from the shared exposure rule via the hybrid pinned + automatic selection (the number of
+// slots and the ranking are settings), and nothing visibility-related is decided here. What remains in this file is structure: section
+// headings that name real routes, and brand/UI labels (listed in the exception register).
 
 const SITE_ORIGIN = getSiteOrigin();
-const RECENT_RECORDINGS_LIMIT = 6;
+const HOME_BLOCKS = ["museum-home-intro", "museum-home-story", "museum-site-seo"] as const;
 
 // Plain dynamic SSR, matching /videos/[slug] (no generateStaticParams, no
-// revalidate, no ISR): a newly published recording or collection must
+// revalidate, no ISR): a newly published video or collection must
 // appear without requiring a redeploy, so this is never statically cached
 // at build time despite having no per-request input of its own.
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_ORIGIN),
-  title: "Music Madras — Preserving Chennai's Musical Heritage",
-  description:
-    "Music Madras is a growing digital archive documenting Chennai's Western Classical Music heritage — its composers, performers, choirs, venues, performances and recordings.",
-  alternates: { canonical: "/" },
-  openGraph: {
-    title: "Music Madras — Preserving Chennai's Musical Heritage",
-    description: "A growing digital archive documenting Chennai's Western Classical Music heritage.",
-    type: "website",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const seo = (await resolveEditorialBlocks(["museum-site-seo"])).get("museum-site-seo");
+  return {
+    metadataBase: new URL(SITE_ORIGIN),
+    ...(seo?.seoTitle ? { title: seo.seoTitle } : {}),
+    ...(seo?.seoDescription ? { description: seo.seoDescription } : {}),
+    alternates: { canonical: "/" },
+    openGraph: {
+      ...(seo?.seoTitle ? { title: seo.seoTitle } : {}),
+      ...(seo?.seoDescription ? { description: seo.seoDescription } : {}),
+      type: "website",
+    },
+  };
+}
 
 export default async function MuseumHomePage() {
-  const [recentRecordings, collections] = await Promise.all([
-    listPublishedVideoPages(RECENT_RECORDINGS_LIMIT),
-    listPublishedCollections(),
-  ]);
+  const [featured, collections, blocks] = await Promise.all([getHomepageFeatured(), listPublishedCollections(), resolveEditorialBlocks(HOME_BLOCKS)]);
+  const intro = blocks.get("museum-home-intro");
+  const story = blocks.get("museum-home-story");
 
   after(() => trackPublicPageView({ path: "/" }));
 
@@ -58,12 +64,12 @@ export default async function MuseumHomePage() {
           priority
         />
         <p className="museum-eyebrow">The Music Madras Archive</p>
-        <h1 id="hero-heading">Preserving Chennai&rsquo;s Musical Heritage</h1>
-        <p className="museum-hero__lede">
-          Music Madras documents and preserves Chennai&rsquo;s Western Classical Music tradition — its composers,
-          performers, choirs, conductors, venues and recordings — so the city&rsquo;s concert life remains
-          discoverable for generations to come.
-        </p>
+        <h1 id="hero-heading">{intro?.title ?? "Music Madras"}</h1>
+        {intro?.body && (
+          <div className="museum-hero__lede">
+            <EditorialBlockBody body={intro.body} headingOffset={1} />
+          </div>
+        )}
         <Link href="/archive" className="museum-button">
           Explore the Archive
         </Link>
@@ -93,24 +99,23 @@ export default async function MuseumHomePage() {
       </section>
 
       <section id="discover" className="museum-section" aria-labelledby="discover-heading">
-        <h2 id="discover-heading">Discover Music Madras</h2>
-        <p className="museum-section__intro">
-          Every recording shown here has been published to the Music Madras archive.
-        </p>
-        {recentRecordings.length > 0 ? (
+        <h2 id="discover-heading">Featured videos</h2>
+        {featured.length > 0 ? (
           <ul className="museum-recording-grid">
-            {recentRecordings.map(({ page, youtubeVideo }) => (
+            {featured.map(({ page, youtubeVideo }) => (
               <li key={page.id}>
                 <RecordingCard page={page} video={youtubeVideo} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className="museum-empty-state">
-            No recordings have been published to the public archive yet. As performances are catalogued and
-            approved, they will appear here.
-          </p>
+          <p className="museum-empty-state">No videos have been published to the Museum yet.</p>
         )}
+        <p>
+          <Link href="/videos" className="museum-button">
+            Browse all videos →
+          </Link>
+        </p>
       </section>
 
       {collections.length > 0 && (
@@ -135,20 +140,12 @@ export default async function MuseumHomePage() {
         </section>
       )}
 
-      <section id="story" className="museum-section" aria-labelledby="story-heading">
-        <h2 id="story-heading">What Music Madras Preserves</h2>
-        <p>
-          Music Madras exists to document more than a video library. Behind every recording is a performance — a
-          programme, a venue, an ensemble, and the people who brought it to life. Over time, the archive will connect
-          composers to the musical works they wrote, works to the programmes and performances that featured them, and
-          performances to the recordings and places where they took place.
-        </p>
-        <p>
-          Chennai&rsquo;s Western Classical Music tradition has been carried for decades by choirs, ensembles,
-          soloists and conductors performing in churches, halls and schools across the city. Music Madras is building
-          the record of that tradition — performance by performance, recording by recording.
-        </p>
-      </section>
+      {story && (
+        <section id="story" className="museum-section" aria-labelledby="story-heading">
+          <h2 id="story-heading">{story.title}</h2>
+          <EditorialBlockBody body={story.body} headingOffset={1} />
+        </section>
+      )}
 
       <section className="museum-section" aria-labelledby="continue-heading">
         <h2 id="continue-heading">Continue Exploring</h2>
@@ -159,8 +156,8 @@ export default async function MuseumHomePage() {
             </li>
           ))}
         </ul>
-        <Link href="#discover" className="museum-button">
-          See Published Recordings
+        <Link href="/videos" className="museum-button">
+          Browse all videos
         </Link>
       </section>
     </>

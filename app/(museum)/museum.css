@@ -561,6 +561,27 @@
    visual system.
 --------------------------------------------------------------------- */
 
+/* Phase 6K-3 — bypass block (WCAG 2.4.1): hidden until it receives keyboard focus, then the first thing on the page. */
+.museum-skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 100;
+  padding: 0.6rem 1.25rem;
+  border-radius: var(--mm-radius-pill);
+  background: var(--mm-discovery);
+  color: var(--mm-on-discovery);
+  font-weight: 600;
+}
+
+.museum-skip-link:focus {
+  top: 0.75rem;
+}
+
+main:focus {
+  outline: none;
+}
+
 .museum-visually-hidden {
   position: absolute;
   width: 1px;

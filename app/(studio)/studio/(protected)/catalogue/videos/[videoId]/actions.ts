@@ -13,7 +13,11 @@ import {
   unpublishVideoPage,
   updateEditorialFields,
 } from "../../../../../../../modules/db/repositories/youtubeVideoPageRepository";
+import { approveExposure, revokeExposure } from "../../../../../../../modules/db/repositories/videoExposureRepository";
+import { acknowledgeMetadataChange } from "../../../../../../../modules/db/repositories/videoMetadataReviewRepository";
 import { createRecordingFromYouTubeVideo } from "../../../../../../../modules/db/repositories/recordingIntakeRepository";
+import { clearReviewHold, setReviewHold } from "../../../../../../../modules/db/repositories/unlistedReviewRepository";
+import type { VideoExposureHold } from "@prisma/client";
 
 // Phase 6G-1C — Server Actions for the per-video Studio manage page
 // (brief "STUDIO ROUTE 2"). Every action re-checks the session and
@@ -166,5 +170,91 @@ export async function revokeUnlistedApprovalAction(videoId: string, pageId: stri
   }
 
   await revokeUnlistedApproval(pageId, session!.user.id);
+  redirect(`/studio/catalogue/videos/${videoId}`);
+}
+
+// Phase 6K-2 — LISTING an approved unlisted video on discovery surfaces (catalogue, search, sitemap, homepage, featured) is its own,
+// separately recorded approval; the page approval above never implies it. Both need RECORDING_PUBLISH, like every action that
+// changes what visitors see. Revoking changes nothing on YouTube.
+export async function approveDiscoveryAction(videoId: string, pageId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
+    errorRedirect(videoId, "You do not have permission to approve this video for listing on the public Museum.");
+  }
+
+  try {
+    await approveExposure({ videoPageId: pageId, scope: "DISCOVERY", actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(videoId, err instanceof Error ? err.message : "Could not approve this video for listing.");
+  }
+
+  redirect(`/studio/catalogue/videos/${videoId}`);
+}
+
+export async function revokeDiscoveryAction(videoId: string, pageId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
+    errorRedirect(videoId, "You do not have permission to revoke this video's listing on the public Museum.");
+  }
+
+  try {
+    await revokeExposure({ videoPageId: pageId, scope: "DISCOVERY", actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(videoId, err instanceof Error ? err.message : "Could not revoke the listing.");
+  }
+
+  redirect(`/studio/catalogue/videos/${videoId}`);
+}
+// Phase 6K-fix (F4) — a rights, copyright or privacy HOLD is part of the shared eligibility rule: while it stands the video is shown nowhere on the
+// public Museum, whatever else is approved (public or unlisted). Recording or clearing one changes what visitors see, so both need RECORDING_PUBLISH.
+// Clearing a hold approves nothing: approvals the hold revoked stay revoked.
+const HOLDS: readonly VideoExposureHold[] = ["RIGHTS", "COPYRIGHT", "PRIVACY", "OTHER"];
+
+export async function setVideoHoldAction(videoId: string, formData: FormData) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
+    errorRedirect(videoId, "You do not have permission to record a hold on this video.");
+  }
+  const hold = String(formData.get("hold") ?? "") as VideoExposureHold;
+  if (!HOLDS.includes(hold)) errorRedirect(videoId, "Choose the kind of hold.");
+
+  try {
+    await setReviewHold({ videoId, hold, note: String(formData.get("note") ?? "") || null, actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(videoId, err instanceof Error ? err.message : "Could not record the hold.");
+  }
+
+  redirect(`/studio/catalogue/videos/${videoId}`);
+}
+
+export async function clearVideoHoldAction(videoId: string) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
+    errorRedirect(videoId, "You do not have permission to clear a hold on this video.");
+  }
+
+  try {
+    await clearReviewHold({ videoId, actorId: session!.user.id });
+  } catch (err) {
+    errorRedirect(videoId, err instanceof Error ? err.message : "Could not clear the hold.");
+  }
+
+  redirect(`/studio/catalogue/videos/${videoId}`);
+}
+
+// Lifecycle hardening (F12) — an editor has looked at the changed metadata of this approved page and accepts it. The page stayed public throughout;
+// this only records that the change was reviewed. Needs RECORDING_PUBLISH, like every change to what visitors see.
+export async function acknowledgeVideoMetadataAction(videoId: string, pageId: string, formData: FormData) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "RECORDING_PUBLISH")) {
+    errorRedirect(videoId, "You do not have permission to review this video's metadata changes.");
+  }
+
+  try {
+    await acknowledgeMetadataChange({ videoPageId: pageId, actorId: session!.user.id, note: String(formData.get("note") ?? "") || null });
+  } catch (err) {
+    errorRedirect(videoId, err instanceof Error ? err.message : "Could not record the metadata review.");
+  }
+
   redirect(`/studio/catalogue/videos/${videoId}`);
 }

@@ -1,4 +1,5 @@
 import { getSiteOrigin } from "../../../modules/config/siteOrigin";
+import { normaliseSearchText } from "../../../modules/mmke/search/searchText";
 import { serializeJsonLd } from "../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
 import { after } from "next/server";
@@ -81,7 +82,7 @@ export async function generateMetadata({
   searchParams: Promise<ArchiveSearchParams>;
 }): Promise<Metadata> {
   const { q, type } = await searchParams;
-  const hasSearchState = Boolean(q?.trim()) || Boolean(type?.trim());
+  const hasSearchState = Boolean(normaliseSearchText(q)) || Boolean(type?.trim());
   const title = "Archive — Music Madras";
   const description =
     "Explore the Music Madras archive of composers, musical works, programmes, performances, artists, choirs, conductors, recordings, venues, and organisations documenting Chennai's Western Classical Music heritage.";
@@ -371,7 +372,7 @@ function Pagination({
 
 export default async function ArchivePage({ searchParams }: { searchParams: Promise<ArchiveSearchParams> }) {
   const { q, type: rawType, page: rawPage } = await searchParams;
-  const query = q?.trim() || undefined;
+  const query = normaliseSearchText(q); // bounded; the repository also escapes LIKE wildcards, so "%" and "_" are literal
   const { type, invalid } = normalizeArchiveType(rawType);
   const requestedPage = parseArchivePage(rawPage);
 

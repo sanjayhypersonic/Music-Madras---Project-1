@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ThemeToggle } from "../shared/ThemeToggle";
 import { MobileNav } from "./MobileNav";
-import { MUSEUM_NAV_LINKS } from "./museumNavigation";
+import { MUSEUM_NAV_LINKS, type MuseumNavLink } from "./museumNavigation";
 
 // Phase 6G-2B — the Museum-wide header. The supplied official logo
 // artwork is used as-is (no recolouring/redesign/cropping); it already
@@ -16,7 +16,7 @@ import { MUSEUM_NAV_LINKS } from "./museumNavigation";
 // mobile menu and the footer), now includes Collections and Learning, and on
 // narrow screens the desktop nav is replaced by MobileNav instead of vanishing.
 
-export function MuseumHeader() {
+export function MuseumHeader({ links = MUSEUM_NAV_LINKS }: { links?: readonly MuseumNavLink[] }) {
   return (
     <header className="museum-header">
       <Link href="/" className="museum-header__brand" aria-label="Music Madras — home">
@@ -30,14 +30,14 @@ export function MuseumHeader() {
         />
       </Link>
       <nav className="museum-nav" aria-label="Primary">
-        {MUSEUM_NAV_LINKS.map((link) => (
+        {links.map((link) => (
           <Link key={link.href} href={link.href}>
             {link.label}
           </Link>
         ))}
       </nav>
       <div className="museum-header__actions">
-        <MobileNav />
+        <MobileNav links={links} />
         <ThemeToggle className="museum-theme-toggle" />
       </div>
     </header>

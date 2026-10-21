@@ -20,6 +20,7 @@ import {
 } from "../../modules/db/repositories/recordingRepository";
 import { seedMediaOnRevision } from "./helpers/seedRevisionRows";
 import { approveUnlistedPublication, createDraftVideoPage, publishVideoPage } from "../../modules/db/repositories/youtubeVideoPageRepository";
+import { approveExposure } from "../../modules/db/repositories/videoExposureRepository";
 import { createCollection, addRecordingToCollection, publishCollection, archiveCollection } from "../../modules/db/repositories/collectionRepository";
 import { getPublicRecordingPageData } from "../../modules/db/repositories/entityRelationshipsRepository";
 import { generateMetadata } from "../../app/(museum)/recordings/[slug]/page";
@@ -321,6 +322,9 @@ describe("C. MusicMadras video visibility — getPublicRecordingPageData", () =>
       expect(beforeApproval!.videos).toHaveLength(0);
 
       await approveUnlistedPublication(videoPage.id, fixture.user.id);
+      expect((await getPublicRecordingPageData(fixture.slug))!.videos).toHaveLength(0); // page approval alone does not list it (6K-2)
+
+      await approveExposure({ videoPageId: videoPage.id, scope: "DISCOVERY", actorId: fixture.user.id });
       const afterApproval = await getPublicRecordingPageData(fixture.slug);
       expect(afterApproval!.videos.map((v) => v.slug)).toContain(videoPage.slug);
     } finally {

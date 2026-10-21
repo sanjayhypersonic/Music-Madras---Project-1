@@ -33,6 +33,7 @@ export interface ProductionConfigReport {
 type Env = Readonly<Record<string, string | undefined>>;
 
 const MIN_AUTH_SECRET_LENGTH = 32;
+const MIN_CRON_SECRET_LENGTH = 32;
 const PLACEHOLDER_AUTH_SECRET = "replace-with-a-long-random-string";
 
 const isSet = (value: string | undefined): value is string => typeof value === "string" && value.trim().length > 0;
@@ -104,6 +105,16 @@ export function assessProductionConfig(env: Env): ProductionConfigReport {
   } else {
     if (!isSet(env.SMTP_URL)) problems.push({ variable: "SMTP_URL", problem: "is not set although EMAIL_PROVIDER is smtp." });
     if (!isSet(env.EMAIL_FROM)) problems.push({ variable: "EMAIL_FROM", problem: "is not set although EMAIL_PROVIDER is smtp." });
+  }
+
+  // --- scheduled maintenance (optional capability; but a weak secret on a live endpoint is refused) --------------
+  if (!isSet(env.CRON_SECRET)) {
+    warnings.push({
+      variable: "CRON_SECRET",
+      problem: "is not set; the scheduled maintenance endpoint (/api/cron/stewardship) is disabled, so notification emails are never sent and the unlisted-video review and playlist checks run only when someone opens Studio.",
+    });
+  } else if (env.CRON_SECRET.trim().length < MIN_CRON_SECRET_LENGTH) {
+    problems.push({ variable: "CRON_SECRET", problem: `is too short (use at least ${MIN_CRON_SECRET_LENGTH} random characters).` });
   }
 
   return { problems, warnings };

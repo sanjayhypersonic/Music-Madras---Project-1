@@ -1,4 +1,5 @@
 import { prisma } from "../client";
+import { applyLifecycleAfterVideoChangeIn } from "./videoLifecycleRepository";
 import type { ObservabilityState, Prisma, VideoPageStatus, YouTubeVideo } from "@prisma/client";
 
 // YouTubeVideo persistence (Phase 6F). This module never decides *what*
@@ -37,11 +38,19 @@ export async function ensureYouTubeVideoIdentity(
   return { id: created.id, isNew: true, observabilityState: created.observabilityState };
 }
 
+// Phase 6K lifecycle hardening (F11/F12) — the two functions below are the STATE-TRANSITION BOUNDARY for a video: every write of its privacy,
+// observability or page-defining metadata goes through them. The follow-on effects (ending the approvals of a video that became private, noticing a
+// material metadata change on an approved page) run in the SAME transaction, so they commit together with the change or not at all. This module still
+// never decides WHAT to write; it only reacts to what was written (videoLifecycleRepository.ts, modules/mmke/catalogue/videoLifecycle.ts).
 export function updateYouTubeVideoFields(
   id: string,
   fields: Prisma.YouTubeVideoUncheckedUpdateInput
 ): Promise<YouTubeVideo> {
-  return prisma.youTubeVideo.update({ where: { id }, data: fields });
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.youTubeVideo.update({ where: { id }, data: fields });
+    await applyLifecycleAfterVideoChangeIn(tx, id);
+    return updated;
+  });
 }
 
 export function findYouTubeVideoByYoutubeId(youtubeVideoId: string): Promise<YouTubeVideo | null> {
@@ -55,7 +64,12 @@ export function listYouTubeVideoIdentities(): Promise<YouTubeVideoIdentity[]> {
 }
 
 export function setYouTubeVideoObservability(id: string, state: ObservabilityState): Promise<YouTubeVideo> {
-  return prisma.youTubeVideo.update({ where: { id }, data: { observabilityState: state } });
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.youTubeVideo.update({ where: { id }, data: { observabilityState: state } });
+    // NOT_OBSERVED, SYNC_ERROR, UNAVAILABLE and DELETED never end an approval (the exposure rule hides the video while it is not OBSERVED). Only PRIVATE does.
+    await applyLifecycleAfterVideoChangeIn(tx, id);
+    return updated;
+  });
 }
 
 // Phase 6G-1C — Studio-facing reads only, added because nothing before now

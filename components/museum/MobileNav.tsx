@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MUSEUM_NAV_LINKS } from "./museumNavigation";
+import { MUSEUM_NAV_LINKS, type MuseumNavLink } from "./museumNavigation";
 
 // Phase 6J-1 — the primary navigation on narrow screens. Below 40rem the
 // desktop nav is hidden (museum.css); without this the header was only a logo
@@ -16,7 +16,7 @@ import { MUSEUM_NAV_LINKS } from "./museumNavigation";
 // and the client (no hydration mismatch). It closes on Escape (returning focus
 // to the button), on choosing a link, on a navigation, and on a click outside.
 
-export function MobileNav() {
+export function MobileNav({ links = MUSEUM_NAV_LINKS }: { links?: readonly MuseumNavLink[] }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const panelId = useId();
@@ -69,7 +69,7 @@ export function MobileNav() {
       </button>
       <nav id={panelId} className="museum-mobile-nav" data-open={open} aria-label="Primary (mobile)">
         <ul>
-          {MUSEUM_NAV_LINKS.map((link) => (
+          {links.map((link) => (
             <li key={link.href}>
               <Link href={link.href} onClick={() => setOpen(false)}>
                 {link.label}

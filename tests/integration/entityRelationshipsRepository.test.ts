@@ -1,3 +1,4 @@
+import { approveExposure } from "../../modules/db/repositories/videoExposureRepository";
 import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { prisma } from "../../modules/db/client";
@@ -406,6 +407,9 @@ describe("entityRelationshipsRepository against a real database", () => {
         expect(beforeApproval.videos).toEqual([]);
 
         await approveUnlistedPublication(pageId, userId);
+        expect((await getChoirRelatedContent(choirId)).videos).toEqual([]); // page approval alone does not list it (6K-2)
+
+        await approveExposure({ videoPageId: pageId, scope: "DISCOVERY", actorId: userId });
         const afterApproval = await getChoirRelatedContent(choirId);
         expect(afterApproval.videos).toHaveLength(1);
       } finally {

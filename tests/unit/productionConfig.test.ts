@@ -16,6 +16,7 @@ const GOOD_ENV = {
   EMAIL_PROVIDER: "smtp",
   SMTP_URL: `smtps://mailer:${SECRET_SENTINEL}@smtp.example.org:465`,
   EMAIL_FROM: "Music Madras <studio@example.org>",
+  CRON_SECRET: `${SECRET_SENTINEL}-cron-0123456789abcdef`,
 };
 
 const problemsFor = (overrides: Record<string, string | undefined>) => assessProductionConfig({ ...GOOD_ENV, ...overrides }).problems.map((p) => p.variable);
@@ -130,5 +131,24 @@ describe("assertProductionConfig", () => {
     expect(message).not.toContain(SECRET_SENTINEL);
     expect(message).not.toContain("tiny-secret-xyz");
     expect(message).not.toContain("mysql://"); // the offending value is not echoed (the hint text itself names the expected scheme)
+  });
+});
+
+describe("CRON_SECRET (the scheduled maintenance endpoint)", () => {
+  it("is optional but warned about when unset, because without it emails are never sent and the sweeps run only when Studio is opened", () => {
+    const report = assessProductionConfig({ ...GOOD_ENV, CRON_SECRET: undefined });
+    expect(report.problems).toEqual([]);
+    expect(report.warnings.map((w) => w.variable)).toEqual(["CRON_SECRET"]);
+    expect(report.warnings[0].problem).toMatch(/emails are never sent/);
+  });
+
+  it("is refused when set but weak, and never printed", () => {
+    expect(problemsFor({ CRON_SECRET: "short" })).toEqual(["CRON_SECRET"]);
+    expect(() => assertProductionConfig({ ...GOOD_ENV, CRON_SECRET: "short" })).toThrow(ProductionConfigurationError);
+    try {
+      assertProductionConfig({ ...GOOD_ENV, CRON_SECRET: "short-but-secret-value" });
+    } catch (err) {
+      expect(String((err as Error).message)).not.toContain("short-but-secret-value");
+    }
   });
 });

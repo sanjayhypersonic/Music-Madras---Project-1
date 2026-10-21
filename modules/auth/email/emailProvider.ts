@@ -25,6 +25,8 @@ import { buildInvitationEmail, buildPasswordResetEmail, type EmailMessage } from
 export interface EmailProvider {
   sendInvitationEmail(input: { toEmail: string; inviteUrl: string; invitedByName: string }): Promise<void>;
   sendPasswordResetEmail(input: { toEmail: string; resetUrl: string }): Promise<void>;
+  /** Phase 6K-1: a Studio notification (plain text) to one recipient. Same delivery rules as the other messages. */
+  sendStudioNotificationEmail(input: { toEmail: string; subject: string; text: string }): Promise<void>;
 }
 
 /** Email delivery is not configured (or is configured unsafely) — an operator problem, never a user error. */
@@ -35,12 +37,26 @@ export class EmailNotConfiguredError extends Error {
   }
 }
 
-/** The provider accepted the call but the message could not be delivered. Carries no credentials. */
+/**
+ * The provider accepted the call but the message could not be delivered. Carries no credentials. `reason` is the transport's own SHORT, non-sensitive
+ * code when it gave one (a Node/SMTP error code such as EAUTH or ETIMEDOUT, and the SMTP reply number such as 535 or 550) so an administrator can tell
+ * "wrong password" from "server unreachable" from "address refused" without the message text, which can contain the SMTP URL or credentials.
+ */
 export class EmailDeliveryError extends Error {
-  constructor() {
+  constructor(readonly reason: string | null = null) {
     super("The email could not be delivered.");
     this.name = "EmailDeliveryError";
   }
+}
+
+/** The transport error's code and SMTP reply number, only when they have the shape of such codes; never the message. */
+export function transportReason(err: unknown): string | null {
+  if (typeof err !== "object" || err === null) return null;
+  const { code, responseCode } = err as { code?: unknown; responseCode?: unknown };
+  const parts: string[] = [];
+  if (typeof code === "string" && /^[A-Z][A-Z0-9_]{1,24}$/.test(code)) parts.push(code);
+  if (typeof responseCode === "number" && Number.isInteger(responseCode) && responseCode >= 100 && responseCode <= 599) parts.push(String(responseCode));
+  return parts.length > 0 ? parts.join(" ") : null;
 }
 
 export class ConsoleEmailProvider implements EmailProvider {
@@ -50,6 +66,10 @@ export class ConsoleEmailProvider implements EmailProvider {
 
   async sendPasswordResetEmail(input: { toEmail: string; resetUrl: string }): Promise<void> {
     console.log(`[ConsoleEmailProvider] Password reset for ${input.toEmail}: ${input.resetUrl}`);
+  }
+
+  async sendStudioNotificationEmail(input: { toEmail: string; subject: string; text: string }): Promise<void> {
+    console.log(`[ConsoleEmailProvider] Studio notification for ${input.toEmail}: ${input.subject}`);
   }
 }
 
@@ -67,9 +87,9 @@ export class SmtpEmailProvider implements EmailProvider {
   private async send(toEmail: string, message: EmailMessage): Promise<void> {
     try {
       await this.transport.sendMail({ from: this.from, to: toEmail, subject: message.subject, text: message.text });
-    } catch {
-      // Deliberately not rethrowing the transport's error: it can contain the SMTP URL/credentials.
-      throw new EmailDeliveryError();
+    } catch (err) {
+      // Deliberately not rethrowing the transport's error: it can contain the SMTP URL/credentials. Only its short, non-sensitive codes are kept.
+      throw new EmailDeliveryError(transportReason(err));
     }
   }
 
@@ -79,6 +99,10 @@ export class SmtpEmailProvider implements EmailProvider {
 
   sendPasswordResetEmail(input: { toEmail: string; resetUrl: string }): Promise<void> {
     return this.send(input.toEmail, buildPasswordResetEmail({ resetUrl: input.resetUrl }));
+  }
+
+  sendStudioNotificationEmail(input: { toEmail: string; subject: string; text: string }): Promise<void> {
+    return this.send(input.toEmail, { subject: input.subject, text: input.text });
   }
 }
 

@@ -1,3 +1,4 @@
+import { approveExposure } from "../../modules/db/repositories/videoExposureRepository";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "crypto";
 
@@ -40,7 +41,7 @@ import { searchRecordings, searchComposers } from "../../modules/db/repositories
 import { listPublicRecordingSitemapEntries, listPublicComposerSitemapEntries, listPublicVenueSitemapEntries } from "../../modules/db/repositories/sitemapRepository";
 import { createSource, approveSource, attachSourceToEntity } from "../../modules/db/repositories/sourceRepository";
 import { completeGenerationRequest, createGenerationRequest } from "../../modules/db/repositories/contentSuggestionRepository";
-import { RECORDING_EDITORIAL_PROMPT_V2 } from "../../modules/ai/prompts/recordingEditorial/recordingEditorialPromptV2";
+import { RECORDING_EDITORIAL_PROMPT_V3 } from "../../modules/ai/prompts/recordingEditorial/recordingEditorialPromptV3";
 import { generateRecordingEditorialSuggestion } from "../../modules/ai/gateway/generateRecordingEditorialSuggestion";
 import { FakeAIProvider } from "../../modules/ai/providers/fake/fakeAIProvider";
 import { computeContextFingerprint } from "../../modules/mmke/contentIntelligence/computeContextFingerprint";
@@ -636,6 +637,8 @@ describe("4. publish through the Studio workflow", () => {
     await publishVideoPage(page.id, users.ADMINISTRATOR);
     expect(await findPublicVideoPagesByYouTubeVideoIds([unlistedInternal])).toEqual([]);
     await approveUnlistedPublication(page.id, users.ADMINISTRATOR);
+    expect(await findPublicVideoPagesByYouTubeVideoIds([unlistedInternal])).toEqual([]); // the page approval alone does not LIST it (6K-2)
+    await approveExposure({ videoPageId: page.id, scope: "DISCOVERY", actorId: users.ADMINISTRATOR });
     expect(await findPublicVideoPagesByYouTubeVideoIds([unlistedInternal])).toHaveLength(1);
   }, T);
 });
@@ -734,7 +737,7 @@ describe("5. controlled AI suggestion", () => {
     expect(row).toMatchObject({ status: "DRAFT_READY", suggestionType: "EDITORIAL_PROSE", targetEntityType: "RECORDING", targetEntityId: promise.recordingId, targetField: "description", proposedContent: DESCRIPTION_TEXT });
     expect(row.finalContent).toBeNull();
     expect(row.reviewedById).toBeNull(); // no human has decided anything yet
-    expect(row.generationRequest).toMatchObject({ status: "SUCCEEDED", provider: "fake", promptVersion: RECORDING_EDITORIAL_PROMPT_V2, requestedById: users.EDITOR, contextFingerprint: computeContextFingerprint(ctx.context) });
+    expect(row.generationRequest).toMatchObject({ status: "SUCCEEDED", provider: "fake", promptVersion: RECORDING_EDITORIAL_PROMPT_V3, requestedById: users.EDITOR, contextFingerprint: computeContextFingerprint(ctx.context) });
 
     const refs = row.evidenceRefs as { sourceType: string; entityType: string; entityId: string }[];
     expect(refs.length).toBeGreaterThanOrEqual(5);

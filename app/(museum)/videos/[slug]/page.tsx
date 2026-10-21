@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const result = await findPublishedBySlug(slug);
   if (!result) return {};
 
-  const { page, youtubeVideo } = result;
+  const { page, youtubeVideo, discoverable } = result;
   const title = page.seoMetaTitle ?? youtubeVideo.title ?? "Music Madras";
   const description = page.seoMetaDescription ?? youtubeVideo.description ?? undefined;
 
@@ -52,6 +52,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title,
     description,
     alternates: { canonical: `/videos/${page.slug}` },
+    // Phase 6K-2: a page that is approved to exist but NOT to be listed (an unlisted video without a discovery approval) is reachable by
+    // its URL only: it is kept out of search indexes, and it is not in the sitemap or any listing.
+    robots: discoverable ? undefined : { index: false, follow: false },
     openGraph: {
       title,
       description,
@@ -68,7 +71,7 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
     notFound();
   }
 
-  const { page, youtubeVideo } = result;
+  const { page, youtubeVideo, discoverable } = result;
   const recordingSlug = await findPublishedRecordingSlugForYouTubeVideo(youtubeVideo.id);
 
   after(() =>
@@ -96,7 +99,7 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
 
   return (
     <article className="museum-container">
-      <p className="museum-eyebrow">Recording</p>
+      <p className="museum-eyebrow">Video</p>
       <h1>{youtubeVideo.title ?? "Untitled"}</h1>
 
       <div className="museum-media">
@@ -131,10 +134,7 @@ export default async function PublicVideoPage({ params }: { params: Promise<{ sl
         </OutboundYouTubeLink>
       </p>
 
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: serializeJsonLd(videoJsonLd) }}
-      />
+      {discoverable && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(videoJsonLd) }} />}
     </article>
   );
 }

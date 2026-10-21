@@ -1,21 +1,31 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
-import { can } from "../../../../../../../modules/auth/policy";
+import { can, describeRolesThatCan } from "../../../../../../../modules/auth/policy";
 import { findYouTubeVideoById } from "../../../../../../../modules/db/repositories/youtubeVideoRepository";
 import { findByYouTubeVideoId } from "../../../../../../../modules/db/repositories/youtubeVideoPageRepository";
+import { listApprovalHistory } from "../../../../../../../modules/db/repositories/videoExposureRepository";
+import { loadApprovalLifecycleStatus } from "../../../../../../../modules/db/repositories/videoLifecycleRepository";
+import { loadMetadataReviewState } from "../../../../../../../modules/db/repositories/videoMetadataReviewRepository";
+import { explainVideoExposure } from "../../../../../../../modules/mmke/catalogue/videoExposure";
+import { APPROVAL_STATUS_TEXT } from "../../../../../../../modules/mmke/catalogue/videoLifecycle";
 import { canPublishVideoPage, canUnpublishVideoPage } from "../../../../../../../modules/publishing/videoPageTransitions";
-import { isYouTubeVideoPagePublic } from "../../../../../../../modules/mmke/catalogue/isYouTubeVideoPagePublic";
+import { getVideoHold } from "../../../../../../../modules/db/repositories/unlistedReviewRepository";
 import { deriveCataloguePageState } from "../../../../../../../modules/mmke/catalogue/deriveCataloguePageState";
 import { findRecordingLinkedToYouTubeVideo } from "../../../../../../../modules/db/repositories/recordingIntakeRepository";
 import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
 import {
+  acknowledgeVideoMetadataAction,
+  approveDiscoveryAction,
   approveUnlistedPublicationAction,
   archiveVideoPageAction,
+  clearVideoHoldAction,
   createCataloguePageAction,
   createRecordingFromVideoAction,
   publishVideoPageAction,
+  revokeDiscoveryAction,
   revokeUnlistedApprovalAction,
+  setVideoHoldAction,
   unarchiveVideoPageAction,
   unpublishVideoPageAction,
   updateEditorialFieldsAction,
@@ -56,14 +66,33 @@ export default async function YouTubeVideoManagePage({
     video.durationSeconds === null
       ? "—"
       : `${Math.floor(video.durationSeconds / 60)}:${String(video.durationSeconds % 60).padStart(2, "0")}`;
-  const isPublic = page
-    ? isYouTubeVideoPagePublic({
+  const approvals = page ? await listApprovalHistory(page.id) : [];
+  const activeApprovals = approvals.filter((a) => !a.revokedAt);
+  const hasActiveDiscovery = activeApprovals.some((a) => a.scope === "DISCOVERY");
+  const hold = await getVideoHold(videoId);
+  const lifecycle = page ? await loadApprovalLifecycleStatus(page.id) : null;
+  const metadataState = page ? await loadMetadataReviewState(page.id) : null;
+  const exposure = page
+    ? explainVideoExposure({
         page: { status: page.status, archivedAt: page.archivedAt, unlistedPublicationApprovedAt: page.unlistedPublicationApprovedAt },
         youtubeVideo: { privacyStatus: video.privacyStatus, observabilityState: video.observabilityState },
+        activeApprovals: activeApprovals.map((a) => ({ scope: a.scope, playlistPageId: a.playlistPageId })),
+        hold: hold?.holdReason ?? null,
       })
-    : false;
+    : [];
+  // "Public" is the shared rule's verdict for the page surface (it includes holds), never a second predicate.
+  const isPublic = exposure.find((line) => line.surface === "PAGE")?.allowed ?? false;
   const isUnlisted = video.privacyStatus === "unlisted";
   const isApprovedUnlisted = Boolean(page?.unlistedPublicationApprovedAt);
+  // What clearing a hold does depends on the video: it never approves anything, so an unlisted video needs a fresh approval, while a PUBLIC video needs
+  // none and is visible again at once if its page is published.
+  const clearHoldConfirm =
+    video.privacyStatus === "public"
+      ? "Clear this hold? Nothing is approved by clearing it. This video is public on YouTube, so it needs no approval: if its catalogue page is published it will be visible on the public Museum again immediately."
+      : video.privacyStatus === "unlisted"
+        ? "Clear this hold? Nothing is approved by clearing it: earlier approvals stay revoked, and this unlisted video stays off the public Museum until someone approves it afresh."
+        : "Clear this hold? Nothing is approved by clearing it. Whether the video appears on the public Museum afterwards follows its YouTube visibility and its page, as for any other video.";
+  const publishers = describeRolesThatCan("RECORDING_PUBLISH");
 
   return (
     <div>
@@ -157,25 +186,167 @@ export default async function YouTubeVideoManagePage({
               <h3>Unlisted — {isApprovedUnlisted ? "approved for public Museum exposure" : "not approved for public Museum exposure"}</h3>
               <p>
                 This video is unlisted on YouTube — requires approval for public Museum exposure. Publishing this catalogue
-                page alone will never make it public; an editor must separately approve it below.
+                page alone will never make it public; an editor must separately approve it below. Approving exposes the <em>Music Madras page</em>:
+                it shows the video&apos;s embedded player and a link to its YouTube address, so anyone who can open the page can find the unlisted video.
+                The video itself stays unlisted on YouTube.
               </p>
+              {lifecycle && (
+                <p role="status">
+                  <strong>{APPROVAL_STATUS_TEXT[lifecycle.status].label}.</strong> {APPROVAL_STATUS_TEXT[lifecycle.status].detail}
+                  {lifecycle.status === "APPROVED_METADATA_REVIEW_PENDING" && lifecycle.changedFields.length > 0 ? ` Changed: ${lifecycle.changedFields.join(", ")}.` : ""}
+                </p>
+              )}
               {canPublish &&
                 (isApprovedUnlisted ? (
                   <form action={revokeUnlistedApprovalAction.bind(null, videoId, page.id)}>
-                    <ConfirmSubmitButton confirmMessage="Revoke approval? This unlisted video will no longer be shown on the public Museum." pendingLabel="Revoking…" tone="danger">
+                    <ConfirmSubmitButton confirmMessage="Revoke approval? This unlisted video will no longer be shown on the public Museum. Approving it again later needs a fresh, explicit approval." pendingLabel="Revoking…" tone="danger">
                       Revoke Public Museum Approval
                     </ConfirmSubmitButton>
                   </form>
                 ) : (
                   <form action={approveUnlistedPublicationAction.bind(null, videoId, page.id)}>
-                    <ConfirmSubmitButton confirmMessage="Approve this unlisted video for the public Museum? Anyone will be able to find and watch it there." pendingLabel="Approving…" tone="primary">
+                    <ConfirmSubmitButton confirmMessage="Approve this unlisted video's page for the public Museum? Anyone with the page link will be able to open it, and the page shows the video's embedded player and a link to its YouTube address, so the unlisted video can be found by anyone who opens the page. The video stays unlisted on YouTube. It will not be listed in the catalogue or on the homepage until you also approve listing." pendingLabel="Approving…" tone="primary">
                       Approve for Public Museum
                     </ConfirmSubmitButton>
                   </form>
                 ))}
-              {!canPublish && <p style={{ fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>Only an Administrator can approve or revoke public exposure.</p>}
+              {!canPublish && <p style={{ fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>Only {publishers} can approve or revoke public exposure.</p>}
             </section>
           )}
+
+          {metadataState && (metadataState.pending || metadataState.history.length > 0) && (
+            <section className="studio-panel">
+              <h3>Metadata review</h3>
+              {metadataState.pending ? (
+                <>
+                  <p role="status">
+                    <strong>{APPROVAL_STATUS_TEXT.APPROVED_METADATA_REVIEW_PENDING.label}.</strong> {APPROVAL_STATUS_TEXT.APPROVED_METADATA_REVIEW_PENDING.detail}
+                  </p>
+                  <ul style={{ fontSize: "0.9rem" }}>
+                    {(Array.isArray(metadataState.pending.changeSummary) ? (metadataState.pending.changeSummary as Array<{ field: string; before: string | null; after: string | null }>) : []).map((c) => (
+                      <li key={c.field}>
+                        <strong>{c.field}</strong>: was “{c.before ?? "(none)"}” — now “{c.after ?? "(none)"}”
+                      </li>
+                    ))}
+                  </ul>
+                  {canPublish && (
+                    <form action={acknowledgeVideoMetadataAction.bind(null, videoId, page.id)} style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <label>
+                        Note (optional)
+                        <input type="text" name="note" maxLength={1000} />
+                      </label>
+                      <ConfirmSubmitButton confirmMessage="Confirm that you have reviewed these changes? The page stays public either way; this records that the changed details were reviewed." pendingLabel="Recording…" tone="primary">
+                        I have reviewed this change
+                      </ConfirmSubmitButton>
+                    </form>
+                  )}
+                </>
+              ) : (
+                <p style={{ fontSize: "0.9rem" }}>No metadata change is waiting for review.</p>
+              )}
+              {metadataState.history.length > 0 && (
+                <>
+                  <h4>History</h4>
+                  <ul style={{ fontSize: "0.9rem" }}>
+                    {metadataState.history.map(({ change, resolvedByName }) => (
+                      <li key={change.id}>
+                        {change.detectedAt.toLocaleString()}: {change.changedFields.join(", ")} — {change.status.toLowerCase()}
+                        {change.resolvedAt ? ` on ${change.resolvedAt.toLocaleString()}${resolvedByName ? ` by ${resolvedByName}` : ""}` : ""}
+                        {change.resolutionNote ? ` (${change.resolutionNote})` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </section>
+          )}
+
+          <section className="studio-panel">
+            <h3>Public exposure</h3>
+            <p style={{ fontSize: "0.9rem" }}>
+              What visitors can reach, and why. YouTube visibility, the existence of a page, its publication and its listing are separate decisions; none implies another.
+            </p>
+            <ul>
+              {exposure.map((line) => (
+                <li key={line.surface}>
+                  <strong>{line.surface === "PAGE" ? "Public page (reachable by its link)" : "Listed in the catalogue, sitemap, homepage, featured videos and related-video sections"}:</strong> {line.allowed ? "YES" : "NO"} - {line.reason}
+                </li>
+              ))}
+            </ul>
+            {isUnlisted && isApprovedUnlisted && canPublish && (
+              hasActiveDiscovery ? (
+                <form action={revokeDiscoveryAction.bind(null, videoId, page.id)}>
+                  <ConfirmSubmitButton confirmMessage="Stop listing this video in the catalogue, search, sitemap and homepage? Its page stays reachable by link while the page approval stands." pendingLabel="Revoking..." tone="danger">
+                    Revoke listing approval
+                  </ConfirmSubmitButton>
+                </form>
+              ) : (
+                <form action={approveDiscoveryAction.bind(null, videoId, page.id)}>
+                  <ConfirmSubmitButton confirmMessage="List this unlisted video in the public catalogue, search, sitemap and homepage? Anyone browsing the Museum will find it." pendingLabel="Approving..." tone="primary">
+                    Approve listing on the public Museum
+                  </ConfirmSubmitButton>
+                </form>
+              )
+            )}
+            {approvals.length > 0 && (
+              <>
+                <h4>Approval history</h4>
+                <ul style={{ fontSize: "0.9rem" }}>
+                  {approvals.map((a) => (
+                    <li key={a.id}>
+                      {a.scope.toLowerCase()}{a.playlistPageId ? " (playlist)" : ""}: approved {a.approvedBy ? `by ${a.approvedBy.name}` : "(carried over from the old approval flag, which recorded no approver)"} on {a.approvedAt.toLocaleString()}
+                      {a.revokedAt ? `; revoked${a.revokedBy ? ` by ${a.revokedBy.name}` : " by the platform"}${a.revokedReason ? ` (${a.revokedReason.toLowerCase().replace(/_/g, " ")})` : ""} on ${a.revokedAt.toLocaleString()}` : " - active"}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+
+          <section className="studio-panel">
+            <h3>Rights, copyright or privacy hold</h3>
+            {hold?.holdReason ? (
+              <>
+                <p role="status">
+                  <strong>Hold in place: {hold.holdReason.toLowerCase()}.</strong> {hold.holdNote ?? ""} While it stands this video is not shown anywhere on the public Museum, whatever else is approved.
+                </p>
+                {canPublish && (
+                  <form action={clearVideoHoldAction.bind(null, videoId)}>
+                    <ConfirmSubmitButton confirmMessage={clearHoldConfirm} pendingLabel="Clearing…" tone="primary">
+                      Clear the hold
+                    </ConfirmSubmitButton>
+                  </form>
+                )}
+              </>
+            ) : canPublish ? (
+              <details>
+                <summary>Record a hold (removes this video from the public Museum at once)</summary>
+                <form action={setVideoHoldAction.bind(null, videoId)} style={{ display: "grid", gap: "0.5rem", maxWidth: "32rem", marginTop: "0.5rem" }}>
+                  <label>
+                    Kind of hold
+                    <select name="hold" required defaultValue="">
+                      <option value="" disabled>
+                        Choose…
+                      </option>
+                      <option value="RIGHTS">Rights</option>
+                      <option value="COPYRIGHT">Copyright</option>
+                      <option value="PRIVACY">Privacy</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </label>
+                  <label>
+                    Reason
+                    <textarea name="note" rows={2} maxLength={2000} />
+                  </label>
+                  <ConfirmSubmitButton confirmMessage="Record this hold? The video disappears from the public Museum now, and any approval it had is revoked." pendingLabel="Recording…" tone="danger">
+                    Record hold
+                  </ConfirmSubmitButton>
+                </form>
+              </details>
+            ) : (
+              <p style={{ fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>No hold is recorded. Only {publishers} can record or clear one.</p>
+            )}
+          </section>
 
           <h2>Editorial fields</h2>
           {canWrite ? (
@@ -241,14 +412,14 @@ export default async function YouTubeVideoManagePage({
               )}
               {!page.archivedAt && (
                 <form action={archiveVideoPageAction.bind(null, videoId, page.id)}>
-                  <ConfirmSubmitButton confirmMessage="Archive this catalogue page? It will be removed from the public Museum." pendingLabel="Archiving…" tone="danger">
+                  <ConfirmSubmitButton confirmMessage="Archive this catalogue page? It will be removed from the public Museum, and any approval to expose it ends. Restoring the page later does not bring an approval back: an unlisted video needs a fresh approval." pendingLabel="Archiving…" tone="danger">
                     Archive
                   </ConfirmSubmitButton>
                 </form>
               )}
               {page.archivedAt && (
                 <form action={unarchiveVideoPageAction.bind(null, videoId, page.id)}>
-                  <ConfirmSubmitButton pendingLabel="Unarchiving…">Unarchive</ConfirmSubmitButton>
+                  <ConfirmSubmitButton confirmMessage="Restore this catalogue page? It comes back as it was (published or draft), but no approval is restored: an unlisted video stays off the public Museum until someone approves it afresh." pendingLabel="Unarchiving…">Unarchive</ConfirmSubmitButton>
                 </form>
               )}
             </div>

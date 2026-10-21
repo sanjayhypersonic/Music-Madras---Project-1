@@ -3,6 +3,7 @@ import { getSiteOrigin } from "../modules/config/siteOrigin";
 import { listPublishedCollections } from "../modules/db/repositories/collectionRepository";
 import { listPublishedVideoPages } from "../modules/db/repositories/youtubeVideoPageRepository";
 import { listPublicLearningGuides } from "../modules/db/repositories/learningGuideRepository";
+import { listPublishedPlaylistPages } from "../modules/db/repositories/playlistPageRepository";
 import {
   listPublicArtistSitemapEntries,
   listPublicChoirSitemapEntries,
@@ -48,6 +49,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     collections,
     videoPages,
     learningGuides,
+    playlistPages,
   ] = await Promise.all([
     listPublicComposerSitemapEntries(),
     listPublicArtistSitemapEntries(),
@@ -62,11 +64,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     listPublishedCollections(),
     listPublishedVideoPages(Number.MAX_SAFE_INTEGER),
     listPublicLearningGuides(),
+    listPublishedPlaylistPages(1000),
   ]);
 
   const staticEntries: MetadataRoute.Sitemap = [
     { url: `${SITE_ORIGIN}/`, lastModified: new Date() },
     { url: `${SITE_ORIGIN}/archive`, lastModified: new Date() },
+    { url: `${SITE_ORIGIN}/videos`, lastModified: new Date() },
     { url: `${SITE_ORIGIN}/collections`, lastModified: new Date() },
     { url: `${SITE_ORIGIN}/learning`, lastModified: new Date() },
   ];
@@ -86,5 +90,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...collections.map((c) => ({ url: `${SITE_ORIGIN}/collections/${c.slug}`, lastModified: c.updatedAt })),
     ...videoPages.map(({ page }) => ({ url: `${SITE_ORIGIN}/videos/${page.slug}`, lastModified: page.updatedAt })),
     ...learningGuides.map((g) => ({ url: `${SITE_ORIGIN}/learning/${g.slug}`, lastModified: g.updatedAt })),
+    ...(playlistPages.length > 0 ? [{ url: `${SITE_ORIGIN}/playlists`, lastModified: new Date() }] : []),
+    // The time the current published version went live — never the time of the last draft edit.
+    ...playlistPages.map((p) => ({ url: `${SITE_ORIGIN}/playlists/${p.slug}`, lastModified: p.lastModified })),
   ];
 }
