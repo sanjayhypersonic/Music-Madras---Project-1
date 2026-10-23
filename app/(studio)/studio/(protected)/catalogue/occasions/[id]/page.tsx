@@ -6,9 +6,13 @@ import { findOccasionById } from "../../../../../../../modules/db/repositories/o
 import EntityActivity from "../../../../../../../components/studio/EntityActivity";
 import { archiveOccasionAction, restoreOccasionAction, updateOccasionAction } from "./actions";
 import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
+import { OccasionConnections } from "../../../../../../../components/studio/OccasionConnections";
+import { loadOccasionWorkspace, type OccasionWorkspace } from "../../../../../../../modules/db/repositories/occasionWorkspaceRepository";
 
 // Phase 6G-12 — the Occasion editorial management view, mirroring the
-// established Composer detail-page pattern exactly.
+// established Composer detail-page pattern exactly. Extended with the read-only workspace: whether the Occasion has a public page and every item connected
+// to it, with the reason each is or is not on that page (occasionWorkspaceRepository.ts). Editing (name, description, archive/restore) is unchanged and
+// still goes through the existing actions; connections are changed where they are made.
 
 export default async function OccasionDetailPage({
   params,
@@ -29,6 +33,14 @@ export default async function OccasionDetailPage({
   }
 
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
+
+  // Read-only; loaded only after the signed-in check above. A failure never shows database detail.
+  let workspace: OccasionWorkspace | null = null;
+  try {
+    workspace = await loadOccasionWorkspace(occasion.id);
+  } catch (err) {
+    console.error("Occasion workspace could not be loaded:", err instanceof Error ? err.name : "unknown error");
+  }
 
   return (
     <div>
@@ -77,6 +89,8 @@ export default async function OccasionDetailPage({
           )}
         </div>
       )}
+
+      {workspace ? <OccasionConnections workspace={workspace} /> : <p role="alert" className="studio-alert studio-alert--error">The public-page status and connected items could not be loaded just now. Try again in a moment.</p>}
 
       <EntityActivity entityType="Occasion" entityId={occasion.id} role={session.user.role} />
     </div>

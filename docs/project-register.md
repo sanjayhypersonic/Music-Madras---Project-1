@@ -2,7 +2,7 @@
 
 Single, deduplicated list of decisions, open owner decisions, deferred risks and release gates. **Rule:** record, keep severity, revisit at the single release-readiness audit. Entries cite the existing report that holds the evidence; they are **not re-verified here**. Update this file in the same change that resolves or adds an item.
 
-Last updated: 2026-10-22 · Branch `music-madras-production-rebuild` · Phase 6K committed (`637d7e9`), Phase 6L committed (`32379ea`), public Occasion pages, the incident log (slice 1), unified archive search and the publication preview committed as local checkpoints · `main` = `3bcfe85` (untouched)
+Last updated: 2026-10-23 · Branch `music-madras-production-rebuild` · Phase 6K committed (`637d7e9`), Phase 6L committed (`32379ea`), public Occasion pages, the incident log (slice 1), unified archive search, the publication preview and the Occasion workspace committed as local checkpoints · `main` = `3bcfe85` (untouched)
 
 ## 1. Settled decisions
 
@@ -49,6 +49,7 @@ Last updated: 2026-10-22 · Branch `music-madras-production-rebuild` · Phase 6K
 | R-16 | Unified archive search limits: ranking is deterministic over at most 500 candidates per tier per type (`RANK_CANDIDATE_CAP`), so beyond ~500 matches for one type the lowest-ranked are not pageable; Performances are not relevance-ranked (they have no title of their own); learning guides match on title only; no typo tolerance, synonyms or as-you-type suggestions (by design: no per-keystroke queries); playlist pages and video pages are not in the unified search (videos have their own `/videos` search) | Low | post-launch | archiveSearchRepository |
 | R-17 | In the dev-server browser check, streamed Suspense content stayed hidden behind a `loading.tsx` fallback although the server response was complete. It happened with a new `/archive` `loading.tsx` (removed) AND with Studio's existing `loading.tsx` (2026-10-22), so it is most likely the dev server or the embedded browser, not a route's code; it was NOT checked against a production build. Before relying on any route-level loading state, confirm streaming completes in a production build in a normal browser | Low–Medium | audit | app/(museum)/archive, app/(studio) |
 | R-18 | The Review & Publish comparison does not cover collection membership, learning-guide membership (they belong to the collection or guide, not to the revision) or the text of a source's citations, and it compares media by identity and URL with the YouTube video's CURRENT availability as a note (availability is the video's state now, not a revision value). Both limits are stated in the interface. It is a read-only view: it does not block or gate publishing | Low | post-launch | recordingRevisionComparisonRepository |
+| R-19 | The Occasion workspace is read-only: connections are changed where they are made (performance, programme, collection, a recording's Relationships step); there is no attach/detach from the Occasion itself. The Occasion model has no date range or publication status of its own (only archived or not), so the workspace shows the derived public-page status instead. Lists are bounded at 200 per kind (it says so when a bound is reached); reasons are "not determined" rather than guessed when the facts do not explain an exclusion | Low | post-launch | occasionWorkspaceRepository |
 
 ## 4. Release gates (not met)
 
@@ -67,6 +68,7 @@ Field-ownership UI; analytics feedback loop; Search Console; contributor portal;
 | Public Occasion pages (`/occasions/[slug]`, sitemap, analytics entity type, Organisation page links) | implemented 2026-10-21, committed as a local checkpoint |
 | Unified archive search completed: Collections, Learning Guides and Occasions added; relevance ranking (exact title, prefix, word prefix, contains, other field) for every named type; Museum-wide header search box; filters and copy updated | implemented 2026-10-22, committed as a local checkpoint |
 | Recording draft-versus-published comparison on Review & Publish (read-only; first-publication mode; fields, works, participants, media, and revision-scoped Sources, Rights, Occasions) | implemented 2026-10-22, committed as a local checkpoint |
+| Occasion workspace in Studio (public-page status and every connected item with its reason; read-only; revision-scoped Recording links) | implemented 2026-10-23, committed as a local checkpoint |
 | Operational incident log, first slice (R-15): table, safe recorder, Organisation-page wiring, Studio → Health view and resolve action, recurring-incident notification | implemented 2026-10-21, committed as a local checkpoint |
 
 ## 7. Escalation rule
