@@ -3,7 +3,10 @@
   "appId": "1:604027177755:web:e4c27f3aac6fc1d71ee1be",
   "apiKey": "AIzaSyDM8_5dxaPHX9GCg2F2NzDsOFlRxrAUweE",
   "authDomain": "artful-cable-9wjkk.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-musicmadras-459466ff-96ba-483e-aab5-31460d662dc2",
   "storageBucket": "artful-cable-9wjkk.firebasestorage.app",
   "messagingSenderId": "604027177755",
-  "measurementId": ""
+  "measurementId": "",
+  "oAuthClientId": "604027177755-tcn7pe1qhfoj38o3sd7c9pj3g1jclh8n.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

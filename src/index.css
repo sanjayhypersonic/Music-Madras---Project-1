@@ -62,7 +62,7 @@ body.light {
 body.light .bg-zinc-950 {
   background-color: #FAF8F5 !important;
 }
-body.light .bg-[#09090b] {
+body.light [class*="bg-[#09090b]"] {
   background-color: #FAF8F5 !important;
 }
 body.light .bg-zinc-900 {

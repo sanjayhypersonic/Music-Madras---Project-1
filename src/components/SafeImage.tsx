@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Music, Radio, Sliders, Award, Video, Mic, Disc } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Music, Radio, Sliders, Award, Video, Disc } from 'lucide-react';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
@@ -9,69 +9,118 @@ interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   className?: string;
 }
 
-export default function SafeImage({ src, fallbackType = 'video', title, alt, className = '', ...props }: SafeImageProps) {
-  const [error, setError] = useState(false);
-  const [imgSrc, setImgSrc] = useState(src);
+export default function SafeImage({
+  src,
+  fallbackType = 'video',
+  title,
+  alt = '',
+  className = '',
+  ...props
+}: SafeImageProps) {
+  // Extract YouTube ID if this is a YouTube thumbnail or video URL
+  const youtubeCandidates = useMemo(() => {
+    if (!src) return [];
+    const match = src.match(/(?:youtube\.com\/(?:vi\/|watch\?v=)|youtu\.be\/|ytimg\.com\/vi\/)([a-zA-Z0-9_-]{6,15})/);
+    if (!match) return [src];
+    
+    const id = match[1];
+    // List candidate CDNs and resolutions in priority order
+    const list = [
+      src,
+      `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+      `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+      `https://img.youtube.com/vi/${id}/mqdefault.jpg`,
+      `https://i.ytimg.com/vi/${id}/0.jpg`,
+    ];
+    // Remove duplicates
+    return Array.from(new Set(list));
+  }, [src]);
 
-  // Sync state if src changes
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [error, setError] = useState(false);
+
+  // Reset when src changes
   useEffect(() => {
-    console.log('[SafeImage Debug] src prop changed to:', src);
-    setImgSrc(src);
+    setCandidateIndex(0);
     setError(false);
   }, [src]);
 
-  if (error || !imgSrc) {
-    console.log('[SafeImage Debug] Rendering fallback placeholder for:', src, 'with fallbackType:', fallbackType);
-    // Return a pristine, luxury themed CSS fallback
+  const currentSrc = youtubeCandidates[candidateIndex] || src;
+
+  const handleError = () => {
+    if (candidateIndex < youtubeCandidates.length - 1) {
+      // Advance to next candidate CDN / format
+      setCandidateIndex((prev) => prev + 1);
+    } else {
+      // All candidates exhausted, switch to graceful UI fallback
+      setError(true);
+    }
+  };
+
+  if (error || !src) {
+    if (fallbackType === 'logo' && currentSrc !== '/logo.png') {
+      return (
+        <img
+          src="/logo.png"
+          alt={alt || 'Music Madras Logo'}
+          className={className}
+          onError={() => {
+            // If local logo fails as well, show pristine MM badge
+            setError(true);
+          }}
+          {...props}
+        />
+      );
+    }
+
     if (fallbackType === 'logo') {
       return (
         <div 
-          className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-zinc-950 font-serif font-extrabold shadow-inner ${className}`}
+          className={`flex items-center justify-center bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-zinc-950 font-serif font-extrabold shadow-inner ${className}`}
           style={{ textShadow: '0 1px 1px rgba(255,255,255,0.2)' }}
         >
-          <span className="text-sm md:text-base tracking-wider">MM</span>
+          <span className="text-sm md:text-base tracking-wider font-bold">MM</span>
         </div>
       );
     }
 
-    // Standard card fallbacks
     const getIcon = () => {
       switch (fallbackType) {
         case 'music':
-          return <Music className="w-8 h-8 text-amber-500/80" />;
+          return <Music className="w-7 h-7 text-amber-500/80" />;
         case 'playlist':
-          return <Radio className="w-8 h-8 text-amber-500/80 animate-pulse" />;
+          return <Radio className="w-7 h-7 text-amber-500/80 animate-pulse" />;
         case 'gear':
-          return <Sliders className="w-8 h-8 text-emerald-500/80" />;
+          return <Sliders className="w-7 h-7 text-emerald-500/80" />;
         case 'artist':
-          return <Award className="w-8 h-8 text-amber-500/80" />;
+          return <Award className="w-7 h-7 text-amber-500/80" />;
         default:
-          return <Video className="w-8 h-8 text-amber-500/80" />;
+          return <Video className="w-7 h-7 text-amber-500/80" />;
       }
     };
 
     const getGradient = () => {
       switch (fallbackType) {
         case 'gear':
-          return 'from-zinc-900 via-zinc-900/90 to-teal-950/40';
+          return 'from-zinc-900 via-zinc-900/95 to-teal-950/40';
         case 'artist':
-          return 'from-zinc-900 via-zinc-900/90 to-amber-950/30';
+          return 'from-zinc-900 via-zinc-900/95 to-amber-950/30';
         default:
-          return 'from-zinc-900 via-zinc-900/90 to-zinc-950';
+          return 'from-zinc-900 via-zinc-900/95 to-zinc-950';
       }
     };
 
     return (
-      <div className={`relative w-full h-full flex flex-col items-center justify-center bg-gradient-to-br ${getGradient()} p-4 text-center border border-zinc-800/40 rounded-xl overflow-hidden ${className}`}>
-        {/* Abstract floating background record pattern for depth */}
-        <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full border border-zinc-800/20 flex items-center justify-center pointer-events-none">
-          <Disc className="w-12 h-12 text-zinc-800/10 animate-spin-slow" />
+      <div className={`flex flex-col items-center justify-center bg-gradient-to-br ${getGradient()} p-3 text-center border border-zinc-800/40 overflow-hidden ${className}`}>
+        <div className="absolute -right-3 -bottom-3 w-20 h-20 rounded-full border border-zinc-800/20 flex items-center justify-center pointer-events-none opacity-40">
+          <Disc className="w-10 h-10 text-zinc-700/30" />
         </div>
         
         {getIcon()}
         
         {title && (
-          <span className="mt-2 text-[10px] font-serif font-bold text-zinc-400 line-clamp-1 px-2 tracking-tight">
+          <span className="mt-1.5 text-[10px] font-serif font-semibold text-zinc-400 line-clamp-1 px-2 tracking-tight">
             {title}
           </span>
         )}
@@ -79,23 +128,16 @@ export default function SafeImage({ src, fallbackType = 'video', title, alt, cla
     );
   }
 
-  console.log('[SafeImage Debug] Rendering img element with src:', imgSrc);
-
-  const isExternal = imgSrc.startsWith('http://') || imgSrc.startsWith('https://');
+  const isExternal = currentSrc.startsWith('http://') || currentSrc.startsWith('https://');
 
   return (
     <img
-      src={imgSrc}
+      src={currentSrc}
       alt={alt}
       className={className}
-      onLoad={() => {
-        console.log('[SafeImage Debug] Image loaded successfully:', imgSrc);
-      }}
-      onError={() => {
-        console.error('[SafeImage Debug] Image failed to load:', imgSrc);
-        setError(true);
-      }}
-      referrerPolicy={isExternal ? "no-referrer" : undefined}
+      onError={handleError}
+      loading="lazy"
+      referrerPolicy={isExternal ? 'no-referrer' : undefined}
       {...props}
     />
   );

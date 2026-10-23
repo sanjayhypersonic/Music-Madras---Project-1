@@ -30,7 +30,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '6mo ago',
     description: "A spectacular performance of 'Dingiri Dingalae' by The South Asian Symphony Orchestra (SASO) and The Chennai Chorale, conducted by Alvin Arumugam. Arranged by Augustine Paul.",
     likesCount: 145,
-    thumbnailUrl: "https://img.youtube.com/vi/zEQmnmwr5UE/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/zEQmnmwr5UE/hqdefault.jpg"
   },
   {
     id: 'vid-2',
@@ -43,7 +43,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '5 months ago',
     description: "A beautiful, authentic live choral performance of the traditional Tamil Christmas song 'Ambara Umbara' by the Bishop Heber Chapel Choir. High-fidelity live audio capturing the natural room acoustics.",
     likesCount: 98,
-    thumbnailUrl: "https://img.youtube.com/vi/PpuO1CxaN5A/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/PpuO1CxaN5A/hqdefault.jpg"
   },
   {
     id: 'vid-3',
@@ -56,7 +56,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '6 months ago',
     description: "An evening of magnificent classical masterworks featuring the best of Wolfgang Amadeus Mozart and Giuseppe Verdi, performed live by SASO and The Chennai Chorale under Alvin Arumugam.",
     likesCount: 189,
-    thumbnailUrl: "https://img.youtube.com/vi/m2THfAiraY8/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/m2THfAiraY8/hqdefault.jpg"
   },
   {
     id: 'vid-4',
@@ -69,7 +69,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: 'Streamed 11 hours ago',
     description: "The beautiful anthem 'Show A Little Bit of Love and Kindness' performed live by the EMC Alumni Choir during the Emmanuel Methodist Church Homecoming service in Chennai.",
     likesCount: 76,
-    thumbnailUrl: "https://img.youtube.com/vi/c1TpR1AU478/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/c1TpR1AU478/hqdefault.jpg"
   },
   {
     id: 'vid-5',
@@ -82,7 +82,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '4 months ago',
     description: "Henry Mancini's legendary theme 'The Pink Panther' performed with precision and humor by the English Brass Collective live in Chennai. Captured via discrete low-profile silent stand systems.",
     likesCount: 122,
-    thumbnailUrl: "https://img.youtube.com/vi/dkZoPqBh5_I/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/dkZoPqBh5_I/hqdefault.jpg"
   },
   {
     id: 'vid-6',
@@ -95,7 +95,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '2 months ago',
     description: "The majestic Christian hymn 'Ride on! Ride on in Majesty' performed by the Bishop Heber Chapel Congregation Choir, recorded live with studio-quality audio.",
     likesCount: 254,
-    thumbnailUrl: "https://img.youtube.com/vi/2e3fEU-lNF8/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/2e3fEU-lNF8/hqdefault.jpg"
   },
   {
     id: 'vid-7',
@@ -108,7 +108,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '2 months ago',
     description: "A stunning sacred vocal performance of 'If God Be For Us' by The Canticles live at the TELC Arulnathar Lutheran Church, directed by Ebenezer ArunKumar.",
     likesCount: 210,
-    thumbnailUrl: "https://img.youtube.com/vi/itlXsCnRqN4/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/itlXsCnRqN4/hqdefault.jpg"
   },
   {
     id: 'vid-8',
@@ -121,7 +121,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '4 months ago',
     description: "An incredibly moving 3-part vocal harmony performance of 'Magizhvom Magizhvom' recorded live in Chennai. Focused on high-fidelity, natural blending without heavy digital compression.",
     likesCount: 88,
-    thumbnailUrl: "https://img.youtube.com/vi/Y1CB5pwiPP0/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/Y1CB5pwiPP0/hqdefault.jpg"
   },
   {
     id: 'vid-9',
@@ -134,7 +134,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '3 months ago',
     description: "Joseph Haydn's gorgeous classical aria 'In Native Worth' from The Creation, beautifully delivered by tenor Prashanth Gasper accompanied by The Chromatics ensemble.",
     likesCount: 114,
-    thumbnailUrl: "https://img.youtube.com/vi/yml5CPj_EtA/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/yml5CPj_EtA/hqdefault.jpg"
   },
   {
     id: 'vid-10',
@@ -147,7 +147,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '1mo ago',
     description: "The beloved traditional hymn 'Crown Him with Many Crowns' performed with stunning power by the congregation at TELC Arulnathar Lutheran Church, conducted by Jeremiah Christopher.",
     likesCount: 167,
-    thumbnailUrl: "https://img.youtube.com/vi/rfAg0EcmqNs/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/rfAg0EcmqNs/hqdefault.jpg"
   },
   {
     id: 'vid-11',
@@ -160,7 +160,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '1 month ago',
     description: "Noel Rawsthorne's magnificent arrangement of Thine be the Glory performed on the grand pipe organ at St. Andrew's Church (The Kirk), Chennai, by Jeremiah Christopher.",
     likesCount: 142,
-    thumbnailUrl: "https://img.youtube.com/vi/UWpwnWw8LqU/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/UWpwnWw8LqU/hqdefault.jpg"
   },
   {
     id: 'vid-12',
@@ -173,7 +173,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '3 months ago',
     description: "Live recording from the St. Andrew's Church (The Kirk), Chennai, capturing the rich, spacious pipe organ acoustics with specialized microphone setups.",
     likesCount: 65,
-    thumbnailUrl: "https://img.youtube.com/vi/569XzRYeeEc/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/569XzRYeeEc/hqdefault.jpg"
   },
   {
     id: 'vid-13',
@@ -186,7 +186,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '2 months ago',
     description: "A serene and meditative organ performance captured live in the natural room acoustics of Chennai's classic architecture.",
     likesCount: 48,
-    thumbnailUrl: "https://img.youtube.com/vi/Cch3sMiHWqY/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/Cch3sMiHWqY/hqdefault.jpg"
   },
   {
     id: 'vid-14',
@@ -199,7 +199,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '4 months ago',
     description: "A magnificent choral anthem with soaring organ accompaniment performed live at TELC Arulnathar Lutheran Church.",
     likesCount: 110,
-    thumbnailUrl: "https://img.youtube.com/vi/qBg0IGBqreU/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/qBg0IGBqreU/hqdefault.jpg"
   },
   {
     id: 'vid-15',
@@ -212,7 +212,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '3 weeks ago',
     description: "A beautiful vocal duet from Handel's Messiah, accompanied by the pipe organ, recorded live in Chennai.",
     likesCount: 95,
-    thumbnailUrl: "https://img.youtube.com/vi/sGBUfjb5Ip8/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/sGBUfjb5Ip8/hqdefault.jpg"
   },
   {
     id: 'vid-16',
@@ -225,7 +225,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '5 months ago',
     description: "Lloyd Larson's powerful 'Witness' performed live by the joint choir of TELC Adaikalanathar & Arulnathar Lutheran Churches in Chennai.",
     likesCount: 130,
-    thumbnailUrl: "https://img.youtube.com/vi/94RXvzXhAa0/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/94RXvzXhAa0/hqdefault.jpg"
   },
   {
     id: 'vid-17',
@@ -238,7 +238,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '2 months ago',
     description: "A deeply moving choral prayer, Holy Spirit Living Breath of God, arranged by Lloyd Larson, recorded live.",
     likesCount: 88,
-    thumbnailUrl: "https://img.youtube.com/vi/U9rjKmECbSU/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/U9rjKmECbSU/hqdefault.jpg"
   },
   {
     id: 'vid-18',
@@ -251,7 +251,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '6 months ago',
     description: "An exquisite Tamil Christmas Carol performed live during the annual Carols by Candlelight service in Chennai.",
     likesCount: 75,
-    thumbnailUrl: "https://img.youtube.com/vi/LZOy4hhKCK4/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/LZOy4hhKCK4/hqdefault.jpg"
   },
   {
     id: 'vid-19',
@@ -264,7 +264,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '1 month ago',
     description: "A profound, soaring performance of Mozart's Lacrimosa by the South Asian Symphony Orchestra and The Chennai Chorale.",
     likesCount: 220,
-    thumbnailUrl: "https://img.youtube.com/vi/fU6QstgYR8Q/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/fU6QstgYR8Q/hqdefault.jpg"
   },
   {
     id: 'vid-20',
@@ -277,7 +277,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '4 months ago',
     description: "An energetic, joyful spiritual anthem performed live during the EMC Choir Homecoming Concert in Chennai.",
     likesCount: 82,
-    thumbnailUrl: "https://img.youtube.com/vi/eXRvL-ilkiE/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/eXRvL-ilkiE/hqdefault.jpg"
   },
   {
     id: 'vid-21',
@@ -290,7 +290,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '3 months ago',
     description: "The beloved hymn 'I Come to the Garden', beautifully performed live in 5-part harmony at Emmanuel Methodist Church.",
     likesCount: 94,
-    thumbnailUrl: "https://img.youtube.com/vi/P6KS7xhIGWs/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/P6KS7xhIGWs/hqdefault.jpg"
   },
   {
     id: 'vid-22',
@@ -303,7 +303,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '7 months ago',
     description: "A majestic setting of Psalm 23 performed live in Chennai with lush string orchestration and crystal-clear vocals.",
     likesCount: 165,
-    thumbnailUrl: "https://img.youtube.com/vi/V2Imi2WvlM8/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/V2Imi2WvlM8/hqdefault.jpg"
   },
   {
     id: 'vid-23',
@@ -316,7 +316,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '2 months ago',
     description: "Haydn's triumphant chorus 'Sing the Lord' from his masterpiece oratorio 'The Creation', captured live with stunning fidelity.",
     likesCount: 115,
-    thumbnailUrl: "https://img.youtube.com/vi/KNNYXoHhl3o/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/KNNYXoHhl3o/hqdefault.jpg"
   },
   {
     id: 'vid-24',
@@ -329,7 +329,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '6 months ago',
     description: "The elegant Tamil Christmas Carol 'Chinnachiru Suthane' performed live during the annual Carols by Candlelight service.",
     likesCount: 140,
-    thumbnailUrl: "https://img.youtube.com/vi/1m8t8IwkDHs/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/1m8t8IwkDHs/hqdefault.jpg"
   },
   {
     id: 'vid-25',
@@ -342,7 +342,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '5 months ago',
     description: "A soaring, powerful performance of Rossini's Domine Deus from Petite Messe Solennelle, recorded live.",
     likesCount: 110,
-    thumbnailUrl: "https://img.youtube.com/vi/YMK86f4aEr8/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/YMK86f4aEr8/hqdefault.jpg"
   },
   {
     id: 'vid-26',
@@ -355,7 +355,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '6 months ago',
     description: "A delightful live vocal arrangement of 'Going to Bethlehem' performed live by The Canticles in Chennai.",
     likesCount: 84,
-    thumbnailUrl: "https://img.youtube.com/vi/0RQXxX1J79I/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/0RQXxX1J79I/hqdefault.jpg"
   },
   {
     id: 'vid-27',
@@ -368,7 +368,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '2 months ago',
     description: "A flawless, brilliant rendition of Mozart's Exsultate Jubilate, Movement 1, performed by soprano Cathlin Esther with The Chromatics.",
     likesCount: 195,
-    thumbnailUrl: "https://img.youtube.com/vi/snDANwKkxcI/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/snDANwKkxcI/hqdefault.jpg"
   },
   {
     id: 'vid-28',
@@ -381,7 +381,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '4 weeks ago',
     description: "A stunningly warm and precise 3-part vocal harmony performance of 'Count Your Blessings', live in Chennai.",
     likesCount: 78,
-    thumbnailUrl: "https://img.youtube.com/vi/2jF3Eblj2SA/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/2jF3Eblj2SA/hqdefault.jpg"
   },
   {
     id: 'vid-29',
@@ -394,7 +394,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '1 month ago',
     description: "Handel's magnificent Samson duet 'Go, Baffled Coward, Go', featuring superb live vocal performances accompanied by keyboard.",
     likesCount: 92,
-    thumbnailUrl: "https://img.youtube.com/vi/0LIZF3X_NDo/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/0LIZF3X_NDo/hqdefault.jpg"
   },
   {
     id: 'vid-30',
@@ -407,7 +407,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '1 month ago',
     description: "A beautiful and expressive live performance of Aaron Copland's masterpiece Appalachian Spring by the South Asian Symphony Orchestra.",
     likesCount: 204,
-    thumbnailUrl: "https://img.youtube.com/vi/LfrK4o-pSwU/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/LfrK4o-pSwU/hqdefault.jpg"
   },
   {
     id: 'vid-31',
@@ -420,7 +420,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '3 months ago',
     description: "The elegant, famous 'The Swan' by Camille Saint-Saëns, performed live by cellist Raman Ramakrishnan and pianist Stephen Prutsman.",
     likesCount: 156,
-    thumbnailUrl: "https://img.youtube.com/vi/mfbJu3HQJOA/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/mfbJu3HQJOA/hqdefault.jpg"
   },
   {
     id: 'vid-32',
@@ -433,7 +433,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '4 months ago',
     description: "Beethoven's intricate and beautiful Cello Sonata No. 4, performed live in an intimate chamber setting in Chennai.",
     likesCount: 118,
-    thumbnailUrl: "https://img.youtube.com/vi/3-bC6U7gN0E/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/3-bC6U7gN0E/hqdefault.jpg"
   },
   {
     id: 'vid-33',
@@ -446,7 +446,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '2 months ago',
     description: "A rich brass arrangement of Johnny Mercer's Autumn Leaves performed live with gorgeous warm resonance.",
     likesCount: 85,
-    thumbnailUrl: "https://img.youtube.com/vi/GqJklOeZaEc/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/GqJklOeZaEc/hqdefault.jpg"
   },
   {
     id: 'vid-34',
@@ -459,7 +459,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '3 weeks ago',
     description: "A beautiful four-hands piano duet of 'God Will Take Care of You', recorded live in Chennai with exceptional balance.",
     likesCount: 72,
-    thumbnailUrl: "https://img.youtube.com/vi/72g8yxnCK84/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/72g8yxnCK84/hqdefault.jpg"
   },
   {
     id: 'vid-35',
@@ -472,7 +472,7 @@ export const VIDEOS_DATA: Video[] = [
     publishedAt: '5 months ago',
     description: "A phenomenal symphonic performance of W.A. Mozart's final symphony 'Jupiter' (No. 41) under the baton of Alvin Arumugam.",
     likesCount: 310,
-    thumbnailUrl: "https://img.youtube.com/vi/-mWc17pyV78/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/-mWc17pyV78/hqdefault.jpg"
   }
 ];
 
@@ -484,7 +484,7 @@ export const PLAYLISTS_DATA: Playlist[] = [
     description: "The Emmanuel Methodist Church (EMC) Choir Homecoming performances under the direction of Kalyan Subrahmanyam, capturing the exquisite balance of vocal parts.",
     youtubeUrl: "https://youtube.com/playlist?list=PL6HjF0ftgoqukPMVied3OlVd0zT-Imjir&si=R3pUwznFmDBe0wSj",
     imageQuery: 'singing',
-    thumbnailUrl: "https://img.youtube.com/vi/NywlHEmY8YY/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/NywlHEmY8YY/hqdefault.jpg"
   },
   {
     id: 'play-3',
@@ -493,7 +493,7 @@ export const PLAYLISTS_DATA: Playlist[] = [
     description: "Curated sacred arias and classical works performed live in Chennai by the renowned vocal ensemble The Chromatics, including compositions by Verdi and Mendelssohn.",
     youtubeUrl: "https://youtube.com/playlist?list=PL6HjF0ftgoqukHKfMBYbjvIYwExv-zqCo&si=XwODzLFIC2PlbhPN",
     imageQuery: 'choir',
-    thumbnailUrl: "https://img.youtube.com/vi/GrHZCVTGj1I/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/GrHZCVTGj1I/hqdefault.jpg"
   },
   {
     id: 'play-4',
@@ -502,7 +502,7 @@ export const PLAYLISTS_DATA: Playlist[] = [
     description: "The famous Christmas Carols services and special hymns performed live by the prestigious Bishop Heber Chapel Choir in Chennai.",
     youtubeUrl: "https://youtube.com/playlist?list=PL6HjF0ftgoqvL10ZDw8kx3OLIP6VV8T97&si=dDJXD9EuLHhi09g5",
     imageQuery: 'violin',
-    thumbnailUrl: "https://img.youtube.com/vi/jiNrP52imwg/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/jiNrP52imwg/hqdefault.jpg"
   },
   {
     id: 'play-5',
@@ -511,7 +511,7 @@ export const PLAYLISTS_DATA: Playlist[] = [
     description: "Magnificent symphonic orchestral and vocal programs performed by the South Asian Symphony Orchestra (SASO) live in Chennai.",
     youtubeUrl: "https://youtube.com/playlist?list=PL6HjF0ftgoqui84vnHtk_1MfaqUZKeOPf&si=gxQFBuCcuUC_9Oyr",
     imageQuery: 'concert',
-    thumbnailUrl: "https://img.youtube.com/vi/kFMY76NTCs8/mqdefault.jpg"
+    thumbnailUrl: "https://i.ytimg.com/vi/kFMY76NTCs8/hqdefault.jpg"
   }
 ];
 
