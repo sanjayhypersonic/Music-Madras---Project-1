@@ -410,6 +410,9 @@ export function findPublicCollectionsByIds(ids: string[]): Promise<Collection[]>
   });
 }
 
+/** The one rule for "a public collection" (also used by archive search, so a result can never be a collection whose own page would 404). */
+export const PUBLIC_COLLECTION_WHERE = { status: "PUBLISHED" as const, archivedAt: null };
+
 export const COLLECTION_INDEX_PAGE_SIZE = 20;
 
 function clampCollectionIndexPage(page: number): number {

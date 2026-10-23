@@ -198,6 +198,13 @@ export function listEntitiesForOccasion(occasionId: string): Promise<Array<{ ent
     .findMany({ where: { occasionId, entityType: { in: ["PROGRAMME", "PERFORMANCE", "COLLECTION"] } }, select: { entityType: true, entityId: true }, orderBy: [{ entityType: "asc" }, { entityId: "asc" }] })
     .then((rows) => rows.map((r) => ({ entityType: r.entityType as "PROGRAMME" | "PERFORMANCE" | "COLLECTION", entityId: r.entityId })));
 }
+/** The same for SEVERAL Occasions at once (one query), for archive search and the sitemap. Recording-level links are never returned (see above). */
+export function listEntitiesForOccasions(occasionIds: string[]): Promise<Array<{ occasionId: string; entityType: "PROGRAMME" | "PERFORMANCE" | "COLLECTION"; entityId: string }>> {
+  if (occasionIds.length === 0) return Promise.resolve([]);
+  return prisma.entityOccasion
+    .findMany({ where: { occasionId: { in: occasionIds }, entityType: { in: ["PROGRAMME", "PERFORMANCE", "COLLECTION"] } }, select: { occasionId: true, entityType: true, entityId: true } })
+    .then((rows) => rows.map((r) => ({ occasionId: r.occasionId, entityType: r.entityType as "PROGRAMME" | "PERFORMANCE" | "COLLECTION", entityId: r.entityId })));
+}
 
 export interface AttachOccasionInput {
   entityType: string;

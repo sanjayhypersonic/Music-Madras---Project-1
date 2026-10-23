@@ -1,7 +1,11 @@
 import { prisma } from "../client";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
 import { likeNeedle } from "../../mmke/search/searchText";
+import { rankCandidates, type RankCandidate } from "../../mmke/search/searchRanking";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
+import { PUBLIC_COLLECTION_WHERE } from "./collectionRepository";
+import { PUBLIC_LEARNING_GUIDE_WHERE } from "./learningGuideRepository";
+import { filterPublicOccasionIds } from "./occasionPageRepository";
 import {
   eligibleArtistWhere,
   eligibleChoirWhere,
@@ -18,8 +22,11 @@ import type {
   ArchiveSearchPage,
   ArchiveSearchResultArtist,
   ArchiveSearchResultChoir,
+  ArchiveSearchResultCollection,
   ArchiveSearchResultComposer,
   ArchiveSearchResultConductor,
+  ArchiveSearchResultGuide,
+  ArchiveSearchResultOccasion,
   ArchiveSearchResultOrganisation,
   ArchiveSearchResultPerformance,
   ArchiveSearchResultProgramme,
@@ -51,6 +58,42 @@ function clampPage(page: number): number {
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
 
+/** How many candidates per tier are ranked in memory for one query (a technical bound, so no query scans or sorts an unbounded set). */
+export const RANK_CANDIDATE_CAP = 500;
+
+interface RankedPageArgs<Row extends { id: string }> {
+  query: string | undefined;
+  page: number;
+  pageSize: number;
+  /** No query: the original browse order (newest first), one page. */
+  plain: () => Promise<Row[]>;
+  count: () => Promise<number>;
+  /** Id + display title of matching records; `prefixOnly` narrows to titles that START with the query. Always ordered by title. */
+  candidates: (prefixOnly: boolean, take: number) => Promise<RankCandidate[]>;
+  /** Full rows for exactly these ids (the ids are already visibility-checked: they came from `candidates`). */
+  load: (ids: string[]) => Promise<Row[]>;
+}
+
+/**
+ * One page of results in RELEVANCE order (searchRanking.ts: exact title, prefix, word prefix, contains, other field; then alphabetical). Candidates come
+ * from two bounded queries — titles that start with the query (so an exact or prefix match is never crowded out of the cap by alphabetically earlier weaker
+ * matches) and every match — are merged without duplicates, ranked in memory, and only the page's rows are loaded. `total` is the database count of
+ * matches. With no query the original browse order is used unchanged.
+ */
+async function rankedPage<Row extends { id: string }>(args: RankedPageArgs<Row>): Promise<{ rows: Row[]; total: number }> {
+  if (!args.query) {
+    const [rows, total] = await Promise.all([args.plain(), args.count()]);
+    return { rows, total };
+  }
+  const [prefix, all, total] = await Promise.all([args.candidates(true, RANK_CANDIDATE_CAP), args.candidates(false, RANK_CANDIDATE_CAP), args.count()]);
+  const ordered = rankCandidates(args.query, [...prefix, ...all]);
+  const start = (args.page - 1) * args.pageSize;
+  const ids = ordered.slice(start, start + args.pageSize);
+  const loaded = ids.length > 0 ? await args.load(ids) : [];
+  const byId = new Map(loaded.map((row) => [row.id, row]));
+  return { rows: ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])), total };
+}
+
 export async function searchComposers(
   query: string | undefined,
   page = 1,
@@ -62,15 +105,16 @@ export async function searchComposers(
     ...(query ? { name: { contains: likeNeedle(query), mode: "insensitive" as const } } : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.composer.findMany({
-      where,
-      orderBy: query ? { name: "asc" } : { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.composer.count({ where }),
-  ]);
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.composer.findMany({ where, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.composer.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.composer.findMany({ where: prefixOnly ? { AND: [where, { name: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, name: true }, orderBy: { name: "asc" }, take })).map((r) => ({ id: r.id, label: r.name })),
+    load: (ids) => prisma.composer.findMany({ where: { id: { in: ids } } }),
+  });
 
   const items: ArchiveSearchResultComposer[] = rows.map((composer) => ({
     entityType: "composer",
@@ -108,16 +152,16 @@ export async function searchWorks(
     ],
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.musicalWork.findMany({
-      where,
-      include: { composer: true },
-      orderBy: query ? { title: "asc" } : { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.musicalWork.count({ where }),
-  ]);
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.musicalWork.findMany({ where, include: { composer: true }, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.musicalWork.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.musicalWork.findMany({ where: prefixOnly ? { AND: [where, { title: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, title: true }, orderBy: { title: "asc" }, take })).map((r) => ({ id: r.id, label: r.title })),
+    load: (ids) => prisma.musicalWork.findMany({ where: { id: { in: ids } }, include: { composer: true } }),
+  });
 
   const items: ArchiveSearchResultWork[] = rows.map((work) => ({
     entityType: "work",
@@ -151,15 +195,16 @@ export async function searchVenues(
       : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.venue.findMany({
-      where,
-      orderBy: query ? { name: "asc" } : { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.venue.count({ where }),
-  ]);
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.venue.findMany({ where, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.venue.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.venue.findMany({ where: prefixOnly ? { AND: [where, { name: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, name: true }, orderBy: { name: "asc" }, take })).map((r) => ({ id: r.id, label: r.name })),
+    load: (ids) => prisma.venue.findMany({ where: { id: { in: ids } } }),
+  });
 
   const items: ArchiveSearchResultVenue[] = rows.map((venue) => ({
     entityType: "venue",
@@ -201,23 +246,31 @@ export async function searchRecordings(
       : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.recording.findMany({
-      where,
+  const recordingInclude = {
+    currentPublishedRevision: {
       include: {
-        currentPublishedRevision: {
-          include: {
-            performance: { include: { venue: true, programme: true } },
-            mediaResources: true,
-          },
-        },
+        performance: { include: { venue: true, programme: true } },
+        mediaResources: true,
       },
-      orderBy: { updatedAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.recording.count({ where }),
-  ]);
+    },
+  };
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.recording.findMany({ where, include: recordingInclude, orderBy: { updatedAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.recording.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (
+        await prisma.recording.findMany({
+          where: prefixOnly ? { AND: [where, { currentPublishedRevision: { title: { startsWith: likeNeedle(query!), mode: "insensitive" } } }] } : where,
+          select: { id: true, currentPublishedRevision: { select: { title: true } } },
+          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+          take,
+        })
+      ).map((r) => ({ id: r.id, label: r.currentPublishedRevision?.title ?? "" })),
+    load: (ids) => prisma.recording.findMany({ where: { id: { in: ids }, status: "PUBLISHED" }, include: recordingInclude }),
+  });
 
   const published = rows.filter((recording) => isRecordingPublished(recording) && recording.currentPublishedRevision);
 
@@ -286,24 +339,25 @@ export async function searchProgrammes(
       : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.programme.findMany({
-      where,
-      // The preview never names an archived Work (or a Work of an archived Composer).
-      include: {
-        items: {
-          where: { musicalWork: { archivedAt: null, composer: { archivedAt: null } } },
-          include: { musicalWork: true },
-          orderBy: { order: "asc" },
-          take: 3,
-        },
-      },
-      orderBy: query ? { title: "asc" } : { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.programme.count({ where }),
-  ]);
+  // The preview never names an archived Work (or a Work of an archived Composer).
+  const programmeInclude = {
+    items: {
+      where: { musicalWork: { archivedAt: null, composer: { archivedAt: null } } },
+      include: { musicalWork: true },
+      orderBy: { order: "asc" as const },
+      take: 3,
+    },
+  };
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.programme.findMany({ where, include: programmeInclude, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.programme.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.programme.findMany({ where: prefixOnly ? { AND: [where, { title: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, title: true }, orderBy: { title: "asc" }, take })).map((r) => ({ id: r.id, label: r.title })),
+    load: (ids) => prisma.programme.findMany({ where: { id: { in: ids } }, include: programmeInclude }),
+  });
 
   const items: ArchiveSearchResultProgramme[] = rows.map((programme) => ({
     entityType: "programme",
@@ -391,15 +445,16 @@ export async function searchArtists(
       : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.artist.findMany({
-      where,
-      orderBy: query ? { name: "asc" } : { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.artist.count({ where }),
-  ]);
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.artist.findMany({ where, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.artist.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.artist.findMany({ where: prefixOnly ? { AND: [where, { name: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, name: true }, orderBy: { name: "asc" }, take })).map((r) => ({ id: r.id, label: r.name })),
+    load: (ids) => prisma.artist.findMany({ where: { id: { in: ids } } }),
+  });
 
   const items: ArchiveSearchResultArtist[] = rows.map((artist) => ({
     entityType: "artist",
@@ -431,15 +486,16 @@ export async function searchChoirs(
       : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.choir.findMany({
-      where,
-      orderBy: query ? { name: "asc" } : { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.choir.count({ where }),
-  ]);
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.choir.findMany({ where, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.choir.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.choir.findMany({ where: prefixOnly ? { AND: [where, { name: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, name: true }, orderBy: { name: "asc" }, take })).map((r) => ({ id: r.id, label: r.name })),
+    load: (ids) => prisma.choir.findMany({ where: { id: { in: ids } } }),
+  });
 
   const items: ArchiveSearchResultChoir[] = rows.map((choir) => ({
     entityType: "choir",
@@ -464,15 +520,16 @@ export async function searchConductors(
     ...(query ? { name: { contains: likeNeedle(query), mode: "insensitive" as const } } : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.conductor.findMany({
-      where,
-      orderBy: query ? { name: "asc" } : { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.conductor.count({ where }),
-  ]);
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.conductor.findMany({ where, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.conductor.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.conductor.findMany({ where: prefixOnly ? { AND: [where, { name: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, name: true }, orderBy: { name: "asc" }, take })).map((r) => ({ id: r.id, label: r.name })),
+    load: (ids) => prisma.conductor.findMany({ where: { id: { in: ids } } }),
+  });
 
   const items: ArchiveSearchResultConductor[] = rows.map((conductor) => ({
     entityType: "conductor",
@@ -509,15 +566,16 @@ export async function searchOrganisations(
       : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.organisation.findMany({
-      where,
-      orderBy: query ? { name: "asc" } : { createdAt: "desc" },
-      skip: (currentPage - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.organisation.count({ where }),
-  ]);
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.organisation.findMany({ where, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.organisation.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.organisation.findMany({ where: prefixOnly ? { AND: [where, { name: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, name: true }, orderBy: { name: "asc" }, take })).map((r) => ({ id: r.id, label: r.name })),
+    load: (ids) => prisma.organisation.findMany({ where: { id: { in: ids } } }),
+  });
 
   const items: ArchiveSearchResultOrganisation[] = rows.map((organisation) => ({
     entityType: "organisation",
@@ -531,6 +589,117 @@ export async function searchOrganisations(
 }
 
 /**
+ * Collection search: published, non-archived Collections only (PUBLIC_COLLECTION_WHERE, the rule /collections/[slug] itself uses), matched on the Collection's
+ * own title and description.
+ */
+export async function searchCollections(
+  query: string | undefined,
+  page = 1,
+  pageSize = ARCHIVE_PAGE_SIZE
+): Promise<ArchiveSearchPage<ArchiveSearchResultCollection>> {
+  const currentPage = clampPage(page);
+  const where = {
+    ...PUBLIC_COLLECTION_WHERE,
+    ...(query
+      ? {
+          OR: [
+            { title: { contains: likeNeedle(query), mode: "insensitive" as const } },
+            { description: { contains: likeNeedle(query), mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.collection.findMany({ where, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.collection.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.collection.findMany({ where: prefixOnly ? { AND: [where, { title: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, title: true }, orderBy: { title: "asc" }, take })).map((r) => ({ id: r.id, label: r.title })),
+    load: (ids) => prisma.collection.findMany({ where: { id: { in: ids } } }),
+  });
+
+  const items: ArchiveSearchResultCollection[] = rows.map((collection) => ({ entityType: "collection", id: collection.id, slug: collection.slug, title: collection.title, description: collection.description }));
+  return { items, total, page: currentPage, pageSize };
+}
+
+/**
+ * Learning-guide search: published, non-archived guides only (PUBLIC_LEARNING_GUIDE_WHERE, the rule /learning/[slug] itself uses), matched on the guide's
+ * TITLE (its body is long Markdown and is deliberately not scanned on every search). A result carries a short factual line, never the body.
+ */
+export async function searchLearningGuides(
+  query: string | undefined,
+  page = 1,
+  pageSize = ARCHIVE_PAGE_SIZE
+): Promise<ArchiveSearchPage<ArchiveSearchResultGuide>> {
+  const currentPage = clampPage(page);
+  const where = {
+    ...PUBLIC_LEARNING_GUIDE_WHERE,
+    ...(query ? { title: { contains: likeNeedle(query), mode: "insensitive" as const } } : {}),
+  };
+
+  const { rows, total } = await rankedPage({
+    query,
+    page: currentPage,
+    pageSize,
+    plain: () => prisma.learningGuide.findMany({ where, orderBy: { createdAt: "desc" }, skip: (currentPage - 1) * pageSize, take: pageSize }),
+    count: () => prisma.learningGuide.count({ where }),
+    candidates: async (prefixOnly, take) =>
+      (await prisma.learningGuide.findMany({ where: prefixOnly ? { AND: [where, { title: { startsWith: likeNeedle(query!), mode: "insensitive" } }] } : where, select: { id: true, title: true }, orderBy: { title: "asc" }, take })).map((r) => ({ id: r.id, label: r.title })),
+    load: (ids) => prisma.learningGuide.findMany({ where: { id: { in: ids } } }),
+  });
+
+  const items: ArchiveSearchResultGuide[] = rows.map((guide) => ({
+    entityType: "guide",
+    id: guide.id,
+    slug: guide.slug,
+    title: guide.title,
+    difficultyLevel: guide.difficultyLevel,
+    estimatedReadingTimeMinutes: guide.estimatedReadingTimeMinutes,
+  }));
+  return { items, total, page: currentPage, pageSize };
+}
+
+/**
+ * Occasion search: an Occasion is a result only while it has a PUBLIC page — active, with something public attached (filterPublicOccasionIds, the set-based
+ * twin of the page's own rule) — so a result never leads to a 404 and an Occasion with only draft content never leaks, not even through the count. Occasions are
+ * a small curated list, so the matches (bounded) are fetched, filtered to the public ones, ranked and paged in memory.
+ */
+export async function searchOccasions(
+  query: string | undefined,
+  page = 1,
+  pageSize = ARCHIVE_PAGE_SIZE
+): Promise<ArchiveSearchPage<ArchiveSearchResultOccasion>> {
+  const currentPage = clampPage(page);
+  const where = {
+    archivedAt: null,
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: likeNeedle(query), mode: "insensitive" as const } },
+            { description: { contains: likeNeedle(query), mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const matches = await prisma.occasion.findMany({ where, orderBy: [{ name: "asc" }, { id: "asc" }], take: RANK_CANDIDATE_CAP });
+  const publicIds = await filterPublicOccasionIds(matches.map((o) => o.id));
+  const visible = matches.filter((o) => publicIds.has(o.id));
+  const ordered = query ? rankCandidates(query, visible.map((o) => ({ id: o.id, label: o.name }))) : visible.map((o) => o.id);
+  const byId = new Map(visible.map((o) => [o.id, o]));
+  const start = (currentPage - 1) * pageSize;
+
+  const items: ArchiveSearchResultOccasion[] = ordered.slice(start, start + pageSize).map((id) => {
+    const occasion = byId.get(id)!;
+    return { entityType: "occasion", id: occasion.id, slug: occasion.slug, name: occasion.name, description: occasion.description };
+  });
+  return { items, total: visible.length, page: currentPage, pageSize };
+}
+
+/**
  * The combined "all supported entity types" view — composes the
  * single-type search functions above rather than a separate query
  * implementation, so a future entity type is one new function away, not
@@ -538,7 +707,7 @@ export async function searchOrganisations(
  * is the discovery/overview mode, not exhaustive search.
  */
 export async function searchArchiveAll(query: string | undefined, limitPerType = ARCHIVE_ALL_TYPES_LIMIT): Promise<ArchiveSearchAllResult> {
-  const [composers, works, recordings, venues, programmes, performances, artists, choirs, conductors, organisations] = await Promise.all([
+  const [composers, works, recordings, venues, programmes, performances, artists, choirs, conductors, organisations, collections, guides, occasions] = await Promise.all([
     searchComposers(query, 1, limitPerType),
     searchWorks(query, 1, limitPerType),
     searchRecordings(query, 1, limitPerType),
@@ -549,7 +718,10 @@ export async function searchArchiveAll(query: string | undefined, limitPerType =
     searchChoirs(query, 1, limitPerType),
     searchConductors(query, 1, limitPerType),
     searchOrganisations(query, 1, limitPerType),
+    searchCollections(query, 1, limitPerType),
+    searchLearningGuides(query, 1, limitPerType),
+    searchOccasions(query, 1, limitPerType),
   ]);
 
-  return { composers, works, recordings, venues, programmes, performances, artists, choirs, conductors, organisations };
+  return { composers, works, recordings, venues, programmes, performances, artists, choirs, conductors, organisations, collections, guides, occasions };
 }

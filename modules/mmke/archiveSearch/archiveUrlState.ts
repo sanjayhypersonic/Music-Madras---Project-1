@@ -18,6 +18,9 @@ export const ARCHIVE_TYPE_LABELS: Record<ArchiveEntityType, string> = {
   conductor: "Conductors",
   venue: "Venues",
   organisation: "Organisations",
+  collection: "Collections",
+  guide: "Learning Guides",
+  occasion: "Occasions",
 };
 
 const TYPE_ALIASES: Record<string, ArchiveEntityType> = {
@@ -41,6 +44,15 @@ const TYPE_ALIASES: Record<string, ArchiveEntityType> = {
   venues: "venue",
   organisation: "organisation",
   organisations: "organisation",
+  collection: "collection",
+  collections: "collection",
+  guide: "guide",
+  guides: "guide",
+  learning: "guide",
+  "learning-guide": "guide",
+  "learning-guides": "guide",
+  occasion: "occasion",
+  occasions: "occasion",
 };
 
 export interface NormalizedArchiveType {

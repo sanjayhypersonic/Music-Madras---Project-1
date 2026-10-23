@@ -12,8 +12,11 @@ import {
   searchArchiveAll,
   searchArtists,
   searchChoirs,
+  searchCollections,
   searchComposers,
   searchConductors,
+  searchLearningGuides,
+  searchOccasions,
   searchOrganisations,
   searchPerformances,
   searchProgrammes,
@@ -27,8 +30,11 @@ import type {
   ArchiveSearchResult,
   ArchiveSearchResultArtist,
   ArchiveSearchResultChoir,
+  ArchiveSearchResultCollection,
   ArchiveSearchResultComposer,
   ArchiveSearchResultConductor,
+  ArchiveSearchResultGuide,
+  ArchiveSearchResultOccasion,
   ArchiveSearchResultOrganisation,
   ArchiveSearchResultPerformance,
   ArchiveSearchResultProgramme,
@@ -85,7 +91,7 @@ export async function generateMetadata({
   const hasSearchState = Boolean(normaliseSearchText(q)) || Boolean(type?.trim());
   const title = "Archive — Music Madras";
   const description =
-    "Explore the Music Madras archive of composers, musical works, programmes, performances, artists, choirs, conductors, recordings, venues, and organisations documenting Chennai's Western Classical Music heritage.";
+    "Explore the Music Madras archive of composers, musical works, programmes, performances, artists, choirs, conductors, recordings, venues, organisations, collections, learning guides and occasions documenting Chennai's Western Classical Music heritage.";
 
   return {
     metadataBase: new URL(SITE_ORIGIN),
@@ -250,6 +256,45 @@ function OrganisationResult({ result }: { result: ArchiveSearchResultOrganisatio
   );
 }
 
+function CollectionResult({ result }: { result: ArchiveSearchResultCollection }) {
+  const description = excerpt(result.description);
+  return (
+    <li className="museum-category-card">
+      <ResultTypeBadge entityType="collection" />
+      <h3>
+        <Link href={`/collections/${result.slug}`}>{result.title}</Link>
+      </h3>
+      {description && <p>{description}</p>}
+    </li>
+  );
+}
+
+function GuideResult({ result }: { result: ArchiveSearchResultGuide }) {
+  const details = [result.difficultyLevel, result.estimatedReadingTimeMinutes ? `${result.estimatedReadingTimeMinutes} min read` : null].filter(Boolean).join(" · ");
+  return (
+    <li className="museum-category-card">
+      <ResultTypeBadge entityType="guide" />
+      <h3>
+        <Link href={`/learning/${result.slug}`}>{result.title}</Link>
+      </h3>
+      {details && <p className="museum-meta">{details}</p>}
+    </li>
+  );
+}
+
+function OccasionResult({ result }: { result: ArchiveSearchResultOccasion }) {
+  const description = excerpt(result.description);
+  return (
+    <li className="museum-category-card">
+      <ResultTypeBadge entityType="occasion" />
+      <h3>
+        <Link href={`/occasions/${result.slug}`}>{result.name}</Link>
+      </h3>
+      {description && <p>{description}</p>}
+    </li>
+  );
+}
+
 function ResultCard({ result }: { result: ArchiveSearchResult }) {
   switch (result.entityType) {
     case "composer":
@@ -272,6 +317,12 @@ function ResultCard({ result }: { result: ArchiveSearchResult }) {
       return <VenueResult result={result} />;
     case "organisation":
       return <OrganisationResult result={result} />;
+    case "collection":
+      return <CollectionResult result={result} />;
+    case "guide":
+      return <GuideResult result={result} />;
+    case "occasion":
+      return <OccasionResult result={result} />;
   }
 }
 
@@ -287,7 +338,7 @@ function SearchForm({ query, type }: { query?: string; type: ArchiveEntityType |
         type="search"
         name="q"
         defaultValue={query ?? ""}
-        placeholder="Search composers, works, artists, choirs, conductors, recordings, venues, organisations…"
+        placeholder="Search composers, works, recordings, performances, artists, venues, collections, guides, occasions…"
       />
       {type && <input type="hidden" name="type" value={type} />}
       <button type="submit" className="museum-button">
@@ -315,6 +366,9 @@ function FilterPills({ query, activeType }: { query?: string; activeType: Archiv
     { type: "conductor", label: "Conductors" },
     { type: "venue", label: "Venues" },
     { type: "organisation", label: "Organisations" },
+    { type: "collection", label: "Collections" },
+    { type: "guide", label: "Learning Guides" },
+    { type: "occasion", label: "Occasions" },
   ];
 
   return (
@@ -389,8 +443,9 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
         <h1>{heading}</h1>
         <p className="museum-entity-header__description">
           Search the Music Madras archive of composers, musical works, programmes, performances, artists,
-          choirs, conductors, recordings, the venues that hosted them, and the organisations that operate
-          them.
+          choirs, conductors, recordings, the venues that hosted them, the organisations that operate
+          them, and the collections, learning guides and occasions that connect them. Results are ranked by how
+          closely the title matches: an exact title first, then titles that begin with your words.
         </p>
       </header>
 
@@ -477,6 +532,9 @@ async function AllTypesResults({ query }: { query?: string }) {
     { type: "conductor", page: all.conductors },
     { type: "venue", page: all.venues },
     { type: "organisation", page: all.organisations },
+    { type: "collection", page: all.collections },
+    { type: "guide", page: all.guides },
+    { type: "occasion", page: all.occasions },
   ];
 
   const totalAcrossAllTypes = groups.reduce((sum, group) => sum + group.page.total, 0);
@@ -550,5 +608,11 @@ async function fetchPageForType(
       return searchVenues(query, page, ARCHIVE_PAGE_SIZE);
     case "organisation":
       return searchOrganisations(query, page, ARCHIVE_PAGE_SIZE);
+    case "collection":
+      return searchCollections(query, page, ARCHIVE_PAGE_SIZE);
+    case "guide":
+      return searchLearningGuides(query, page, ARCHIVE_PAGE_SIZE);
+    case "occasion":
+      return searchOccasions(query, page, ARCHIVE_PAGE_SIZE);
   }
 }

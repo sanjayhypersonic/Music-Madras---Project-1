@@ -343,7 +343,8 @@ export async function detachRecordingFromLearningGuide(learningGuideId: string, 
 // following the same split Collection already established.
 // ---------------------------------------------------------------------------
 
-const PUBLIC_LEARNING_GUIDE_WHERE = { status: "PUBLISHED", archivedAt: null } as const;
+/** The one rule for "a public learning guide" (also used by archive search, so a result can never be a guide whose own page would 404). */
+export const PUBLIC_LEARNING_GUIDE_WHERE = { status: "PUBLISHED", archivedAt: null } as const;
 
 export const LEARNING_GUIDE_INDEX_PAGE_SIZE = 20;
 

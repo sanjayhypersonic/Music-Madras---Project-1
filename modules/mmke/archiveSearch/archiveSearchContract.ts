@@ -20,7 +20,10 @@ export type ArchiveEntityType =
   | "artist"
   | "choir"
   | "conductor"
-  | "organisation";
+  | "organisation"
+  | "collection"
+  | "guide"
+  | "occasion";
 
 export interface ArchiveSearchResultComposer {
   entityType: "composer";
@@ -121,6 +124,34 @@ export interface ArchiveSearchResultOrganisation {
   description: string | null;
 }
 
+/** A published Collection (the same public rule as /collections/[slug]). */
+export interface ArchiveSearchResultCollection {
+  entityType: "collection";
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+}
+
+/** A published learning guide (the same public rule as /learning/[slug]); a short factual line, never its body. */
+export interface ArchiveSearchResultGuide {
+  entityType: "guide";
+  id: string;
+  slug: string;
+  title: string;
+  difficultyLevel: string | null;
+  estimatedReadingTimeMinutes: number | null;
+}
+
+/** An Occasion with public content attached (the same public rule as /occasions/[slug]). */
+export interface ArchiveSearchResultOccasion {
+  entityType: "occasion";
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+}
+
 export type ArchiveSearchResult =
   | ArchiveSearchResultComposer
   | ArchiveSearchResultWork
@@ -131,7 +162,10 @@ export type ArchiveSearchResult =
   | ArchiveSearchResultArtist
   | ArchiveSearchResultChoir
   | ArchiveSearchResultConductor
-  | ArchiveSearchResultOrganisation;
+  | ArchiveSearchResultOrganisation
+  | ArchiveSearchResultCollection
+  | ArchiveSearchResultGuide
+  | ArchiveSearchResultOccasion;
 
 /** One entity type's page of results, for the single-type paginated view. */
 export interface ArchiveSearchPage<T> {
@@ -153,4 +187,7 @@ export interface ArchiveSearchAllResult {
   choirs: ArchiveSearchPage<ArchiveSearchResultChoir>;
   conductors: ArchiveSearchPage<ArchiveSearchResultConductor>;
   organisations: ArchiveSearchPage<ArchiveSearchResultOrganisation>;
+  collections: ArchiveSearchPage<ArchiveSearchResultCollection>;
+  guides: ArchiveSearchPage<ArchiveSearchResultGuide>;
+  occasions: ArchiveSearchPage<ArchiveSearchResultOccasion>;
 }

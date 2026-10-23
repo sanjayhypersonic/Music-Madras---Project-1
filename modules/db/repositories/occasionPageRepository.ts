@@ -2,12 +2,12 @@ import { prisma } from "../client";
 import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
 import type { OccasionPageCollection, OccasionPagePerformance, OccasionPageProgramme, OccasionPageRecording, PublicOccasionPageData } from "../../mmke/occasionPage/occasionPageContract";
 import { findPublicCollectionsByIds } from "./collectionRepository";
-import { listEntitiesForOccasion } from "./occasionRepository";
+import { listEntitiesForOccasion, listEntitiesForOccasions } from "./occasionRepository";
 import { PUBLISHED_REVISION_WHERE, eligiblePerformanceWhere, eligibleProgrammeWhere } from "./publicEligibility";
 
-// Public Occasion pages — the reader behind /occasions/[slug] and its sitemap entry. ONE definition of "public": getPublicOccasionPageData returns
-// null unless the Occasion is active and something public is attached to it, and the sitemap is built by calling this very function, so the page and the
-// sitemap cannot disagree.
+// Public Occasion pages — the reader behind /occasions/[slug], its sitemap entry and archive search. ONE definition of "public": getPublicOccasionPageData
+// returns null unless the Occasion is active and something public is attached to it; filterPublicOccasionIds is its set-based twin (a constant number of
+// queries for any number of Occasions) used by the sitemap and archive search, and a test pins that the two never disagree.
 //
 // What counts as attached (all of it filtered by the shared eligibility rules, so a public page never links to something whose own page would 404):
 //   - a Performance attached directly, or any Performance of an attached Programme   -> eligible Performances only (publicEligibility.ts)
@@ -21,7 +21,6 @@ import { PUBLISHED_REVISION_WHERE, eligiblePerformanceWhere, eligibleProgrammeWh
 /** A technical bound on each list, so one heavily used Occasion cannot make an unbounded page. Not a product setting. */
 const LIST_LIMIT = 200;
 const SITEMAP_MAX_OCCASIONS = 500;
-const SITEMAP_CONCURRENCY = 10;
 
 export async function getPublicOccasionPageData(slug: string): Promise<PublicOccasionPageData | null> {
   const occasion = await prisma.occasion.findFirst({ where: { slug, archivedAt: null } });
@@ -87,21 +86,63 @@ export async function getPublicOccasionPageData(slug: string): Promise<PublicOcc
   return { id: occasion.id, slug: occasion.slug, name: occasion.name, description: occasion.description, performances, programmes, recordings, collections, lastModified: occasion.updatedAt };
 }
 
+/**
+ * Which of these Occasions are PUBLIC — the set-based twin of getPublicOccasionPageData's "something public is attached" rule, in a constant number of queries
+ * however many Occasions are asked about (archive search and the sitemap use it). An Occasion is public when it is active and at least one of these holds:
+ * an eligible Performance is attached directly or belongs to an attached Programme (an eligible attached Programme always has such a Performance); a
+ * published, non-archived Collection is attached; or a published Recording's PUBLISHED revision carries it. A test pins the equivalence with the page reader.
+ */
+export async function filterPublicOccasionIds(occasionIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(occasionIds)];
+  if (ids.length === 0) return new Set();
+  const active = (await prisma.occasion.findMany({ where: { id: { in: ids }, archivedAt: null }, select: { id: true } })).map((o) => o.id);
+  if (active.length === 0) return new Set();
+
+  const links = await listEntitiesForOccasions(active);
+  const of = (type: "PROGRAMME" | "PERFORMANCE" | "COLLECTION") => links.filter((l) => l.entityType === type);
+  const performanceIds = of("PERFORMANCE").map((l) => l.entityId);
+  const programmeIds = of("PROGRAMME").map((l) => l.entityId);
+  const collectionIds = of("COLLECTION").map((l) => l.entityId);
+
+  const [performances, collections, revisionLinks] = await Promise.all([
+    performanceIds.length + programmeIds.length === 0
+      ? Promise.resolve([])
+      : prisma.performance.findMany({
+          where: { AND: [eligiblePerformanceWhere, { OR: [{ id: { in: performanceIds } }, { programmeId: { in: programmeIds } }] }] },
+          select: { id: true, programmeId: true },
+        }),
+    findPublicCollectionsByIds(collectionIds),
+    prisma.recordingRevisionOccasion.findMany({ where: { occasionId: { in: active }, revision: PUBLISHED_REVISION_WHERE }, select: { occasionId: true, revision: { select: { recordingId: true } } } }),
+  ]);
+  const recordingIds = [...new Set(revisionLinks.map((l) => l.revision.recordingId))];
+  const publishedRecordingIds = new Set(
+    recordingIds.length === 0
+      ? []
+      : (await prisma.recording.findMany({ where: { id: { in: recordingIds }, status: "PUBLISHED" }, include: { currentPublishedRevision: { select: { title: true } } } })).filter((r) => isRecordingPublished(r)).map((r) => r.id)
+  );
+
+  const eligiblePerformanceIds = new Set(performances.map((p) => p.id));
+  const programmeHasEligiblePerformance = new Set(performances.map((p) => p.programmeId));
+  const publicCollectionIds = new Set(collections.map((c) => c.id));
+
+  const publicIds = new Set<string>();
+  for (const link of links) {
+    if (link.entityType === "PERFORMANCE" && eligiblePerformanceIds.has(link.entityId)) publicIds.add(link.occasionId);
+    else if (link.entityType === "PROGRAMME" && programmeHasEligiblePerformance.has(link.entityId)) publicIds.add(link.occasionId);
+    else if (link.entityType === "COLLECTION" && publicCollectionIds.has(link.entityId)) publicIds.add(link.occasionId);
+  }
+  for (const link of revisionLinks) if (publishedRecordingIds.has(link.revision.recordingId)) publicIds.add(link.occasionId);
+  return publicIds;
+}
+
 export interface OccasionSitemapEntry {
   slug: string;
   updatedAt: Date;
 }
 
-/** The Occasions that have a public page, built by calling the page's own reader so the two can never disagree. Occasions are a small curated list. */
+/** The Occasions that have a public page (one set-based check, not one query set per Occasion). Occasions are a small curated list, bounded anyway. */
 export async function listPublicOccasionSitemapEntries(): Promise<OccasionSitemapEntry[]> {
-  const active = await prisma.occasion.findMany({ where: { archivedAt: null }, select: { slug: true, updatedAt: true }, orderBy: { slug: "asc" }, take: SITEMAP_MAX_OCCASIONS });
-  const entries: OccasionSitemapEntry[] = [];
-  for (let offset = 0; offset < active.length; offset += SITEMAP_CONCURRENCY) {
-    const chunk = active.slice(offset, offset + SITEMAP_CONCURRENCY);
-    const pages = await Promise.all(chunk.map((o) => getPublicOccasionPageData(o.slug)));
-    chunk.forEach((o, i) => {
-      if (pages[i]) entries.push(o);
-    });
-  }
-  return entries;
+  const active = await prisma.occasion.findMany({ where: { archivedAt: null }, select: { id: true, slug: true, updatedAt: true }, orderBy: { slug: "asc" }, take: SITEMAP_MAX_OCCASIONS });
+  const publicIds = await filterPublicOccasionIds(active.map((o) => o.id));
+  return active.filter((o) => publicIds.has(o.id)).map((o) => ({ slug: o.slug, updatedAt: o.updatedAt }));
 }

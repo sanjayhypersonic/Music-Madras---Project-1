@@ -809,3 +809,38 @@ button.museum-button {
 .museum-root .museum-button.museum-button--secondary:hover {
   color: var(--mm-link-hover);
 }
+
+/* The Museum-wide header search (a plain GET form to /archive). Same tokens as the archive page's own search form; on narrow screens it takes the space the
+   desktop nav gives up and the button is visually hidden (Enter and the mobile keyboard's search key still submit; it stays in the accessibility tree). */
+.museum-header__search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 10rem;
+  max-width: 18rem;
+  min-width: 9rem;
+  margin: 0;
+}
+
+.museum-header__search .museum-search-input {
+  min-width: 0;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 40rem) {
+  .museum-header__search {
+    flex: 1 1 auto;
+  }
+
+  .museum-header__search-button {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    padding: 0;
+    border: 0;
+  }
+}
