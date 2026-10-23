@@ -2,7 +2,7 @@
 
 Single, deduplicated list of decisions, open owner decisions, deferred risks and release gates. **Rule:** record, keep severity, revisit at the single release-readiness audit. Entries cite the existing report that holds the evidence; they are **not re-verified here**. Update this file in the same change that resolves or adds an item.
 
-Last updated: 2026-10-21 · Branch `music-madras-production-rebuild` · Phase 6K committed locally (`637d7e9`) · Phase 6L implemented, uncommitted · `main` = `3bcfe85` (untouched)
+Last updated: 2026-10-21 · Branch `music-madras-production-rebuild` · Phase 6K committed (`637d7e9`), Phase 6L committed (`32379ea`), public Occasion pages committed as local checkpoints · `main` = `3bcfe85` (untouched)
 
 ## 1. Settled decisions
 
@@ -44,15 +44,25 @@ Last updated: 2026-10-21 · Branch `music-madras-production-rebuild` · Phase 6K
 | R-11 | The public Organisation page omits an inconsistent Recording's links (never unverified, never legacy rows) and logs it on the server (`Organisation page: … omitted … (reason)`); there is no alert or counter yet, so someone must watch the server log. Studio and the AI context stay strict (they throw) | Low | audit | recording-publication-safety §15 |
 | R-12 | Legacy Recording-level rows remain in the database as frozen history; removal is a separate approved migration after a soak period | Low | post-soak | relationship-cutover runbook |
 | R-13 | The backfill and re-projection tools operate on the whole database; their tests rely on the suite's serial, clean-up-after-yourself discipline | Low | audit | relationship cutover rehearsal |
+| R-14 | Occasion sitemap and Occasion pages: the sitemap calls the page reader once per active Occasion (parity by construction; fine for a curated list of tens, capped at 500); Occasion pages are not yet in archive search and have no Videos section | Low | audit | occasionPageRepository |
+| R-15 | **MANDATORY BEFORE PUBLIC LAUNCH — operational monitoring.** Integrity problems (an omitted inconsistent Recording, sweep failures, email failures) are reported only on the server log and in Studio Health; there is no incident counting, no external alerting, no uptime or error monitoring, and nothing verifies that an alert would reach a person. Must be built, then verified end to end, before launch | **High (launch gate)** | before launch | R-11, deployment-readiness-gate §6 |
 
 ## 4. Release gates (not met)
 
-Empty Museum (no real Recordings yet); no CI; no error monitoring or alerting; no hosting or scheduler; email delivery unproven; production domain and environment unset; the deployment-readiness gate never rehearsed on a real host; recovery policy undecided (O-01); pending migrations not applied (O-02). Source: `phase-6j-8-production-readiness-audit.md` (2026-10-14, not re-verified), `phase-6j-12d`, `deployment-readiness-gate.md` §6.
+Empty Museum (no real Recordings yet); no CI; no error monitoring or alerting; no hosting or scheduler; email delivery unproven; production domain and environment unset; the deployment-readiness gate never rehearsed on a real host; recovery policy undecided (O-01); pending migrations not applied (O-02); **operational monitoring, incident counting and alerting not built or verified (R-15)**. Source: `phase-6j-8-production-readiness-audit.md` (2026-10-14, not re-verified), `phase-6j-12d`, `deployment-readiness-gate.md` §6.
 
 ## 5. Deferred product scope (post-launch)
 
-Public Occasion pages; field-ownership UI; analytics feedback loop; Search Console; contributor portal; vector search / RAG; AI usage quotas; Studio design-token refactor and broad accessibility pass. Source: `content-intelligence-architecture.md` §119 and §16.
+Field-ownership UI; analytics feedback loop; Search Console; contributor portal; vector search / RAG; AI usage quotas; Studio design-token refactor and broad accessibility pass. Source: `content-intelligence-architecture.md` §119 and §16.
 
-## 6. Escalation rule
+## 6. Completed since the last audit
+
+| Item | Done |
+|---|---|
+| Phase 6K lifecycle and reliability hardening | committed `637d7e9` |
+| Phase 6L relationship cutover (revision-scoped Sources, Rights, Occasions; legacy writes frozen; Organisation page degrades per Recording) | committed `32379ea` |
+| Public Occasion pages (`/occasions/[slug]`, sitemap, analytics entity type, Organisation page links) | implemented 2026-10-21, committed as a local checkpoint |
+
+## 7. Escalation rule
 
 Investigate immediately only for credible data loss, security exposure, irreversible production damage or another critical failure. Everything else waits for the single release-readiness audit.

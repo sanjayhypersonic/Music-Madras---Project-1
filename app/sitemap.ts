@@ -4,6 +4,7 @@ import { listPublishedCollections } from "../modules/db/repositories/collectionR
 import { listPublishedVideoPages } from "../modules/db/repositories/youtubeVideoPageRepository";
 import { listPublicLearningGuides } from "../modules/db/repositories/learningGuideRepository";
 import { listPublishedPlaylistPages } from "../modules/db/repositories/playlistPageRepository";
+import { listPublicOccasionSitemapEntries } from "../modules/db/repositories/occasionPageRepository";
 import {
   listPublicArtistSitemapEntries,
   listPublicChoirSitemapEntries,
@@ -50,6 +51,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     videoPages,
     learningGuides,
     playlistPages,
+    occasions,
   ] = await Promise.all([
     listPublicComposerSitemapEntries(),
     listPublicArtistSitemapEntries(),
@@ -65,6 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     listPublishedVideoPages(Number.MAX_SAFE_INTEGER),
     listPublicLearningGuides(),
     listPublishedPlaylistPages(1000),
+    listPublicOccasionSitemapEntries(),
   ]);
 
   const staticEntries: MetadataRoute.Sitemap = [
@@ -89,6 +92,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...recordings.map((r) => ({ url: `${SITE_ORIGIN}/recordings/${r.slug}`, lastModified: r.updatedAt })),
     ...collections.map((c) => ({ url: `${SITE_ORIGIN}/collections/${c.slug}`, lastModified: c.updatedAt })),
     ...videoPages.map(({ page }) => ({ url: `${SITE_ORIGIN}/videos/${page.slug}`, lastModified: page.updatedAt })),
+    ...occasions.map((o) => ({ url: `${SITE_ORIGIN}/occasions/${o.slug}`, lastModified: o.updatedAt })),
     ...learningGuides.map((g) => ({ url: `${SITE_ORIGIN}/learning/${g.slug}`, lastModified: g.updatedAt })),
     ...(playlistPages.length > 0 ? [{ url: `${SITE_ORIGIN}/playlists`, lastModified: new Date() }] : []),
     // The time the current published version went live — never the time of the last draft edit.

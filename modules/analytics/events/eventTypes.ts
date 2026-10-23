@@ -51,6 +51,7 @@ export const CANONICAL_ENTITY_TYPES = [
   "Conductor",
   "Venue",
   "Organisation",
+  "Occasion",
   "Collection",
   "EducationalContent",
   "LearningGuide",

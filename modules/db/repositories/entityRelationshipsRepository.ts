@@ -878,7 +878,7 @@ export async function getPublicOrganisationPageData(slug: string): Promise<Organ
   ]);
   const occasions = dedupeById(occasionLinkLists.flat().map((link) => link.occasion))
     .filter((occasion) => occasion.archivedAt === null)
-    .map((occasion) => ({ id: occasion.id, name: occasion.name }));
+    .map((occasion) => ({ id: occasion.id, slug: occasion.slug, name: occasion.name }));
 
   // Sources / Rights Information: aggregated across this Organisation's
   // own derived Recordings' existing EntitySource/EntityRights

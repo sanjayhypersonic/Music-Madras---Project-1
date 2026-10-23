@@ -188,6 +188,17 @@ export function listOccasionsForEntity(
   });
 }
 
+/**
+ * The entities an Occasion is attached to, for the public Occasion page: Programmes, Performances and Collections only. Recording-level occasions are
+ * revision-scoped since Phase 6L (recording_revision_occasions) and are read through the published revision; the frozen legacy Recording-level rows are
+ * deliberately NOT returned here, so they can never reach a public page.
+ */
+export function listEntitiesForOccasion(occasionId: string): Promise<Array<{ entityType: "PROGRAMME" | "PERFORMANCE" | "COLLECTION"; entityId: string }>> {
+  return prisma.entityOccasion
+    .findMany({ where: { occasionId, entityType: { in: ["PROGRAMME", "PERFORMANCE", "COLLECTION"] } }, select: { entityType: true, entityId: true }, orderBy: [{ entityType: "asc" }, { entityId: "asc" }] })
+    .then((rows) => rows.map((r) => ({ entityType: r.entityType as "PROGRAMME" | "PERFORMANCE" | "COLLECTION", entityId: r.entityId })));
+}
+
 export interface AttachOccasionInput {
   entityType: string;
   entityId: string;

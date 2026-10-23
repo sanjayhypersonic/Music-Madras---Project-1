@@ -24,9 +24,10 @@ export interface OrganisationPageVenue {
   name: string;
 }
 
-/** No public /occasions/[slug] route exists (explicitly out of scope) — rendered as plain text, never a link. */
+/** Public Occasion pages: an Occasion that appears here has public content (the aggregation only surfaces active Occasions of eligible content), so /occasions/[slug] exists for it and the page links to it. */
 export interface OrganisationPageOccasion {
   id: string;
+  slug: string;
   name: string;
 }
 

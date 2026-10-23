@@ -20,9 +20,9 @@ import { createEntityViewEvent } from "../../../../modules/analytics/events/fact
 // the shared resolveRelatedContent core exactly like every other entity
 // page — no Prisma import here. Occasions/Sources/RightsInformation are
 // aggregated across this Organisation's own derived content (never a
-// direct Organisation-level attachment, which does not exist) and are
-// rendered as plain identifying text, never links — no public route for
-// any of the three exists.
+// direct Organisation-level attachment, which does not exist). Occasions
+// link to their public /occasions/[slug] page (every Occasion surfaced here has public content, so the page exists); Sources and
+// RightsInformation are rendered as plain identifying text, never links — no public route for either exists.
 
 const SITE_ORIGIN = getSiteOrigin();
 
@@ -182,7 +182,9 @@ export default async function OrganisationPage({ params }: { params: Promise<{ s
         <EntitySection id="occasions" heading="Occasions">
           <ul className="museum-pathways">
             {organisation.occasions.map((occasion) => (
-              <li key={occasion.id}>{occasion.name}</li>
+              <li key={occasion.id}>
+                <Link href={`/occasions/${occasion.slug}`}>{occasion.name}</Link>
+              </li>
             ))}
           </ul>
         </EntitySection>
