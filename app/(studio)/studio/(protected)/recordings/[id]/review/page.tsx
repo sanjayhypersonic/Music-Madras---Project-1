@@ -4,6 +4,9 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { findRecordingById, getRecordingRevisionCompletenessReport } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { isReadyToPublish } from "../../../../../../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
 import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
+import { RevisionComparison } from "../../../../../../../components/studio/RevisionComparison";
+import { RevisionRelationshipDataError } from "../../../../../../../modules/db/repositories/recordingRelationshipReadersRepository";
+import { loadPublicationPreview, type PublicationPreview } from "../../../../../../../modules/db/repositories/recordingRevisionComparisonRepository";
 import { submitForReviewAction, publishAction, unpublishAction, restoreAction, archiveAction } from "./actions";
 import { startNewDraftAction } from "../draftActions";
 
@@ -25,6 +28,17 @@ export default async function ReviewStepPage({
   const openRevisionId = recording.currentDraftRevisionId ?? recording.currentPublishedRevisionId;
   const completeness = openRevisionId ? await getRecordingRevisionCompletenessReport(openRevisionId) : null;
   const ready = completeness ? isReadyToPublish(completeness.report) : false;
+
+  // The read-only "what will publishing change" preview. It never creates a draft and never writes: it only reads the open draft and the published
+  // revision. Inconsistent revision data is shown as itself (and nothing is compared), never guessed around.
+  let preview: PublicationPreview | null = null;
+  let previewProblem: string | null = null;
+  try {
+    preview = await loadPublicationPreview(id);
+  } catch (err) {
+    if (!(err instanceof RevisionRelationshipDataError)) throw err;
+    previewProblem = err.message;
+  }
 
   // Phase 6J-4: the editable state is explicit. "Open draft" is the only thing that can be reviewed or published;
   // a Recording without one (published with no pending changes, or UNPUBLISHED — which keeps its last published
@@ -78,6 +92,18 @@ export default async function ReviewStepPage({
           </table>
 </div>
         </>
+      )}
+
+      {previewProblem && (
+        <p role="alert" className="studio-alert studio-alert--error">
+          The comparison could not be shown: {previewProblem} Publishing is not affected by this notice, but the revision data should be looked at.
+        </p>
+      )}
+      {preview?.state === "PREVIEW" && (
+        <RevisionComparison comparison={preview.comparison} proposedRevisionNumber={preview.proposedRevisionNumber} publishedRevisionNumber={preview.publishedRevisionNumber} />
+      )}
+      {preview?.state === "NO_DRAFT" && (
+        <p className="studio-muted">There is no open draft, so nothing is proposed for publication and there is nothing to compare.</p>
       )}
 
       <p>Status: {recording.status}</p>

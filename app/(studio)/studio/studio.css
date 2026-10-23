@@ -697,3 +697,44 @@
     transition: none !important;
   }
 }
+
+/* The Review & Publish step's read-only "what publishing will change" preview. Functional colours come only from the shared status badges; here only
+   layout and the existing neutral tokens. Narrow screens: the table scrolls inside .studio-table-scroll and the lists simply stack. */
+.studio-compare__summary {
+  font-weight: 600;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.studio-compare__table th,
+.studio-compare__table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--mm-border);
+}
+
+.studio-compare__value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.studio-compare__list {
+  margin-top: 1rem;
+}
+
+.studio-compare__list h4 {
+  margin: 0 0 0.35rem;
+}
+
+.studio-compare__items {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.35rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.studio-compare__limits {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
