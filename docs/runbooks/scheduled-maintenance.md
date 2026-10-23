@@ -58,6 +58,8 @@ Every run and step is stored (`stewardship_runs`, `stewardship_step_runs`): stat
 
 **Studio → Health** (Super Administrators and Founders) shows: when the job last started and when every step last succeeded; each step's latest result and how many runs in a row it has not succeeded; whether a run is in progress now; a red notice if the job has **never run** or last started **more than three hours ago** (the schedule has probably stopped); emails waiting and in flight; and whether any approval stands on an archived page or private video. A step that fails **two runs in a row** also raises one administrator notification (resolved when it next succeeds); a single transient failure is shown in Health but interrupts nobody.
 
+**Operational incidents (separate from the job).** Studio → Health also lists operational incidents: integrity problems the platform worked around while serving the public site (today: a recording left off an Organisation page because its revision data was inconsistent), recorded once each and counted, with a Mark-resolved action for Super Administrators and Founders. A recurring incident raises one administrator notification (at most one evaluation per incident per hour). This is not a substitute for external monitoring and alerting, which are mandatory before launch (project register R-15).
+
 ## Verifying it works (after a scheduler is configured)
 
 1. Call it once by hand (placeholder values):

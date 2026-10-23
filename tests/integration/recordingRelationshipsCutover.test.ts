@@ -43,6 +43,7 @@ const sourceIds: string[] = [];
 const rightsIds: string[] = [];
 const occasionIds: string[] = [];
 const extraRecordingIds: string[] = [];
+const incidentSubjectIds: string[] = []; // Recordings whose omission was recorded as an operational incident (cleaned up in afterAll)
 let organisationId: string;
 let organisationSlug: string;
 let venueId: string;
@@ -113,6 +114,9 @@ beforeAll(async () => {
 }, T);
 
 afterAll(async () => {
+  // Every page build that met an inconsistent Recording recorded an incident about it: remove those of ALL the Recordings this file created.
+  await prisma.operationalIncident.deleteMany({ where: { subjectId: { in: [...incidentSubjectIds, ...handles.map((h) => h.recordingId), ...extraRecordingIds] } } });
+  await prisma.studioNotification.deleteMany({ where: { dedupeKey: "operational-incident-recurring-ORGANISATION_PAGE_RECORDING_OMITTED" } });
   for (const handle of handles) await handle.cleanup(); // recordings first: revision-scoped links are RESTRICT on the catalogue rows
   if (extraRecordingIds.length > 0) {
     const revisionIds = (await prisma.recordingRevision.findMany({ where: { recordingId: { in: extraRecordingIds } }, select: { id: true } })).map((r) => r.id);
@@ -398,6 +402,71 @@ describe("one inconsistent Recording does not take down the Organisation page", 
       await prisma.entitySource.deleteMany({ where: { entityId: bad.recordingId } });
     }
     expect(mine((await orgPage()).sources, own)).toEqual(sorted([goodSource, badSource])); // intact once the pointer is right again
+  }, T);
+});
+describe("an omitted Recording is recorded as ONE deduplicated operational incident", () => {
+  it("each page build counts the same incident (no new row per request), the second raises one administrator notification, healthy links stay visible and nothing comes from legacy rows", async () => {
+    const goodSource = await newSource();
+    const badSource = await newSource();
+    const legacyOnly = await newSource();
+    const good = await liveWith({ sources: [goodSource] });
+    const bad = await liveWith({ sources: [badSource] });
+    incidentSubjectIds.push(bad.recordingId, good.recordingId);
+    await prisma.entitySource.create({ data: { entityType: "RECORDING", entityId: bad.recordingId, sourceId: legacyOnly } });
+    const ownDraft = await startDraft(bad.recordingId);
+    const original = (await pointers(bad.recordingId)).currentPublishedRevisionId!;
+    const own = [goodSource, badSource, legacyOnly];
+    await prisma.studioNotification.deleteMany({ where: { dedupeKey: "operational-incident-recurring-ORGANISATION_PAGE_RECORDING_OMITTED" } });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      await prisma.recording.update({ where: { id: bad.recordingId }, data: { currentPublishedRevisionId: ownDraft } });
+      const first = await orgPage();
+      expect(mine(first.sources, own)).toEqual([goodSource]); // healthy links visible, the bad one's omitted, legacy never used
+      let rows = await prisma.operationalIncident.findMany({ where: { subjectId: { in: [bad.recordingId, good.recordingId] } } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ kind: "ORGANISATION_PAGE_RECORDING_OMITTED", reasonCode: "PUBLISHED_REVISION_NOT_PUBLISHED", subjectType: "Recording", subjectId: bad.recordingId, status: "OPEN", occurrenceCount: 1 });
+      expect(await prisma.studioNotification.findUnique({ where: { dedupeKey: "operational-incident-recurring-ORGANISATION_PAGE_RECORDING_OMITTED" } })).toBeNull(); // a first occurrence interrupts nobody
+
+      const second = await orgPage();
+      expect(mine(second.sources, own)).toEqual([goodSource]);
+      rows = await prisma.operationalIncident.findMany({ where: { subjectId: { in: [bad.recordingId, good.recordingId] } } });
+      expect(rows).toHaveLength(1); // the same incident, counted
+      expect(rows[0].occurrenceCount).toBe(2);
+      const raised = await prisma.studioNotification.findUnique({ where: { dedupeKey: "operational-incident-recurring-ORGANISATION_PAGE_RECORDING_OMITTED" } });
+      expect(raised).toMatchObject({ kind: "OPERATIONAL_INCIDENT_RECURRING", status: "OPEN", audienceAction: "SETTINGS_MANAGE" });
+      expect(`${raised!.title} ${raised!.body}`).not.toContain(bad.recordingId);
+    } finally {
+      logged.mockRestore();
+      await prisma.recording.update({ where: { id: bad.recordingId }, data: { currentPublishedRevisionId: original } });
+      await prisma.entitySource.deleteMany({ where: { entityId: bad.recordingId } });
+    }
+  }, T);
+
+  it("failing to persist the incident never takes the public page down: the page still renders, the omission is still logged, and the error is logged by class only", async () => {
+    const goodSource = await newSource();
+    const badSource = await newSource();
+    const good = await liveWith({ sources: [goodSource] });
+    const bad = await liveWith({ sources: [badSource] });
+    incidentSubjectIds.push(bad.recordingId, good.recordingId);
+    const ownDraft = await startDraft(bad.recordingId);
+    const original = (await pointers(bad.recordingId)).currentPublishedRevisionId!;
+    const own = [goodSource, badSource];
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const down = vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("connection lost: password=hunter2"));
+    try {
+      await prisma.recording.update({ where: { id: bad.recordingId }, data: { currentPublishedRevisionId: ownDraft } });
+      const page = await orgPage(); // must not throw
+      expect(mine(page.sources, own)).toEqual([goodSource]);
+      const lines = logged.mock.calls.map((c) => c.map(String).join(" ")).join("\n");
+      expect(lines).toContain(bad.recordingId); // the omission itself is still observable
+      expect(lines).toContain("could not be recorded"); // and so is the failure to record it
+      expect(lines).not.toMatch(/hunter2|connection lost/);
+      expect(await prisma.operationalIncident.count({ where: { subjectId: bad.recordingId } })).toBe(0);
+    } finally {
+      down.mockRestore();
+      logged.mockRestore();
+      await prisma.recording.update({ where: { id: bad.recordingId }, data: { currentPublishedRevisionId: original } });
+    }
   }, T);
 });
 describe("concurrency: publication is atomic for readers and for writers", () => {

@@ -2,7 +2,7 @@
 
 Single, deduplicated list of decisions, open owner decisions, deferred risks and release gates. **Rule:** record, keep severity, revisit at the single release-readiness audit. Entries cite the existing report that holds the evidence; they are **not re-verified here**. Update this file in the same change that resolves or adds an item.
 
-Last updated: 2026-10-21 · Branch `music-madras-production-rebuild` · Phase 6K committed (`637d7e9`), Phase 6L committed (`32379ea`), public Occasion pages committed as local checkpoints · `main` = `3bcfe85` (untouched)
+Last updated: 2026-10-21 · Branch `music-madras-production-rebuild` · Phase 6K committed (`637d7e9`), Phase 6L committed (`32379ea`), public Occasion pages and the operational incident log (slice 1) committed as local checkpoints · `main` = `3bcfe85` (untouched)
 
 ## 1. Settled decisions
 
@@ -41,11 +41,11 @@ Last updated: 2026-10-21 · Branch `music-madras-production-rebuild` · Phase 6K
 | R-08 | Public videos have no metadata review; only unlisted approvals are tracked | Low | audit | ADR-0002 §11.4 |
 | R-09 | Abandoned drafts keep participant clones; a refused promotion has no merge | Low | post-launch | recording-publication-safety, Limitations |
 | R-10 | Studio internal lists use plain `contains`; archive category copy and brand text are still in code | Low | post-launch | ADR-0002 §8, §9 |
-| R-11 | The public Organisation page omits an inconsistent Recording's links (never unverified, never legacy rows) and logs it on the server (`Organisation page: … omitted … (reason)`); there is no alert or counter yet, so someone must watch the server log. Studio and the AI context stay strict (they throw) | Low | audit | recording-publication-safety §15 |
+| R-11 | The public Organisation page omits an inconsistent Recording's links (never unverified, never legacy rows), logs it, and since the incident log (R-15 slice 1) records it as a deduplicated operational incident visible on Studio → Health, with an administrator notification when it recurs. Studio and the AI context stay strict (they throw). Remaining: the log line and the in-app incident are the only signals (no external alert) | Low | audit | recording-publication-safety §15 |
 | R-12 | Legacy Recording-level rows remain in the database as frozen history; removal is a separate approved migration after a soak period | Low | post-soak | relationship-cutover runbook |
 | R-13 | The backfill and re-projection tools operate on the whole database; their tests rely on the suite's serial, clean-up-after-yourself discipline | Low | audit | relationship cutover rehearsal |
 | R-14 | Occasion sitemap and Occasion pages: the sitemap calls the page reader once per active Occasion (parity by construction; fine for a curated list of tens, capped at 500); Occasion pages are not yet in archive search and have no Videos section | Low | audit | occasionPageRepository |
-| R-15 | **MANDATORY BEFORE PUBLIC LAUNCH — operational monitoring.** Integrity problems (an omitted inconsistent Recording, sweep failures, email failures) are reported only on the server log and in Studio Health; there is no incident counting, no external alerting, no uptime or error monitoring, and nothing verifies that an alert would reach a person. Must be built, then verified end to end, before launch | **High (launch gate)** | before launch | R-11, deployment-readiness-gate §6 |
+| R-15 | **MANDATORY BEFORE PUBLIC LAUNCH — operational monitoring.** *Slice 1 done (2026-10-21):* an in-app, deduplicated incident log (`operational_incidents`: kind, fingerprint, count, first/last seen, open/resolved; no free-form data) fed by the Organisation-page omission, shown to administrators on Studio → Health with a Mark-resolved action, and one administrator notification per incident kind when an incident recurs (at most one evaluation per incident per hour; announced again only when the set of recurring incidents grows or after a resolved incident reopens). **Still required before launch:** (1) more incident sources — scheduled-maintenance step failures, email-delivery failures, sync failures, unhandled server errors — wired to the recorder; (2) external error reporting and uptime monitoring with a chosen provider (O-03); (3) external alerting that reaches a person when no administrator is in Studio, and an end-to-end test proving it does; (4) a scheduler-driven re-evaluation of recurring-incident notifications (today they are evaluated only when an incident recurs or is resolved, so a crash between claiming and raising waits for the next recurrence after the hour); (5) retention for resolved incidents; (6) email delivery verified, since the notification email channel depends on the scheduler and a mail provider; (7) a launch-checklist item that fails the release if any of the above is unverified | **High (launch gate)** | before launch | R-11, deployment-readiness-gate §6 |
 
 ## 4. Release gates (not met)
 
@@ -62,6 +62,7 @@ Field-ownership UI; analytics feedback loop; Search Console; contributor portal;
 | Phase 6K lifecycle and reliability hardening | committed `637d7e9` |
 | Phase 6L relationship cutover (revision-scoped Sources, Rights, Occasions; legacy writes frozen; Organisation page degrades per Recording) | committed `32379ea` |
 | Public Occasion pages (`/occasions/[slug]`, sitemap, analytics entity type, Organisation page links) | implemented 2026-10-21, committed as a local checkpoint |
+| Operational incident log, first slice (R-15): table, safe recorder, Organisation-page wiring, Studio → Health view and resolve action, recurring-incident notification | implemented 2026-10-21, committed as a local checkpoint |
 
 ## 7. Escalation rule
 

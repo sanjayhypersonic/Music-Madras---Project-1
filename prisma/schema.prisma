@@ -213,6 +213,7 @@ model StudioUser {
   notificationDeliveries    StudioNotificationDelivery[]
   videoExposureApproved     VideoExposureApproval[]       @relation("VideoExposureApprovedBy")
   videoExposureRevoked      VideoExposureApproval[]       @relation("VideoExposureRevokedBy")
+  incidentsResolved         OperationalIncident[]         @relation("OperationalIncidentResolvedBy")
   videoExposureConfirmed    VideoExposureApproval[]       @relation("VideoExposureConfirmedBy")
   videoMetadataResolved     VideoMetadataChange[]         @relation("VideoMetadataChangeResolvedBy")
   videoReviewsDecided       VideoExposureReview[]         @relation("VideoReviewDecidedBy")
@@ -2052,27 +2053,27 @@ model StudioNotificationRead {
 
 /// What was actually done to deliver a notification to a person on a channel: never "delivered" unless it was.
 model StudioNotificationDelivery {
-  id              String                     @id @default(uuid())
-  notificationId  String
-  channel         NotificationChannel
-  recipientUserId String
-  status          NotificationDeliveryStatus @default(PENDING)
-  attempts        Int                        @default(0)
-  lastAttemptAt   DateTime?
-  nextAttemptAt   DateTime?
-  reason          String?
+  id                String                     @id @default(uuid())
+  notificationId    String
+  channel           NotificationChannel
+  recipientUserId   String
+  status            NotificationDeliveryStatus @default(PENDING)
+  attempts          Int                        @default(0)
+  lastAttemptAt     DateTime?
+  nextAttemptAt     DateTime?
+  reason            String?
   /// A worker CLAIMS a delivery before sending: while claimedUntil is in the future no other worker will take it, and the claim token proves which
   /// worker may record the outcome. An expired claim (a crashed worker) is simply retaken. Delivery is therefore at-least-once, never exactly-once.
-  claimedUntil    DateTime?
-  claimToken      String?
+  claimedUntil      DateTime?
+  claimToken        String?
   /// The notification was raised again (a new episode) while a worker held the claim: the claim stays valid, and once the in-flight send is recorded
   /// the delivery returns to PENDING so the newer text is sent too.
-  requeueAfterClaim Boolean                  @default(false)
+  requeueAfterClaim Boolean                    @default(false)
   /// Non-sensitive description of the last failure (an error class and a bounded, scrubbed message); never credentials, addresses or message bodies.
-  lastError       String?
-  lastErrorAt     DateTime?
-  createdAt       DateTime                   @default(now())
-  updatedAt       DateTime                   @updatedAt
+  lastError         String?
+  lastErrorAt       DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
 
   notification StudioNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
   recipient    StudioUser         @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
@@ -2142,6 +2143,49 @@ model StewardshipStepRun {
   @@map("stewardship_step_runs")
 }
 
+// ---------------------------------------------------------------------------
+// Operational incidents (project register R-15, first slice) — a durable, deduplicated record of integrity problems the platform detects at run time
+// and works around (today: a Recording whose revision data is inconsistent is omitted from the public Organisation page). One row per distinct problem
+// (kind + fingerprint), counted and timestamped instead of one row per occurrence. NOTHING FREE-FORM IS EVER STORED: the kind is an enum, the reason is a
+// bounded code, the subject is an entity type code and an internal id. Visible only to administrators (Studio -> Health).
+// ---------------------------------------------------------------------------
+
+enum OperationalIncidentKind {
+  ORGANISATION_PAGE_RECORDING_OMITTED
+}
+
+enum OperationalIncidentStatus {
+  OPEN
+  RESOLVED
+}
+
+model OperationalIncident {
+  id              String                    @id @default(uuid())
+  kind            OperationalIncidentKind
+  /// sha256 (first 32 hex) of kind + reason code + subject: the same problem always maps to the same row.
+  fingerprint     String
+  status          OperationalIncidentStatus @default(OPEN)
+  /// A bounded code such as PUBLISHED_REVISION_NOT_PUBLISHED. Never text from an exception.
+  reasonCode      String
+  /// A code such as "Recording" and the internal id of the affected row, when the incident is about one.
+  subjectType     String?
+  subjectId       String?
+  occurrenceCount Int                       @default(1)
+  firstSeenAt     DateTime                  @default(now())
+  lastSeenAt      DateTime                  @default(now())
+  resolvedAt      DateTime?
+  resolvedById    String?
+  resolvedReason  String?
+  /// When a recurrence of this incident last had its administrator notification evaluated (the claim that stops a flood).
+  lastNotifiedAt  DateTime?
+
+  resolvedBy StudioUser? @relation("OperationalIncidentResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@unique([kind, fingerprint])
+  @@index([status, lastSeenAt])
+  @@map("operational_incidents")
+}
+
 /// A named lease so overlapping invocations cannot run the job twice at once. A lease expires by itself (a crashed run never blocks the next one).
 model StewardshipLease {
   name        String   @id
@@ -2174,22 +2218,22 @@ enum VideoExposureScope {
 /// database by the partial unique index video_exposure_approvals_one_active_target_key (raw SQL in migration 20261022120000: Prisma cannot
 /// express a partial index, so it is not declared here).
 model VideoExposureApproval {
-  id             String              @id @default(uuid())
+  id             String                     @id @default(uuid())
   videoPageId    String
   scope          VideoExposureScope
   /// Set only for PLAYLIST scope: the Music Madras playlist page this approval applies to.
   playlistPageId String?
   /// Who approved. NULL only for an approval carried over from the old single flag, which recorded no approver: the platform never guesses one.
   approvedById   String?
-  approvedAt     DateTime            @default(now())
-  note           String?             @db.Text
+  approvedAt     DateTime                   @default(now())
+  note           String?                    @db.Text
   revokedById    String?
   revokedAt      DateTime?
-  revokeNote     String?             @db.Text
+  revokeNote     String?                    @db.Text
   /// Why it was revoked, so Studio can tell an editor's decision from a lifecycle invalidation (the video went private, the page was archived).
   revokedReason  VideoExposureRevokeReason?
   /// Who made this approval: an editor deciding in Studio, or the platform carrying a legacy approval over (6K-fix).
-  origin         VideoExposureOrigin @default(EDITOR)
+  origin         VideoExposureOrigin        @default(EDITOR)
   /// For a carried-over approval: when (and by whom) an editor reconsidered it and chose to keep it. Null = not yet reconsidered.
   confirmedAt    DateTime?
   confirmedById  String?

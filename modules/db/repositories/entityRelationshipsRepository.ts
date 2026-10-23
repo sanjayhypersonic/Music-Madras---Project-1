@@ -33,6 +33,10 @@ import { assembleOrganisationPageData } from "../../mmke/organisationPage/assemb
 import type { OrganisationPageData } from "../../mmke/organisationPage/organisationPageContract";
 import { listOccasionsForEntity } from "./occasionRepository";
 import { loadPublishedRecordingRelationships } from "./recordingRelationshipReadersRepository";
+import { recordOperationalIncidentSafely } from "./operationalIncidentRepository";
+
+/** A technical bound: how many inconsistent Recordings one page build records as incidents (all of them are still logged and omitted). */
+const MAX_INCIDENTS_PER_PAGE_BUILD = 25;
 import { listPublicLearningGuidesForRecording, listPublicLearningGuidesForWorkIds } from "./learningGuideRepository";
 import { assembleLearningGuidePageData } from "../../mmke/learningGuidePage/assembleLearningGuidePageData";
 import type { LearningGuidePageData } from "../../mmke/learningGuidePage/learningGuidePageContract";
@@ -869,6 +873,13 @@ export async function getPublicOrganisationPageData(slug: string): Promise<Organ
     // Ids and a reason code only: nothing from the data itself. Observable, never silently swallowed.
     console.error(`Organisation page: the sources, rights and occasions of recording ${problem.recordingId} were omitted because its revision data is inconsistent (${problem.reason}).`);
   }
+  // Also recorded as a deduplicated operational incident (Studio -> Health, with an administrator notification when it recurs). That is best-effort by
+  // design: recordOperationalIncidentSafely never throws, so a failure to persist it can never take this public page down. Bounded per page build.
+  await Promise.all(
+    publishedRecordings.inconsistent.slice(0, MAX_INCIDENTS_PER_PAGE_BUILD).map((problem) =>
+      recordOperationalIncidentSafely({ kind: "ORGANISATION_PAGE_RECORDING_OMITTED", reasonCode: problem.reason, subject: { type: "Recording", id: problem.recordingId } })
+    )
+  );
   const publishedRecordingSets = [...publishedRecordings.byRecording.values()];
   const occasionLinkLists = await Promise.all([
     ...content.performances.map((p) => listOccasionsForEntity("PERFORMANCE", p.id)),

@@ -20,6 +20,7 @@ export const NOTIFICATION_KINDS = {
   PLAYLIST_QUALITY_FAILED: { label: "A playlist page needs more before it can be published", audienceAction: "CATALOGUE_WRITE", severity: "ACTION_REQUIRED" },
   PLAYLIST_QUALITY_REGRESSION: { label: "A playlist page no longer meets the publication checks", audienceAction: "CATALOGUE_WRITE", severity: "WARNING" },
   NOTIFICATION_DELIVERY_PROBLEM: { label: "Notification delivery needs attention", audienceAction: "SETTINGS_MANAGE", severity: "WARNING" },
+  OPERATIONAL_INCIDENT_RECURRING: { label: "An operational problem keeps recurring", audienceAction: "SETTINGS_MANAGE", severity: "WARNING" },
 } as const satisfies Record<string, NotificationKindDefinition>;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;

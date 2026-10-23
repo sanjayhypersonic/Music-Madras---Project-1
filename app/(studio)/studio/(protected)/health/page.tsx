@@ -5,6 +5,8 @@ import { can } from "../../../../../modules/auth/policy";
 import { findLifecycleViolations } from "../../../../../modules/db/repositories/videoLifecycleRepository";
 import { emailDeliveryHealth } from "../../../../../modules/db/repositories/studioNotificationRepository";
 import { STEWARDSHIP_STALE_AFTER_MS, loadStewardshipHealth } from "../../../../../modules/db/repositories/stewardshipRunRepository";
+import { loadIncidentOverview } from "../../../../../modules/db/repositories/operationalIncidentRepository";
+import { resolveIncidentAction } from "./actions";
 
 // Phase 6K lifecycle hardening (F10) — Studio's view of the scheduled maintenance job. It says plainly whether the job has been running, what each step
 // did last time, and what went wrong, from the durable run records (stewardship_runs / stewardship_step_runs). Nothing here starts a run or configures
@@ -31,17 +33,19 @@ function countsLine(counts: unknown): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-export default async function HealthPage() {
+export default async function HealthPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   const session = await getCurrentStudioSession();
   if (!session || session.user.status !== "ACTIVE") redirect("/studio/signin");
   if (!can(session.user.role, "SETTINGS_MANAGE")) redirect("/studio/dashboard");
 
-  const [health, email, violations] = await Promise.all([loadStewardshipHealth(), emailDeliveryHealth(), findLifecycleViolations(50)]);
+  const [health, email, violations, incidents] = await Promise.all([loadStewardshipHealth(), emailDeliveryHealth(), findLifecycleViolations(50), loadIncidentOverview()]);
   const failingSteps = health.steps.filter((s) => s.status === "FAILED" || s.status === "PARTIAL");
 
   return (
     <div>
       <h1>Health</h1>
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
       <p>
         What the scheduled maintenance job has been doing. It keeps the unlisted-video review, metadata checks, playlist checks and notification emails current. It is called by whatever scheduler this deployment uses
         (see docs/runbooks/scheduled-maintenance.md); this page only reports what that scheduler has actually run.
@@ -108,6 +112,38 @@ export default async function HealthPage() {
         </p>
       )}
 
+      <h2>Operational incidents</h2>
+      <p>
+        Problems the platform noticed and worked around while serving the public site, recorded once each and counted (nothing free-form is stored: a kind, a reason code and the affected item&apos;s internal id).
+        When the same problem happens again, administrators get one notification, at most once an hour per problem. Mark an incident resolved once it has been looked at; if it happens again it reopens.
+        These details are visible to administrators only. This is a first step: it does not replace external monitoring and alerting, which must exist before the site is public.
+      </p>
+      {incidents.openCount === 0 ? (
+        <p>No operational incident is open.{incidents.resolvedCount > 0 ? ` ${incidents.resolvedCount} resolved.` : ""}</p>
+      ) : (
+        <>
+          <p role="alert" className="studio-alert studio-alert--error">
+            {incidents.openCount} open incident{incidents.openCount === 1 ? "" : "s"}
+            {incidents.openCount > incidents.open.length ? ` (the ${incidents.open.length} most recent are shown)` : ""}.
+          </p>
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {incidents.open.map((incident) => (
+              <li key={incident.id} style={{ borderTop: "1px solid var(--mm-border)", padding: "0.5rem 0" }}>
+                <p style={{ margin: 0 }}>
+                  <strong>{incident.kindLabel}</strong> — {incident.reasonCode}
+                  {incident.subjectType && incident.subjectId ? ` · ${incident.subjectType} ${incident.subjectId}` : ""}
+                </p>
+                <p style={{ margin: "0.25rem 0", fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>
+                  {incident.occurrenceCount} time{incident.occurrenceCount === 1 ? "" : "s"}{incident.recurring ? " (recurring)" : ""} · first seen {incident.firstSeenAt.toLocaleString()} · last seen {incident.lastSeenAt.toLocaleString()}
+                </p>
+                <form action={resolveIncidentAction.bind(null, incident.id)}>
+                  <button type="submit" className="studio-button--primary">Mark resolved</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <h2>Recent runs</h2>
       {health.recentRuns.length === 0 ? (
         <p className="studio-empty">No runs recorded.</p>

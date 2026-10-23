@@ -12,6 +12,7 @@ const videoPage = read("app/(studio)/studio/(protected)/catalogue/videos/[videoI
 const reviewPage = read("app/(studio)/studio/(protected)/catalogue/unlisted-review/page.tsx");
 const reviewActions = read("app/(studio)/studio/(protected)/catalogue/unlisted-review/actions.ts");
 const healthPage = read("app/(studio)/studio/(protected)/health/page.tsx");
+const healthActions = read("app/(studio)/studio/(protected)/health/actions.ts");
 
 describe("approving an unlisted video says what is exposed", () => {
   it("states that the page shows the embedded player and a link to the YouTube address, and that the video stays unlisted on YouTube", () => {
@@ -78,5 +79,21 @@ describe("the Health page is honest about what it can and cannot see", () => {
     expect(healthPage).toMatch(/at-least-once/);
     expect(healthPage).toMatch(/The job has never run/);
     expect(healthPage).toMatch(/probably stopped/);
+  });
+});
+
+describe("operational incidents on the Health page are private to administrators and honest about their limits", () => {
+  it("the page and the resolve action both require SETTINGS_MANAGE on the server", () => {
+    expect(healthPage).toMatch(/can\(session\.user\.role, "SETTINGS_MANAGE"\)\) redirect\("\/studio\/dashboard"\)/);
+    expect(healthActions).toMatch(/can\(session\.user\.role, "SETTINGS_MANAGE"\)/);
+    expect(healthActions).toMatch(/status !== "ACTIVE"/);
+  });
+
+  it("shows open incidents with counts and a way to resolve them, says what is stored, and says it does not replace external monitoring", () => {
+    expect(healthPage).toMatch(/Operational incidents/);
+    expect(healthPage).toMatch(/nothing free-form is stored/);
+    expect(healthPage).toMatch(/visible to administrators only/);
+    expect(healthPage).toMatch(/does not replace external monitoring and alerting, which must exist before the site is public/);
+    expect(healthPage).toMatch(/Mark resolved/);
   });
 });
