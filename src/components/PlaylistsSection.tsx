@@ -17,7 +17,7 @@ export default function PlaylistsSection() {
             Curated Channel Playlists
           </h2>
           <p className="text-xs md:text-sm text-zinc-400 mt-1">
-            Grouped concert series, vocal compilations, and sacred recitals dynamically synced from @MusicMadras.
+            Grouped concert series, vocal compilations, and sacred recitals dynamically synced from @MusicMadras ({playlists.length} active playlists • updated every 3 hours).
           </p>
         </div>
 

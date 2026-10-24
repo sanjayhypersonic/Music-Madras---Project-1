@@ -31,5 +31,11 @@ service cloud.firestore {
       allow create: if isEmailVerified() && isValidId(logId);
       allow update, delete: if false; // Audit logs are immutable once written!
     }
+
+    // Rules for Channel Dynamic Data (3-hour cached feed)
+    match /channelDynamicData/{dataId} {
+      allow read: if true; // Public read so all visitors receive cached live stats
+      allow write: if isEmailVerified() && isValidId(dataId);
+    }
   }
 }

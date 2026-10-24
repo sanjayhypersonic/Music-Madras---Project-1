@@ -8,9 +8,12 @@ export interface Video {
   views: string;
   viewsCount?: number;
   publishedAt: string;
+  publishedAtRaw?: string;
   description: string;
   likesCount: number;
+  commentCount?: number;
   thumbnailUrl: string;
+  tags?: string[];
 }
 
 export interface Playlist {
@@ -21,6 +24,20 @@ export interface Playlist {
   youtubeUrl: string;
   imageQuery: string;
   thumbnailUrl: string;
+  publishedAt?: string;
+  channelTitle?: string;
+}
+
+export interface ChannelStats {
+  subscribers: string;
+  subscriberCountRaw?: number;
+  videoCount: string;
+  totalViews: string;
+  totalViewsRaw?: number;
+  channelTitle?: string;
+  channelDescription?: string;
+  handle?: string;
+  avatarUrl?: string;
 }
 
 export interface BookingRequest {

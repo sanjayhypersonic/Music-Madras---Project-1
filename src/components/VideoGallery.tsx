@@ -322,7 +322,7 @@ export default function VideoGallery({
             Showcase Highlights:
           </span>
           <span className="text-zinc-400">
-            Top 3 most viewed + 9 rotating recitals ({displayVideos.length} shown)
+            Top 3 most viewed + 9 rotating recitals ({displayVideos.length} shown) • Dynamic API sync every 3 hours
           </span>
         </div>
 
@@ -438,7 +438,16 @@ export default function VideoGallery({
                   </p>
 
                   <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
-                    <span>{video.views} views • {video.publishedAt}</span>
+                    <span className="flex items-center gap-1.5 flex-wrap">
+                      <span>{video.views} views</span>
+                      {video.likesCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 text-zinc-400">
+                          • <Heart className="w-2.5 h-2.5 text-red-500 fill-current inline" />
+                          {video.likesCount}
+                        </span>
+                      )}
+                      <span>• {video.publishedAt}</span>
+                    </span>
                     <button
                       onClick={(e) => handleCopyLink(video, e)}
                       aria-label={`Copy YouTube link for ${video.title}`}

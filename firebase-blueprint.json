@@ -42,6 +42,26 @@
         "targetName": { "type": "string" }
       },
       "required": ["id", "timestamp", "userEmail", "action"]
+    },
+    "channelDynamicData": {
+      "title": "Channel Dynamic Data",
+      "description": "Dynamic YouTube channel metadata cached and refreshed every 3 hours.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "lastCheckedAt": { "type": "number" },
+        "nextCheckAt": { "type": "number" },
+        "subscribers": { "type": "string" },
+        "subscriberCountRaw": { "type": "number" },
+        "videoCount": { "type": "string" },
+        "totalViews": { "type": "string" },
+        "totalViewsRaw": { "type": "number" },
+        "channelTitle": { "type": "string" },
+        "channelDescription": { "type": "string" },
+        "handle": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "lastCheckedAt"]
     }
   },
   "firestore": {
@@ -52,6 +72,10 @@
     "/auditLogs/{logId}": {
       "schema": "auditLogs",
       "description": "Security audit trails for editorial work."
+    },
+    "/channelDynamicData/{dataId}": {
+      "schema": "channelDynamicData",
+      "description": "Persistent 3-hour cached channel metrics."
     }
   }
 }
