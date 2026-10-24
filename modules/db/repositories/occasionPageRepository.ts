@@ -1,4 +1,5 @@
 import { prisma } from "../client";
+import { isPlausibleSlug } from "../../mmke/slug/isPlausibleSlug";
 import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import type { OccasionPageCollection, OccasionPagePerformance, OccasionPageProgramme, OccasionPageRecording, PublicOccasionPageData } from "../../mmke/occasionPage/occasionPageContract";
 import { findPublicCollectionsByIds } from "./collectionRepository";
@@ -23,6 +24,7 @@ const LIST_LIMIT = 200;
 const SITEMAP_MAX_OCCASIONS = 500;
 
 export async function getPublicOccasionPageData(slug: string): Promise<PublicOccasionPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const occasion = await prisma.occasion.findFirst({ where: { slug, archivedAt: null } });
   if (!occasion) return null;
 

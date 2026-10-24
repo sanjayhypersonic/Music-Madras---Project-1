@@ -1,4 +1,5 @@
 import { prisma } from "../client";
+import { isPlausibleSlug } from "../../mmke/slug/isPlausibleSlug";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { generateVideoSlug } from "../../mmke/slug/generateVideoSlug";
 import { isVideoExposed, type ActiveApproval, type ExposureHoldName } from "../../mmke/catalogue/videoExposure";
@@ -115,6 +116,7 @@ function stripReview(video: PageWithApprovals["youtubeVideo"]): YouTubeVideo {
  * returned here without anyone needing to remember to unpublish it.
  */
 export async function findPublishedBySlug(slug: string): Promise<PublicVideoPageResult | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const found = await prisma.youTubeVideoPage.findUnique({ where: { slug }, include: { youtubeVideo: VIDEO_WITH_HOLD, exposureApprovals: ACTIVE_APPROVALS } });
   if (!found) return null;
 

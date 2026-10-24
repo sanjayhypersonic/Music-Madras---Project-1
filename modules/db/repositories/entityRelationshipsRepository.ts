@@ -1,4 +1,5 @@
 import { prisma } from "../client";
+import { isPlausibleSlug } from "../../mmke/slug/isPlausibleSlug";
 import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
 import { findPublicCollectionsByIds } from "./collectionRepository";
@@ -311,6 +312,7 @@ export async function getVenueRelatedContent(venueId: string): Promise<RelatedCo
 // ---------------------------------------------------------------------------
 
 export async function getComposerEntityPageData(slug: string): Promise<EntityPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   // Phase 6J-1: a Composer is public only while eligible (an active work that
   // published content reaches) — see publicEligibility.ts.
   const composer = await prisma.composer.findFirst({ where: { AND: [{ slug }, eligibleComposerWhere] } });
@@ -344,6 +346,7 @@ export async function getComposerEntityPageData(slug: string): Promise<EntityPag
 }
 
 export async function getVenueEntityPageData(slug: string): Promise<EntityPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const venue = await prisma.venue.findFirst({ where: { AND: [{ slug }, eligibleVenueWhere] }, include: { organisation: true } });
   if (!venue) return null;
   // An archived Organisation is not linked (its own page would 404).
@@ -402,6 +405,7 @@ export async function getVenueEntityPageData(slug: string): Promise<EntityPageDa
  * convention as every other public entity-page function above).
  */
 export async function getPublicWorkPageData(slug: string): Promise<WorkPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const work = await prisma.musicalWork.findFirst({ where: { AND: [{ slug }, eligibleWorkWhere] }, include: { composer: true } });
   if (!work) return null;
 
@@ -440,6 +444,7 @@ export async function getPublicWorkPageData(slug: string): Promise<WorkPageData 
 // ---------------------------------------------------------------------------
 
 export async function getArtistEntityPageData(slug: string): Promise<EntityPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const artist = await prisma.artist.findFirst({ where: { AND: [{ slug }, eligibleArtistWhere] } });
   if (!artist) return null;
 
@@ -465,6 +470,7 @@ export async function getArtistEntityPageData(slug: string): Promise<EntityPageD
 }
 
 export async function getChoirEntityPageData(slug: string): Promise<EntityPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const choir = await prisma.choir.findFirst({ where: { AND: [{ slug }, eligibleChoirWhere] } });
   if (!choir) return null;
 
@@ -490,6 +496,7 @@ export async function getChoirEntityPageData(slug: string): Promise<EntityPageDa
 }
 
 export async function getConductorEntityPageData(slug: string): Promise<EntityPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const conductor = await prisma.conductor.findFirst({ where: { AND: [{ slug }, eligibleConductorWhere] } });
   if (!conductor) return null;
 
@@ -530,6 +537,7 @@ export async function getConductorEntityPageData(slug: string): Promise<EntityPa
  * convention as every other public entity-page function in this file).
  */
 export async function getPublicProgrammePageData(slug: string): Promise<ProgrammePageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const programme = await prisma.programme.findFirst({
     where: { AND: [{ slug }, eligibleProgrammeWhere] },
     include: {
@@ -580,6 +588,7 @@ export async function getPublicProgrammePageData(slug: string): Promise<Programm
  * file).
  */
 export async function getPublicPerformancePageData(slug: string): Promise<PerformancePageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const found = await prisma.performance.findFirst({
     where: { AND: [{ slug }, eligiblePerformanceWhere] },
     include: {
@@ -637,6 +646,7 @@ export async function getPublicPerformancePageData(slug: string): Promise<Perfor
  * either way).
  */
 export async function getPublicRecordingPageData(slug: string): Promise<RecordingPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const context = await getPublishedRecordingContextBySlug(slug);
   if (!context) return null;
 
@@ -739,6 +749,7 @@ export async function getPublicRecordingPageData(slug: string): Promise<Recordin
  * entity-page function in this file).
  */
 export async function getPublicCollectionPageData(slug: string): Promise<CollectionPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const collection = await prisma.collection.findUnique({
     where: { slug },
     include: {
@@ -843,6 +854,7 @@ export async function getPublicCollectionPageData(slug: string): Promise<Collect
 // ---------------------------------------------------------------------------
 
 export async function getPublicOrganisationPageData(slug: string): Promise<OrganisationPageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   // Phase 6J-1: an Organisation is public only while it operates an eligible
   // Venue, and lists only its eligible Venues.
   const organisation = await prisma.organisation.findFirst({
@@ -951,6 +963,7 @@ export async function getPublicOrganisationPageData(slug: string): Promise<Organ
  * entity-page function in this file).
  */
 export async function getPublicLearningGuidePageData(slug: string): Promise<LearningGuidePageData | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const guide = await prisma.learningGuide.findUnique({
     where: { slug },
     include: {

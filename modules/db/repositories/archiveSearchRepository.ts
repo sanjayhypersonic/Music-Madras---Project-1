@@ -1,6 +1,6 @@
 import { prisma } from "../client";
 import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
-import { likeNeedle } from "../../mmke/search/searchText";
+import { likeNeedle, normaliseSearchText } from "../../mmke/search/searchText";
 import { rankCandidates, type RankCandidate } from "../../mmke/search/searchRanking";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
 import { PUBLIC_COLLECTION_WHERE } from "./collectionRepository";
@@ -145,7 +145,7 @@ export async function searchWorks(
             {
               OR: [
                 { title: { contains: likeNeedle(query), mode: "insensitive" as const } },
-                { alternateTitles: { has: query } },
+                { alternateTitles: { has: normaliseSearchText(query) ?? "" } }, // the visitor's text, normalised like every other search use (no control characters reach the database)
               ],
             },
           ]

@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { isPlausibleSlug } from "../../mmke/slug/isPlausibleSlug";
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { canForkNewDraft, canPublishCurrentDraft } from "../../publishing/revisionTransitions";
@@ -1251,6 +1252,7 @@ export async function detachWorkFromRevision(
 export async function findPublishedRecordingBySlug(
   slug: string
 ): Promise<{ recording: Recording; publishedRevision: RecordingRevision } | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const recording = await prisma.recording.findUnique({
     where: { slug },
     include: { currentPublishedRevision: true },
@@ -1277,6 +1279,7 @@ export async function findPublishedRecordingBySlug(
  * identity row's currentPublishedRevisionId pointer.
  */
 export async function getPublishedRecordingContextBySlug(slug: string) {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const recording = await prisma.recording.findUnique({
     where: { slug },
     include: {

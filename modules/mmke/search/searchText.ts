@@ -11,7 +11,8 @@ export const SEARCH_MAX_LENGTH = 100;
 /** Whitespace collapsed, trimmed, and cut to SEARCH_MAX_LENGTH characters (by code point, so a character is never split). Undefined when nothing is left. */
 export function normaliseSearchText(raw: string | undefined | null): string | undefined {
   if (!raw) return undefined;
-  const trimmed = [...raw.replace(/\s+/g, " ").trim()].slice(0, SEARCH_MAX_LENGTH).join("").trim();
+  // Control characters (a NUL byte in particular, which PostgreSQL rejects as an invalid text value and which would otherwise become an unhandled error) are just spaces.
+  const trimmed = [...raw.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim()].slice(0, SEARCH_MAX_LENGTH).join("").trim();
   return trimmed === "" ? undefined : trimmed;
 }
 

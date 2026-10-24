@@ -1,4 +1,5 @@
 import { writeAuditLog } from "../../audit/writeAuditLog";
+import { isPlausibleSlug } from "../../mmke/slug/isPlausibleSlug";
 import { isVideoExposed, type ExposureHoldName, type VideoExposureFacts } from "../../mmke/catalogue/videoExposure";
 import { exposedVideoPageWhere } from "../../mmke/catalogue/videoExposureQuery";
 import { PlaylistArchivedError, PlaylistConflictError, PlaylistInvalidError, PlaylistMemberError, PlaylistNotFoundError, PlaylistQualityError } from "../../mmke/playlists/playlistErrors";
@@ -711,6 +712,7 @@ async function publicMembers(playlist: Pick<PlaylistPage, "id" | "publishedMembe
 
 /** The only sanctioned public lookup: a published, non-archived page with at least one member visitors may see. Reads the published snapshot only; never the draft. */
 export async function findPublishedPlaylistBySlug(slug: string): Promise<PublicPlaylistPage | null> {
+  if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
   const page = await prisma.playlistPage.findUnique({ where: { slug } });
   if (!page || page.status !== "PUBLISHED" || page.archivedAt !== null || page.publishedTitle === null) return null;
   const members = await publicMembers(page);
