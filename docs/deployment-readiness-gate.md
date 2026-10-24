@@ -1,6 +1,6 @@
 # Deployment readiness gate (hosting-independent)
 
-**Status: DEFINED, NOT OPERATIONAL.** This is the procedure a production deployment must pass. No hosting provider has been selected, so none of it has been implemented or tested on a real host. Each step below is a requirement; how it is performed (preview environments, traffic routing, instant rollback, monitors) is provider-specific and **remains pending the choice of provider**. Do not describe this gate as in force until it has been implemented and exercised on the chosen host and a rehearsal has been recorded.
+**Status: DEFINED, TOOLING IMPLEMENTED, NOT OPERATIONAL.** The gate is now executable: `docs/runbooks/production-launch.md` gives the command for each step (configuration preflight, migration status/apply with guards, restore-point fingerprint and verification, a readiness probe at `/api/ready`, automated smoke checks, a rollback-compatibility check, unhandled-error reporting). That tooling has been exercised against the isolated test database only. This is the procedure a production deployment must pass. No hosting provider has been selected, so none of it has been implemented or tested on a real host. Each step below is a requirement; how it is performed (preview environments, traffic routing, instant rollback, monitors) is provider-specific and **remains pending the choice of provider**. Do not describe this gate as in force until it has been implemented and exercised on the chosen host and a rehearsal has been recorded.
 
 Why it exists (verified in Phase 6J-9A with `next start`):
 
@@ -63,6 +63,6 @@ Record the evidence (command or request, status, timestamp, who) for each item. 
 
 - Selection of the hosting provider, and the provider-specific implementation of sections 2 and 4 (preview/staging environments, pre-promotion checks, traffic routing, instant rollback, readiness probes).
 - CI automation, error reporting, uptime monitoring and alerting.
-- Optionally a dedicated readiness route that checks the database, so a probe needs only one URL (a code change, not part of this document).
+- ~~A dedicated readiness route~~ **done**: `GET /api/ready` checks the database and that every migration this release needs is applied. A host's probe should still check both `/api/health` and `/api/ready`.
 - A rehearsal of the whole gate on the chosen host, recorded as evidence. **Until that rehearsal passes, this gate is not operational.**
 </content>
