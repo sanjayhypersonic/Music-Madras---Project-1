@@ -40,14 +40,6 @@ export default function VideoGallery({
   const [showAllArchived, setShowAllArchived] = useState(false);
   const playerRef = useRef<HTMLDivElement>(null);
 
-  // Automatically re-shuffle the 9 rotating showcase items periodically (every 45s)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setShuffleSeed(prev => prev + 1);
-    }, 45000);
-    return () => clearInterval(interval);
-  }, []);
-
   const activeVideo = videos.find(v => v.id === activeVideoId) || null;
 
   useEffect(() => {

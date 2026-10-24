@@ -22,14 +22,13 @@ interface YouTubeContextType {
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
-  lastSynced: number | null;
-  nextCheckInMs: number;
+  lastSynced: number;
   nextCheckTimeFormatted: string;
   isStale: boolean;
   apiKey: string;
   saveApiKey: (newKey: string) => Promise<boolean>;
   refreshFeed: () => Promise<void>;
-  checkDynamicUpdate: (force?: boolean) => Promise<void>;
+  checkDynamicUpdate: (force?: boolean, isSilent?: boolean) => Promise<void>;
   isSyncModalOpen: boolean;
   setIsSyncModalOpen: (open: boolean) => void;
 }
@@ -52,10 +51,10 @@ export function YouTubeProvider({ children }: { children: React.ReactNode }) {
     avatarUrl: 'https://yt3.googleusercontent.com/d0KOXSy8sQFmrwCGqkTjm90JYMpqdtrFpjtQCh7145eUjEf0XDnCxPXvfg6_RvKnaIY091x5_TA=s800-c-k-c0x00ffffff-no-rj'
   });
   const [isLive, setIsLive] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastSynced, setLastSynced] = useState<number | null>(() => {
+  const [lastSynced, setLastSynced] = useState<number>(() => {
     try {
       const meta = localStorage.getItem('musicmadras_dynamic_sync_meta_v6');
       if (meta) {
@@ -65,18 +64,21 @@ export function YouTubeProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore
     }
-    return null;
+    return Date.now();
   });
-  const [nextCheckInMs, setNextCheckInMs] = useState<number>(() => getTimeUntilNextCheck(lastSynced));
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
   const isUpdatingRef = useRef(false);
 
   // Master Dynamic Data checker and updater (every 3 hours)
-  const checkDynamicUpdate = useCallback(async (forceRefresh = false) => {
+  // `isSilent` guarantees that automatic background checks do NOT flash spinners or reload the UI
+  const checkDynamicUpdate = useCallback(async (forceRefresh = false, isSilent = true) => {
     if (isUpdatingRef.current) return;
     isUpdatingRef.current = true;
-    setIsRefreshing(forceRefresh);
+
+    if (!isSilent) {
+      setIsRefreshing(true);
+    }
 
     try {
       const result = await checkAndUpdateDynamicData(forceRefresh);
@@ -94,65 +96,61 @@ export function YouTubeProvider({ children }: { children: React.ReactNode }) {
       setIsLive(result.isLive);
       setError(result.error || null);
       setLastSynced(result.cachedAt);
-      setNextCheckInMs(getTimeUntilNextCheck(result.cachedAt));
     } catch (err: any) {
       console.warn('3-hour dynamic update failed:', err);
-      setError(err?.message || 'Failed to sync with YouTube API');
+      if (!isSilent) {
+        setError(err?.message || 'Failed to sync with YouTube API');
+      }
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (!isSilent) {
+        setIsRefreshing(false);
+      }
       isUpdatingRef.current = false;
     }
   }, []);
 
-  // Initial check on mount: If dynamic data is stale (> 3 hours), update immediately
+  // Initial check on mount: If dynamic data is genuinely older than 3 hours, check in background silently
   useEffect(() => {
-    const shouldForce = isDynamicDataStale(lastSynced);
-    checkDynamicUpdate(shouldForce);
-  }, [checkDynamicUpdate]);
-
-  // Periodic heartbeat every 30 seconds:
-  // Updates countdown timer and triggers full API refresh when 3-hour cycle expires
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const remaining = getTimeUntilNextCheck(lastSynced);
-      setNextCheckInMs(remaining);
-
-      // If 3 hours have passed since lastSynced, automatically re-check and update!
-      if (isDynamicDataStale(lastSynced) && !isUpdatingRef.current) {
-        console.log('3 hours elapsed: checking and updating YouTube dynamic data...');
-        checkDynamicUpdate(true);
-      }
-    }, 30000); // Check every 30 seconds
-
-    return () => clearInterval(interval);
+    if (isDynamicDataStale(lastSynced)) {
+      checkDynamicUpdate(true, true);
+    }
   }, [lastSynced, checkDynamicUpdate]);
 
-  // Page Visibility & Window Focus Handler:
-  // When user returns to tab, if 3 hours elapsed, auto-check and update immediately
+  // Scheduled 3-Hour Timer:
+  // Dynamically schedules the next check precisely when 3 hours elapse from lastSynced
   useEffect(() => {
-    const handleVisibilityOrFocus = () => {
+    const remainingMs = getTimeUntilNextCheck(lastSynced);
+    const delay = remainingMs > 0 ? remainingMs : DYNAMIC_UPDATE_INTERVAL_MS;
+
+    const timer = setTimeout(() => {
+      console.log('3-hour interval reached: checking and updating YouTube dynamic data silently in background...');
+      checkDynamicUpdate(true, true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [lastSynced, checkDynamicUpdate]);
+
+  // Page Visibility Handler:
+  // When user returns to the tab after a long period (>3 hours), silently update dynamic data
+  useEffect(() => {
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && !isUpdatingRef.current) {
         if (isDynamicDataStale(lastSynced)) {
-          console.log('Tab focused and data is older than 3 hours: triggering dynamic update...');
-          checkDynamicUpdate(true);
-        } else {
-          setNextCheckInMs(getTimeUntilNextCheck(lastSynced));
+          console.log('Tab visible and data older than 3 hours: silent background refresh...');
+          checkDynamicUpdate(true, true);
         }
       }
     };
 
-    window.addEventListener('focus', handleVisibilityOrFocus);
-    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      window.removeEventListener('focus', handleVisibilityOrFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [lastSynced, checkDynamicUpdate]);
 
-  // Manual trigger for refresh
+  // Manual trigger for refresh (e.g. from admin studio or sync modal)
   const refreshFeed = async () => {
-    await checkDynamicUpdate(true);
+    await checkDynamicUpdate(true, false);
   };
 
   const saveApiKey = async (newKey: string): Promise<boolean> => {
@@ -200,7 +198,6 @@ export function YouTubeProvider({ children }: { children: React.ReactNode }) {
         isRefreshing,
         error,
         lastSynced,
-        nextCheckInMs,
         nextCheckTimeFormatted,
         isStale,
         apiKey,
