@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
-import { can } from "../../../../../../../modules/auth/policy";
+import { can, describeRolesThatCan } from "../../../../../../../modules/auth/policy";
+import { ReadOnlyStepNotice } from "../../../../../../../components/studio/ReadOnlyStepNotice";
 import { listProgrammes, findProgrammeById } from "../../../../../../../modules/db/repositories/programmeRepository";
 import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { listMusicalWorksByComposer } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
@@ -46,6 +47,7 @@ export default async function ProgrammeStepPage({
         <button type="submit">View</button>
       </form>
 
+      {!canWrite && <ReadOnlyStepNotice roles={describeRolesThatCan("CATALOGUE_WRITE")} what="create or change programmes" />}
       {canWrite && (
         <>
           <h3>Create a new programme</h3>

@@ -987,7 +987,9 @@ export async function publishCurrentDraft(recordingId: string, actorId: string):
   if (result.reason === "BUSY") throw new RecordingBusyError(recordingId);
   throw new Error(`Recording ${recordingId} could not be published (${result.reason}).`);
 }
-export function findRecordingById(id: string): Promise<RecordingWithRevisions | null> {
+export async function findRecordingById(id: string): Promise<RecordingWithRevisions | null> {
+  // An id no Recording could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is "not found", never a database error and a 500.
+  if (!isPlausibleSlug(id)) return null;
   return prisma.recording.findUnique({
     where: { id },
     include: { currentDraftRevision: true, currentPublishedRevision: true },

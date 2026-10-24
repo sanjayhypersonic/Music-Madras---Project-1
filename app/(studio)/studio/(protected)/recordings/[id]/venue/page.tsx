@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
-import { can } from "../../../../../../../modules/auth/policy";
+import { can, describeRolesThatCan } from "../../../../../../../modules/auth/policy";
+import { ReadOnlyStepNotice } from "../../../../../../../components/studio/ReadOnlyStepNotice";
 import { listActiveVenues } from "../../../../../../../modules/db/repositories/venueRepository";
 import { createVenueForRecordingAction } from "./actions";
 import type { VenueType } from "@prisma/client";
@@ -41,6 +42,7 @@ export default async function VenueStepPage({
       </ul>
       {venues.length === 0 && <p className="studio-empty">No venues yet.</p>}
 
+      {!canWrite && <ReadOnlyStepNotice roles={describeRolesThatCan("CATALOGUE_WRITE")} what="add venues" />}
       {canWrite && (
         <form
           action={createVenueForRecordingAction.bind(null, id)}

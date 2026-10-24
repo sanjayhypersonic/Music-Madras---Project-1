@@ -57,6 +57,17 @@ export default async function RecordingWorkflowLayout({
       <h1>
         {title} <small style={{ fontWeight: "normal" }}>({phase})</small>
       </h1>
+      {/* On every step: an archived recording refuses edits (the server says so after a try), and a hold withholds the recording from the public Museum whatever its status. The hold's NOTE is never shown here (it is for those who may manage holds, on Review & Publish). */}
+      {recording.status === "ARCHIVED" && (
+        <p role="status" className="studio-alert studio-alert--warning">
+          This recording is archived, so it cannot be edited and is not public. Restore it from Review &amp; Publish to work on it again.
+        </p>
+      )}
+      {recording.holdReason && (
+        <p role="status" className="studio-alert studio-alert--warning">
+          On hold: {recording.holdReason.toLowerCase()}. This recording is withheld from the public Museum until the hold is lifted (Review &amp; Publish).
+        </p>
+      )}
       <div className="studio-steps-layout">
         <RecordingSteps recordingId={id} steps={STEPS} />
         <div className="studio-steps-layout__content">{children}</div>
