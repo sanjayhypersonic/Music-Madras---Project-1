@@ -4,7 +4,7 @@ import SafeImage from './SafeImage';
 import { useYouTube } from '../context/YouTubeContext';
 
 export default function PlaylistsSection() {
-  const { playlists, isLive } = useYouTube();
+  const { playlists } = useYouTube();
 
   return (
     <section className="py-12 px-4 md:px-8 max-w-7xl mx-auto space-y-8" id="playlists">
@@ -15,11 +15,6 @@ export default function PlaylistsSection() {
           <h2 className="font-serif text-2xl md:text-3xl font-bold text-zinc-50 flex items-center gap-2">
             <Radio className="w-6 h-6 text-amber-500 animate-pulse" />
             Curated Channel Playlists
-            {isLive && (
-              <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold uppercase tracking-wider">
-                Live YouTube API Feed
-              </span>
-            )}
           </h2>
           <p className="text-xs md:text-sm text-zinc-400 mt-1">
             Grouped concert series, vocal compilations, and sacred recitals dynamically synced from @MusicMadras.

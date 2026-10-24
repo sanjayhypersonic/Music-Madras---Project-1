@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Music, Radio, Sliders, Calendar, Award, Home, Sun, Moon, Youtube } from 'lucide-react';
+import { Bell, Music, Radio, Sliders, Calendar, Award, Home, Sun, Moon } from 'lucide-react';
 import { CHANNEL_INFO } from '../data';
 import SafeImage from './SafeImage';
 import { useYouTube } from '../context/YouTubeContext';
@@ -13,7 +13,7 @@ interface HeaderProps {
 }
 
 export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, setTheme }: HeaderProps) {
-  const { isLive, setIsSyncModalOpen, channelStats } = useYouTube();
+  const { channelStats } = useYouTube();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [showButtons, setShowButtons] = useState(true);
 
@@ -224,19 +224,6 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, 
             ? 'opacity-100 max-h-[50px] scale-100 mt-0' 
             : 'opacity-0 max-h-0 scale-95 -mt-4 pointer-events-none'
         }`}>
-          <button
-            onClick={() => setIsSyncModalOpen(true)}
-            aria-label="YouTube API Live Feed Settings & Status"
-            title={isLive ? "YouTube API: Connected (Live Feed Active)" : "YouTube API: Standby (Click to verify or connect)"}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-zinc-100 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-          >
-            <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            <Youtube className="w-3.5 h-3.5 text-[#FF0000]" fill="currentColor" />
-            <span className="hidden sm:inline text-[11px] font-mono">
-              {isLive ? 'Live Feed' : 'Sync API'}
-            </span>
-          </button>
-
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label={`Switch to ${theme === 'dark' ? 'high-contrast light' : 'dark'} theme`}

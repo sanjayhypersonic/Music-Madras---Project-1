@@ -46,7 +46,7 @@ export default function VideoGallery({
   activeVideoId,
   setActiveVideoId
 }: VideoGalleryProps) {
-  const { videos: contextVideos, isLive, refreshFeed, isRefreshing, isLoading, setIsSyncModalOpen } = useYouTube();
+  const { videos: contextVideos } = useYouTube();
   const [searchQuery, setSearchQuery] = useState('');
   const [videos, setVideos] = useState<Video[]>(contextVideos);
   const [copiedVideoId, setCopiedVideoId] = useState<string | null>(null);
@@ -61,10 +61,6 @@ export default function VideoGallery({
     }, 45000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleRefresh = async () => {
-    await refreshFeed();
-  };
 
   const activeVideo = videos.find(v => v.id === activeVideoId) || null;
 
@@ -156,34 +152,6 @@ export default function VideoGallery({
             <h2 className="font-serif text-2xl md:text-3xl font-bold text-zinc-100 flex items-center gap-2">
               <span className="text-amber-500">@MusicMadras</span> Archive Highlights
             </h2>
-            {isLive ? (
-              <button
-                onClick={() => setIsSyncModalOpen(true)}
-                title="Connected to YouTube Data API (Click to view feed info)"
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors cursor-pointer"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live Channel Sync
-              </button>
-            ) : (
-              <button
-                onClick={() => setIsSyncModalOpen(true)}
-                title="Click to connect YouTube Data API"
-                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                Sync YouTube API
-              </button>
-            )}
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              title="Refresh latest uploads from YouTube"
-              className="p-1.5 text-zinc-400 hover:text-amber-400 rounded-lg hover:bg-zinc-800/60 transition-colors disabled:opacity-50 cursor-pointer"
-              aria-label="Refresh videos"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
-            </button>
           </div>
           <p className="text-xs md:text-sm text-zinc-400 mt-1">
             Genuine live concert captures from the official YouTube channel. Filtered and optimized for pristine sound projection.

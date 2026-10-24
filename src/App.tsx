@@ -9,7 +9,6 @@ import TechSpecs from './components/TechSpecs';
 import PlaylistsSection from './components/PlaylistsSection';
 import SchemaMarkup from './components/SchemaMarkup';
 import SafeImage from './components/SafeImage';
-import YouTubeSyncModal from './components/YouTubeSyncModal';
 import useSEO from './hooks/useSEO';
 import { CHANNEL_INFO, VIDEOS_DATA } from './data';
 import MusicMadrasStudio from './components/studio/MusicMadrasStudio';
@@ -17,7 +16,7 @@ import { KnowledgePack } from './components/studio/types';
 import { YouTubeProvider, useYouTube } from './context/YouTubeContext';
 
 function AppContent() {
-  const { videos, isLive, refreshFeed, channelStats } = useYouTube();
+  const { videos, channelStats } = useYouTube();
   const [activeTab, setActiveTab] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
@@ -326,11 +325,6 @@ function AppContent() {
                       <h3 className="font-serif text-lg font-bold text-zinc-100 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
                         Featured Concert highlights
-                        {isLive && (
-                          <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold uppercase tracking-wider">
-                            Live YouTube API
-                          </span>
-                        )}
                       </h3>
                       <p className="text-[11px] text-zinc-400">
                         Top live classical recordings captured on location with absolute sound precision.
@@ -583,9 +577,6 @@ function AppContent() {
         onClose={() => setIsBookingOpen(false)}
         defaultMode={bookingFormMode}
       />
-
-      {/* YouTube Data API Live Sync Modal */}
-      <YouTubeSyncModal />
 
       {/* Footer Element */}
       <footer className="bg-zinc-950 text-zinc-300 border-t border-zinc-800 py-12 px-4 md:px-8 shadow-inner">
