@@ -9,12 +9,15 @@ import TechSpecs from './components/TechSpecs';
 import PlaylistsSection from './components/PlaylistsSection';
 import SchemaMarkup from './components/SchemaMarkup';
 import SafeImage from './components/SafeImage';
+import YouTubeSyncModal from './components/YouTubeSyncModal';
 import useSEO from './hooks/useSEO';
 import { CHANNEL_INFO, VIDEOS_DATA } from './data';
 import MusicMadrasStudio from './components/studio/MusicMadrasStudio';
 import { KnowledgePack } from './components/studio/types';
+import { YouTubeProvider, useYouTube } from './context/YouTubeContext';
 
-export default function App() {
+function AppContent() {
+  const { videos, isLive, refreshFeed, channelStats } = useYouTube();
   const [activeTab, setActiveTab] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
@@ -42,7 +45,7 @@ export default function App() {
   };
 
   // Dynamic Canonical URLs, SEO Document Title, and Description Synchronization
-  useSEO({ activeTab, activeVideoId });
+  useSEO({ activeTab, activeVideoId, videos });
 
   // Local storage synchronization for theme
   useEffect(() => {
@@ -118,7 +121,7 @@ export default function App() {
     }`}>
       
       {/* Structured Dynamic SEO Schema Data */}
-      <SchemaMarkup activeTab={activeTab} activeVideoId={activeVideoId} />
+      <SchemaMarkup activeTab={activeTab} activeVideoId={activeVideoId} videos={videos} />
       
       {/* Header element */}
       <Header
@@ -145,7 +148,7 @@ export default function App() {
               setIsBookingOpen(true);
             }}
             onBrowseVideos={() => {
-              setActiveTab('Concert');
+              setActiveTab('all');
             }}
           />
         )}
@@ -177,17 +180,17 @@ export default function App() {
                   {/* Card 1: MusicMadras Archive */}
                   {/* Card 1: Showcases */}
                   <div 
-                    onClick={() => setActiveTab('Concert')}
+                    onClick={() => setActiveTab('all')}
                     className="group bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/50 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
                   >
                     <div>
-                      <div className="relative h-32 w-full overflow-hidden">
+                      <div className="relative h-32 w-full overflow-hidden bg-black">
                         <SafeImage 
-                          src="/images/music-madras-archive.jpg"
-                          alt="MusicMadras Archive"
+                          src="https://i.ytimg.com/vi/zEQmnmwr5UE/hqdefault.jpg"
+                          alt="MusicMadras Archive — Dingiri Dingalae"
                           fallbackType="music"
                           title="MusicMadras Archive"
-                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-85"
+                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-90"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                         <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center text-amber-400 border border-zinc-800">
@@ -216,13 +219,13 @@ export default function App() {
                     className="group bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/50 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
                   >
                     <div>
-                      <div className="relative h-32 w-full overflow-hidden">
+                      <div className="relative h-32 w-full overflow-hidden bg-black">
                         <SafeImage 
-                          src="/images/curated-playlists.jpg"
-                          alt="Curated Playlists"
+                          src="https://i.ytimg.com/vi/Cch3sMiHWqY/hqdefault.jpg"
+                          alt="Curated Playlists — Wedding Recitals"
                           fallbackType="playlist"
                           title="Curated Playlists"
-                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
+                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-90"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                         <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center text-amber-400 border border-zinc-800">
@@ -251,13 +254,13 @@ export default function App() {
                     className="group bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/50 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
                   >
                     <div>
-                      <div className="relative h-32 w-full overflow-hidden">
+                      <div className="relative h-32 w-full overflow-hidden bg-black">
                         <SafeImage 
-                          src="/images/studio-recording-rig.jpg"
-                          alt="Focusrite Studio Rig"
+                          src="/assets/aistudio/se_08e3f770.jpg"
+                          alt="Music Madras Concert Acoustic Space & Studio Recording Rig"
                           fallbackType="gear"
                           title="Studio Recording Rig"
-                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
+                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-90"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                         <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center text-amber-400 border border-zinc-800">
@@ -286,13 +289,13 @@ export default function App() {
                     className="group bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/50 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
                   >
                     <div>
-                      <div className="relative h-32 w-full overflow-hidden">
+                      <div className="relative h-32 w-full overflow-hidden bg-black">
                         <SafeImage 
-                          src="/images/artist-program.jpg"
-                          alt="Artist Program"
+                          src="/assets/aistudio/mic_c1105c5e.png"
+                          alt="Music Madras Free Classical Artist Recording Program"
                           fallbackType="artist"
                           title="Artist Program"
-                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-80"
+                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-90"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
                         <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center text-amber-400 border border-zinc-800">
@@ -323,6 +326,11 @@ export default function App() {
                       <h3 className="font-serif text-lg font-bold text-zinc-100 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
                         Featured Concert highlights
+                        {isLive && (
+                          <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold uppercase tracking-wider">
+                            Live YouTube API
+                          </span>
+                        )}
                       </h3>
                       <p className="text-[11px] text-zinc-400">
                         Top live classical recordings captured on location with absolute sound precision.
@@ -330,9 +338,9 @@ export default function App() {
                     </div>
                     <button
                       onClick={() => {
-                        setActiveTab('Concert');
-                        if (VIDEOS_DATA.length > 0) {
-                          setActiveVideoId(VIDEOS_DATA[0].id);
+                        setActiveTab('all');
+                        if (videos.length > 0) {
+                          setActiveVideoId(videos[0].id);
                         }
                       }}
                       aria-label="View all live concert highlights"
@@ -343,7 +351,7 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {VIDEOS_DATA.slice(0, 3).map((video) => (
+                    {videos.slice(0, 3).map((video) => (
                       <div
                         key={video.id}
                         onClick={() => {
@@ -576,6 +584,9 @@ export default function App() {
         defaultMode={bookingFormMode}
       />
 
+      {/* YouTube Data API Live Sync Modal */}
+      <YouTubeSyncModal />
+
       {/* Footer Element */}
       <footer className="bg-zinc-950 text-zinc-300 border-t border-zinc-800 py-12 px-4 md:px-8 shadow-inner">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8 text-left">
@@ -666,5 +677,13 @@ export default function App() {
       </footer>
 
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <YouTubeProvider>
+      <AppContent />
+    </YouTubeProvider>
   );
 }

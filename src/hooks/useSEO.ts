@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
+import { Video } from '../types';
 import { VIDEOS_DATA } from '../data';
 
 export interface UseSEOOptions {
   activeTab: string;
   activeVideoId?: string | null;
+  videos?: Video[];
 }
 
 /**
@@ -11,7 +13,7 @@ export interface UseSEOOptions {
  * and history state synchronization.
  * Decouples side-effect logic from the main App component rendering cycle.
  */
-export function useSEO({ activeTab, activeVideoId }: UseSEOOptions) {
+export function useSEO({ activeTab, activeVideoId, videos = VIDEOS_DATA }: UseSEOOptions) {
   useEffect(() => {
     // 1. Synchronize URL query parameters dynamically to enable search crawler deep-links
     const url = new URL(window.location.href);
@@ -75,7 +77,7 @@ export function useSEO({ activeTab, activeVideoId }: UseSEOOptions) {
     let displayTitle = '';
     let displayDescription = '';
     
-    const activeVideo = activeVideoId ? VIDEOS_DATA.find(v => v.id === activeVideoId) : null;
+    const activeVideo = activeVideoId ? videos.find(v => v.id === activeVideoId) : null;
     
     if (activeVideo) {
       displayTitle = `${activeVideo.title} | ${suffix}`;

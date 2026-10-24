@@ -1,4 +1,5 @@
 import React from 'react';
+import { Video } from '../types';
 import { VIDEOS_DATA, PLAYLISTS_DATA } from '../data';
 import {
   getConcertSchema,
@@ -13,10 +14,11 @@ import {
 interface SchemaMarkupProps {
   activeTab: string;
   activeVideoId: string | null;
+  videos?: Video[];
 }
 
-export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({ activeTab, activeVideoId }) => {
-  const activeVideo = activeVideoId ? VIDEOS_DATA.find(v => v.id === activeVideoId) : null;
+export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({ activeTab, activeVideoId, videos = VIDEOS_DATA }) => {
+  const activeVideo = activeVideoId ? videos.find(v => v.id === activeVideoId) : null;
   const activeVideoTitle = activeVideo ? activeVideo.title : undefined;
 
   // Always include the central entity definition (Organization/Studio & WebSite)
@@ -39,22 +41,22 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({ activeTab, activeVid
   if (activeTab === 'playlists') {
     // Generate MusicAlbum schemas for our curated compiled lists
     PLAYLISTS_DATA.forEach(playlist => {
-      schemas.push(getAlbumSchema(playlist, VIDEOS_DATA));
+      schemas.push(getAlbumSchema(playlist, videos));
     });
   } else if (activeTab === 'Concert') {
     // Generate Concert/MusicEvent schemas for the main showcases
-    const concertVideos = VIDEOS_DATA.filter(v => v.category === 'Concert').slice(0, 5);
+    const concertVideos = videos.filter(v => v.category === 'Concert').slice(0, 5);
     concertVideos.forEach(v => {
       schemas.push(getConcertSchema(v));
     });
   } else if (activeTab === 'all' || activeTab === 'home') {
     // Showcase general high-profile events and recordings
-    const featuredConcerts = VIDEOS_DATA.filter(v => v.category === 'Concert').slice(0, 3);
+    const featuredConcerts = videos.filter(v => v.category === 'Concert').slice(0, 3);
     featuredConcerts.forEach(v => {
       schemas.push(getConcertSchema(v));
     });
 
-    const featuredRecordings = VIDEOS_DATA.slice(0, 5);
+    const featuredRecordings = videos.slice(0, 5);
     featuredRecordings.forEach(v => {
       schemas.push(getRecordingSchema(v));
     });

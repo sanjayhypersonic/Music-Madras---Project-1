@@ -1,8 +1,11 @@
-import { Radio, Youtube, Layers, ArrowUpRight } from 'lucide-react';
-import { PLAYLISTS_DATA, CHANNEL_INFO } from '../data';
+import { Radio, Youtube, Layers, ArrowUpRight, Sparkles } from 'lucide-react';
+import { CHANNEL_INFO } from '../data';
 import SafeImage from './SafeImage';
+import { useYouTube } from '../context/YouTubeContext';
 
 export default function PlaylistsSection() {
+  const { playlists, isLive } = useYouTube();
+
   return (
     <section className="py-12 px-4 md:px-8 max-w-7xl mx-auto space-y-8" id="playlists">
       
@@ -12,9 +15,14 @@ export default function PlaylistsSection() {
           <h2 className="font-serif text-2xl md:text-3xl font-bold text-zinc-50 flex items-center gap-2">
             <Radio className="w-6 h-6 text-amber-500 animate-pulse" />
             Curated Channel Playlists
+            {isLive && (
+              <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold uppercase tracking-wider">
+                Live YouTube API Feed
+              </span>
+            )}
           </h2>
           <p className="text-xs md:text-sm text-zinc-400 mt-1">
-            Carefully grouped concert logs, vocal compilations, and debut recitals on @MusicMadras.
+            Grouped concert series, vocal compilations, and sacred recitals dynamically synced from @MusicMadras.
           </p>
         </div>
 
@@ -32,7 +40,7 @@ export default function PlaylistsSection() {
 
       {/* Playlist Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {PLAYLISTS_DATA.map((playlist) => (
+        {playlists.map((playlist) => (
           <a
             key={playlist.id}
             href={playlist.youtubeUrl}
@@ -69,15 +77,12 @@ export default function PlaylistsSection() {
               </div>
             </div>
 
-            {/* Description Details */}
-            <div className="p-5 space-y-3 flex-grow flex flex-col justify-between text-left">
-              <div className="space-y-1.5">
-                <h3 className="font-serif text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors">
+            {/* Playlist Title & Action Details */}
+            <div className="p-5 space-y-4 flex-grow flex flex-col justify-between text-left">
+              <div>
+                <h3 className="font-serif text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors leading-snug">
                   {playlist.title}
                 </h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  {playlist.description}
-                </p>
               </div>
 
               <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between">

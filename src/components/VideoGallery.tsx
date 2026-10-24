@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, MouseEvent } from 'react';
-import { Search, Heart, Sparkles, Sliders, Youtube, Volume2, Maximize2, X, AlertCircle, Link, Check, ExternalLink, RefreshCw, Radio } from 'lucide-react';
+import { useState, useEffect, useRef, MouseEvent, useMemo } from 'react';
+import { Search, Heart, Sparkles, Sliders, Youtube, Volume2, Maximize2, X, AlertCircle, Link, Check, ExternalLink, RefreshCw, Radio, Flame, Shuffle } from 'lucide-react';
 import { Video } from '../types';
-import { VIDEOS_DATA, CHANNEL_INFO } from '../data';
+import { CHANNEL_INFO } from '../data';
 import SafeImage from './SafeImage';
-import { getMusicMadrasVideos } from '../lib/youtube';
+import { useYouTube } from '../context/YouTubeContext';
 
 const categoryDisplayNames: Record<string, string> = {
   all: 'All Highlights',
@@ -13,6 +13,21 @@ const categoryDisplayNames: Record<string, string> = {
   Vocal: 'Solo Vocals',
   Instrumental: 'Orchestra & Classical Instruments',
 };
+
+// Helper to convert strings like '1.4K', '980', '1.2M' to actual numbers for view ranking
+function parseViewsCount(viewsStr?: string): number {
+  if (!viewsStr) return 0;
+  const str = viewsStr.trim().toUpperCase();
+  if (str.endsWith('M')) {
+    return (parseFloat(str.replace('M', '')) || 0) * 1000000;
+  }
+  if (str.endsWith('K')) {
+    return (parseFloat(str.replace('K', '')) || 0) * 1000;
+  }
+  const clean = str.replace(/,/g, '');
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : num;
+}
 
 interface VideoGalleryProps {
   selectedCategory: string;
@@ -31,39 +46,24 @@ export default function VideoGallery({
   activeVideoId,
   setActiveVideoId
 }: VideoGalleryProps) {
+  const { videos: contextVideos, isLive, refreshFeed, isRefreshing, isLoading, setIsSyncModalOpen } = useYouTube();
   const [searchQuery, setSearchQuery] = useState('');
-  const [baseVideos, setBaseVideos] = useState<Video[]>(VIDEOS_DATA);
-  const [videos, setVideos] = useState<Video[]>(VIDEOS_DATA);
-  const [isLiveSync, setIsLiveSync] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [videos, setVideos] = useState<Video[]>(contextVideos);
   const [copiedVideoId, setCopiedVideoId] = useState<string | null>(null);
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+  const [showAllArchived, setShowAllArchived] = useState(false);
   const playerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch dynamic videos on mount
+  // Automatically re-shuffle the 9 rotating showcase items periodically (every 45s)
   useEffect(() => {
-    let mounted = true;
-    getMusicMadrasVideos().then((res) => {
-      if (mounted && res.videos && res.videos.length > 0) {
-        setBaseVideos(res.videos);
-        setIsLiveSync(res.isLive);
-      }
-    });
-    return () => {
-      mounted = false;
-    };
+    const interval = setInterval(() => {
+      setShuffleSeed(prev => prev + 1);
+    }, 45000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      const res = await getMusicMadrasVideos(true);
-      if (res.videos && res.videos.length > 0) {
-        setBaseVideos(res.videos);
-        setIsLiveSync(res.isLive);
-      }
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 500);
-    }
+    await refreshFeed();
   };
 
   const activeVideo = videos.find(v => v.id === activeVideoId) || null;
@@ -76,7 +76,7 @@ export default function VideoGallery({
 
   // Sync state for actual likes count in session memory
   useEffect(() => {
-    const updatedVideos = baseVideos.map(video => {
+    const updatedVideos = contextVideos.map(video => {
       const isLiked = likedVideos.includes(video.id);
       return {
         ...video,
@@ -84,7 +84,7 @@ export default function VideoGallery({
       };
     });
     setVideos(updatedVideos);
-  }, [likedVideos, baseVideos]);
+  }, [likedVideos, contextVideos]);
 
   const handleCopyLink = (video: Video, e: MouseEvent) => {
     e.stopPropagation();
@@ -101,16 +101,50 @@ export default function VideoGallery({
     setActiveVideoId(video.id);
   };
 
-  // Filter videos based on category tab and search query
-  const filteredVideos = videos.filter(video => {
-    const matchesCategory = selectedCategory === 'all' || selectedCategory === 'liked' 
-      ? (selectedCategory === 'liked' ? likedVideos.includes(video.id) : true)
-      : video.category === selectedCategory;
-    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          video.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          video.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // 1. Filter videos based on category tab and search query
+  const categoryMatchedVideos = useMemo(() => {
+    return videos.filter(video => {
+      const matchesCategory = selectedCategory === 'all' || selectedCategory === 'liked' 
+        ? (selectedCategory === 'liked' ? likedVideos.includes(video.id) : true)
+        : video.category === selectedCategory;
+      const matchesSearch = searchQuery.trim() === '' || 
+        video.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        video.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        video.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [videos, selectedCategory, likedVideos, searchQuery]);
+
+  // 2. Curated Showcase logic: First 3 are top most viewed; remaining 9 are randomly selected & shuffled
+  const { displayVideos, top3Ids } = useMemo(() => {
+    // If active search query or user requested all, show full list
+    if (searchQuery.trim().length > 0 || showAllArchived || categoryMatchedVideos.length <= 12) {
+      const sorted = [...categoryMatchedVideos].sort((a, b) => parseViewsCount(b.views) - parseViewsCount(a.views));
+      return {
+        displayVideos: categoryMatchedVideos,
+        top3Ids: new Set(sorted.slice(0, 3).map(v => v.id))
+      };
+    }
+
+    // Sort by highest views descending
+    const sortedByViews = [...categoryMatchedVideos].sort((a, b) => parseViewsCount(b.views) - parseViewsCount(a.views));
+
+    // First 3: videos with the most views
+    const top3 = sortedByViews.slice(0, 3);
+    const top3Set = new Set(top3.map(v => v.id));
+
+    // The rest of the candidate videos
+    const remainingPool = sortedByViews.slice(3);
+
+    // Randomly select and shuffle 9 from remaining pool using shuffleSeed
+    const shuffled = [...remainingPool].sort(() => Math.random() - 0.5);
+    const selected9 = shuffled.slice(0, 9);
+
+    return {
+      displayVideos: [...top3, ...selected9],
+      top3Ids: top3Set
+    };
+  }, [categoryMatchedVideos, searchQuery, showAllArchived, shuffleSeed]);
 
   return (
     <section className="py-12 px-4 md:px-8 max-w-7xl mx-auto space-y-8" id="showcases">
@@ -122,21 +156,30 @@ export default function VideoGallery({
             <h2 className="font-serif text-2xl md:text-3xl font-bold text-zinc-100 flex items-center gap-2">
               <span className="text-amber-500">@MusicMadras</span> Archive Highlights
             </h2>
-            {isLiveSync ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+            {isLive ? (
+              <button
+                onClick={() => setIsSyncModalOpen(true)}
+                title="Connected to YouTube Data API (Click to view feed info)"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+              >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Live Channel Sync
-              </span>
+              </button>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/50">
-                Curated Feed
-              </span>
+              <button
+                onClick={() => setIsSyncModalOpen(true)}
+                title="Click to connect YouTube Data API"
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                Sync YouTube API
+              </button>
             )}
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
               title="Refresh latest uploads from YouTube"
-              className="p-1.5 text-zinc-400 hover:text-amber-400 rounded-lg hover:bg-zinc-800/60 transition-colors disabled:opacity-50"
+              className="p-1.5 text-zinc-400 hover:text-amber-400 rounded-lg hover:bg-zinc-800/60 transition-colors disabled:opacity-50 cursor-pointer"
               aria-label="Refresh videos"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
@@ -164,7 +207,7 @@ export default function VideoGallery({
       {/* Category Tabs & Sub-Filters */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-1.5 bg-zinc-900/60 p-1 rounded-2xl border border-zinc-800" role="tablist" aria-label="Recording categories">
-          {['Concert', 'Organ', 'Choral', 'Vocal', 'Instrumental', 'all'].map((cat) => (
+          {['all', 'Concert', 'Organ', 'Choral', 'Vocal', 'Instrumental'].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -182,10 +225,16 @@ export default function VideoGallery({
           ))}
         </div>
 
-        <div className="text-[11px] text-zinc-500 font-semibold tracking-wide uppercase flex items-center gap-1.5">
-          <span>Displaying {filteredVideos.length} recordings</span>
-          <span>•</span>
-          <span>Chennai, TN</span>
+        <div className="flex items-center gap-2">
+          {!showAllArchived && categoryMatchedVideos.length > 12 && !searchQuery.trim() && (
+            <span className="text-[11px] text-amber-400 font-semibold flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
+              <Flame className="w-3 h-3 fill-current" />
+              Top 3 Most Viewed + 9 Rotated
+            </span>
+          )}
+          <span className="text-[11px] text-zinc-500 font-semibold tracking-wide uppercase">
+            {displayVideos.length} recordings shown
+          </span>
         </div>
       </div>
 
@@ -311,10 +360,45 @@ export default function VideoGallery({
         </div>
       )}
 
+      {/* Showcase Curation Banner & Shuffle Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-800/80">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="flex items-center gap-1.5 font-bold text-zinc-100">
+            <Flame className="w-4 h-4 text-amber-500 fill-current" />
+            Showcase Highlights:
+          </span>
+          <span className="text-zinc-400">
+            Top 3 most viewed + 9 rotating recitals ({displayVideos.length} shown)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShuffleSeed(prev => prev + 1)}
+            title="Randomly shuffle the 9 rotating recitals"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-amber-400 rounded-xl font-medium transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <Shuffle className="w-3.5 h-3.5 text-amber-400" />
+            Shuffle 9 Picks
+          </button>
+
+          {categoryMatchedVideos.length > 12 && (
+            <button
+              onClick={() => setShowAllArchived(!showAllArchived)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 border border-zinc-700 hover:border-zinc-600 text-zinc-300 rounded-xl font-medium transition-all text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+            >
+              {showAllArchived ? 'Show 12 Curated' : `View All (${categoryMatchedVideos.length})`}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Video Grid */}
-      {filteredVideos.length > 0 ? (
+      {displayVideos.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {filteredVideos.map((video) => {
+          {displayVideos.map((video) => {
+            const isTopViewed = top3Ids.has(video.id) && !searchQuery.trim();
+
             return (
               <div
                 key={video.id}
@@ -345,11 +429,19 @@ export default function VideoGallery({
                   {/* Dark overlay gradient for legibility */}
                   <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-transparent to-black/45 flex flex-col justify-between p-3">
                     {/* Top row */}
-                    <div className="flex justify-between items-center">
-                      <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full tracking-wider uppercase">
-                        {categoryDisplayNames[video.category] || video.category}
-                      </span>
-                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                    <div className="flex justify-between items-center gap-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {isTopViewed && (
+                          <span className="bg-amber-500 text-zinc-950 font-extrabold text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                            <Flame className="w-3 h-3 fill-current" />
+                            Most Viewed
+                          </span>
+                        )}
+                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full tracking-wider uppercase">
+                          {categoryDisplayNames[video.category] || video.category}
+                        </span>
+                      </div>
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0">
                         4K HD
                       </span>
                     </div>
