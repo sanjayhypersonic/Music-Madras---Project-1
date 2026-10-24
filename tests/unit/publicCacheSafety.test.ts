@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "fs";
 import path from "path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 // Public cache safety for Recording holds (project register R-22).
 //
@@ -14,6 +14,9 @@ import { describe, expect, it } from "vitest";
 // any caching construct appears under a public route, every visibility change (publish, unpublish, archive, restore, Recording hold, video hold and approval...)
 // must revalidate the affected paths, or a held Recording would keep being served. These tests make that day impossible to miss: they fail when a caching
 // construct is introduced, and they require the hold actions to revalidate public paths if one ever is.
+
+// These tests walk the source tree. In isolation that takes a few seconds; with the whole suite running in parallel on a slow disk it can pass vitest's 5 s default.
+vi.setConfig({ testTimeout: 30_000 });
 
 const root = path.resolve(__dirname, "../..");
 const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");

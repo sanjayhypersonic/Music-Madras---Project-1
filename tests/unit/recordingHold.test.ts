@@ -1,12 +1,15 @@
 import { readdirSync, readFileSync, statSync } from "fs";
 import path from "path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { isRecordingPublished, isRecordingPubliclyVisible } from "../../modules/mmke/catalogue/isRecordingPublished";
 import { classifyRecording } from "../../modules/mmke/occasionWorkspace/occasionConnections";
 import { can } from "../../modules/auth/policy";
 
 // Recording-level holds (project register R-20): the predicate, and source-level guarantees that enforcement lives in the canonical public readers, that the hold
 // actions are authorized on the server, and that a hold can never change publication state or touch the legacy relationship rows.
+
+// One test walks the whole source tree; give the file headroom when the full suite runs in parallel (see publicCacheSafety.test.ts).
+vi.setConfig({ testTimeout: 30_000 });
 
 const root = path.resolve(__dirname, "../..");
 const read = (relative: string) => readFileSync(path.join(root, relative), "utf8");

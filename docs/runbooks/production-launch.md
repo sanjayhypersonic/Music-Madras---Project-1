@@ -25,8 +25,8 @@ the deployment itself.
    npx tsx scripts/writeMigrationManifest.ts --check
    ```
 
-3. **Checks on the release commit**: `npm run typecheck`, `npm run lint`, `npm test`, `npm run test:integration` (against the isolated test database), and the production build on the host.
-4. **Runtime**: Node 24 (`.nvmrc`, `engines`). `npm audit --omit=dev` reviewed: as of 2026-10-24 it reports a **critical** advisory in `next` 16.4.0 and several high ones (register R-24, owner decision O-08). The installed Next.js version also makes the first build after a source change stop with a `SecurityFatalError` and exit 1 until the same command is run again, so a CI or host build that is not retried fails. Resolve R-24 before the first production build.
+3. **Checks on the release commit**: `npx next typegen` first on a pristine checkout (the generated route types are not committed, and `tsc` fails with `Cannot find name 'LayoutProps'` without them; a build also generates them), then `npm run typecheck`, `npm run lint`, `npm test`, `npm run test:integration` (against the isolated test database), and the production build on the host. Install with `npm ci --strict-allow-scripts` so any install script missing from the `allowScripts` policy in `package.json` fails loudly instead of being a notice.
+4. **Runtime and dependencies**: Node 24 (`.nvmrc`, `engines`). Run `npm audit --omit=dev` on the **release commit** and review every finding (the gate in §1 of `docs/deployment-readiness-gate.md`). On 2026-10-24 it reported 0 after the Next.js 16.4.3 / Prisma 7.10.1 / nodemailer 10.2.1 remediation (register R-24); a clean result only covers advisories already published for those exact versions, so re-run it, and check the host's install log: npm 11 warns that six packages' install scripts are not covered by `allowScripts` (`argon2` must load and hash on the host).
 
 ## 2. Restore point and its fingerprint (before any change to the database)
 
