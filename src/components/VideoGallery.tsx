@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, MouseEvent } from 'react';
-import { Search, Heart, Sparkles, Sliders, Youtube, Volume2, Maximize2, X, AlertCircle, Link, Check, ExternalLink } from 'lucide-react';
+import { Search, Heart, Sparkles, Sliders, Youtube, Volume2, Maximize2, X, AlertCircle, Link, Check, ExternalLink, RefreshCw, Radio } from 'lucide-react';
 import { Video } from '../types';
 import { VIDEOS_DATA, CHANNEL_INFO } from '../data';
 import SafeImage from './SafeImage';
+import { getMusicMadrasVideos } from '../lib/youtube';
 
 const categoryDisplayNames: Record<string, string> = {
   all: 'All Highlights',
@@ -31,9 +32,39 @@ export default function VideoGallery({
   setActiveVideoId
 }: VideoGalleryProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [baseVideos, setBaseVideos] = useState<Video[]>(VIDEOS_DATA);
   const [videos, setVideos] = useState<Video[]>(VIDEOS_DATA);
+  const [isLiveSync, setIsLiveSync] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedVideoId, setCopiedVideoId] = useState<string | null>(null);
   const playerRef = useRef<HTMLDivElement>(null);
+
+  // Fetch dynamic videos on mount
+  useEffect(() => {
+    let mounted = true;
+    getMusicMadrasVideos().then((res) => {
+      if (mounted && res.videos && res.videos.length > 0) {
+        setBaseVideos(res.videos);
+        setIsLiveSync(res.isLive);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await getMusicMadrasVideos(true);
+      if (res.videos && res.videos.length > 0) {
+        setBaseVideos(res.videos);
+        setIsLiveSync(res.isLive);
+      }
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   const activeVideo = videos.find(v => v.id === activeVideoId) || null;
 
@@ -45,7 +76,7 @@ export default function VideoGallery({
 
   // Sync state for actual likes count in session memory
   useEffect(() => {
-    const updatedVideos = VIDEOS_DATA.map(video => {
+    const updatedVideos = baseVideos.map(video => {
       const isLiked = likedVideos.includes(video.id);
       return {
         ...video,
@@ -53,7 +84,7 @@ export default function VideoGallery({
       };
     });
     setVideos(updatedVideos);
-  }, [likedVideos]);
+  }, [likedVideos, baseVideos]);
 
   const handleCopyLink = (video: Video, e: MouseEvent) => {
     e.stopPropagation();
@@ -87,11 +118,32 @@ export default function VideoGallery({
       {/* Title block */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-zinc-800/80 pb-5">
         <div>
-          <h2 className="font-serif text-2xl md:text-3xl font-bold text-zinc-100 flex items-center gap-2">
-            <span className="text-amber-500">@MusicMadras</span> Archive Highlights
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="font-serif text-2xl md:text-3xl font-bold text-zinc-100 flex items-center gap-2">
+              <span className="text-amber-500">@MusicMadras</span> Archive Highlights
+            </h2>
+            {isLiveSync ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Live Channel Sync
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/50">
+                Curated Feed
+              </span>
+            )}
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              title="Refresh latest uploads from YouTube"
+              className="p-1.5 text-zinc-400 hover:text-amber-400 rounded-lg hover:bg-zinc-800/60 transition-colors disabled:opacity-50"
+              aria-label="Refresh videos"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
+            </button>
+          </div>
           <p className="text-xs md:text-sm text-zinc-400 mt-1">
-            Genuine live concert captures. Filtered and optimized for pristine sound projection.
+            Genuine live concert captures from the official YouTube channel. Filtered and optimized for pristine sound projection.
           </p>
         </div>
 
