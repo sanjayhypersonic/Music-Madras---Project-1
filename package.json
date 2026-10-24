@@ -29,7 +29,12 @@
     "backfill:revision-relationships": "tsx scripts/backfillRevisionRelationships.ts",
     "reproject:legacy-relationships": "tsx scripts/reprojectLegacyRelationships.ts",
     "design:evaluate": "tsx scripts/evaluateVisualDirections.ts",
-    "design:specimen": "tsx scripts/generateDirectionSpecimen.ts"
+    "design:specimen": "tsx scripts/generateDirectionSpecimen.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "migrations:manifest": "tsx scripts/writeMigrationManifest.ts",
+    "ops:check-config": "tsx scripts/checkProductionConfig.ts",
+    "ops:smoke": "tsx scripts/smokeTest.ts",
+    "ops:verify-database": "tsx scripts/verifyDatabase.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",

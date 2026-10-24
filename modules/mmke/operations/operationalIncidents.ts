@@ -13,6 +13,10 @@ export const OPERATIONAL_INCIDENT_KINDS = {
     label: "A recording's relationships were left off an Organisation page",
     meaning: "Its revision data was inconsistent, so its sources, rights and occasions were omitted (never shown unverified, never taken from legacy rows). Other recordings on the page were unaffected.",
   },
+  UNHANDLED_SERVER_ERROR: {
+    label: "A page or action failed with an unhandled server error",
+    meaning: "Recorded by the framework's error hook with only the kind of error and the route pattern (never the message, the URL or any data). The same failure on the same route is counted, not repeated. Check the server log line {event: unhandled_server_error} for the error digest.",
+  },
 } as const;
 
 export type OperationalIncidentKindName = keyof typeof OPERATIONAL_INCIDENT_KINDS;

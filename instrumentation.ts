@@ -16,3 +16,12 @@ export async function register() {
     console.warn(`[config] ${warning.variable}: ${warning.problem}`);
   }
 }
+
+// Launch readiness (register R-15, unhandled server errors): the framework calls this for every server error it captures (render, route handler, server action).
+// It records one safe log line and a deduplicated operational incident, never the message, URL or request data (modules/ops/requestErrorReport.ts). Node.js runtime
+// only: the incident log needs the database. It never throws.
+export async function onRequestError(error: unknown, _request: unknown, context: { routePath?: unknown; routeType?: unknown; routerKind?: unknown }) {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const { reportRequestError } = await import("./modules/ops/reportRequestError");
+  await reportRequestError(error, context);
+}
