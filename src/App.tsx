@@ -220,8 +220,8 @@ function AppContent() {
                     <div>
                       <div className="relative h-32 w-full overflow-hidden bg-black">
                         <SafeImage 
-                          src="https://i.ytimg.com/vi/Cch3sMiHWqY/hqdefault.jpg"
-                          alt="Curated Playlists — Wedding Recitals"
+                          src="https://i.ytimg.com/vi/rUrS7Pb2W90/hqdefault.jpg"
+                          alt="Curated Playlists — Christian Wedding Music"
                           fallbackType="playlist"
                           title="Curated Playlists"
                           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-90"

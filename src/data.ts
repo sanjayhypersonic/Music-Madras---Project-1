@@ -6,9 +6,9 @@ export const CHANNEL_INFO = {
   url: 'https://www.youtube.com/@MusicMadras',
   description: 'Music Madras: A Pure Live Experience - Digital Archive',
   detailedDescription: 'Welcome to Music Madras, your front-row seat to the authentic sound of Western and Indian classical concerts in Chennai. This includes Church Music. In an era of over-processed live recordings, we believe something vital is lost when the "concert hall sound" is sanitized by extreme post-production. Our mission is to bridge that gap. We celebrate the "perfectly imperfect" nature of live music, capturing the blend and balance intended for the live audience.',
-  subscribers: '12.4K',
-  videoCount: '184',
-  totalViews: '1.2M',
+  subscribers: '874',
+  videoCount: '181',
+  totalViews: '227K',
   location: 'Chennai, Tamil Nadu, India',
   turnaroundTime: '2-3 Business Days',
   qualitySpec: {
@@ -541,40 +541,139 @@ export const VIDEOS_DATA: Video[] = [
 
 export const PLAYLISTS_DATA: Playlist[] = [
   {
-    id: 'play-2',
+    id: 'PLY1Yefuyk0BI',
+    title: "Christian Wedding Music | Tamil Wedding Songs, Hymns & Classical Wedding Music | Music Madras",
+    videoCount: 9,
+    description: "Curated wedding hymns, sacred marches, and Tamil Christian bridal music recorded live.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PLY1Yefuyk0BI",
+    imageQuery: 'wedding',
+    thumbnailUrl: "https://i.ytimg.com/vi/rUrS7Pb2W90/hqdefault.jpg"
+  },
+  {
+    id: 'PLf4CcKxuKJvg',
+    title: "Mozart: Coronation Mass in C Major, K. 317 | Complete Mass | Music Madras",
+    videoCount: 6,
+    description: "Complete live movements of W.A. Mozart's Coronation Mass in C Major performed by The Chennai Chorale.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PLf4CcKxuKJvg",
+    imageQuery: 'choral',
+    thumbnailUrl: "https://i.ytimg.com/vi/GtMpTCmC1QA/hqdefault.jpg"
+  },
+  {
+    id: 'PLZf6nqKmvUHg',
+    title: "Musical Sunday | TELC Arulnathar Church | Chennai | 06 September 2026",
+    videoCount: 16,
+    description: "Sacred Sunday choral, solo vocal, and liturgical performances live at TELC Arulnathar Church.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PLZf6nqKmvUHg",
+    imageQuery: 'church',
+    thumbnailUrl: "https://i.ytimg.com/vi/GtMpTCmC1QA/hqdefault.jpg"
+  },
+  {
+    id: 'PL6HjF0ftgoqukPMVied3OlVd0zT-Imjir',
     title: "EMC Choir Homecoming - Jan 2026 | Kalyan Subrahmanyam",
-    videoCount: 12,
-    description: "The Emmanuel Methodist Church (EMC) Choir Homecoming performances under the direction of Kalyan Subrahmanyam, capturing the exquisite balance of vocal parts.",
-    youtubeUrl: "https://youtube.com/playlist?list=PL6HjF0ftgoqukPMVied3OlVd0zT-Imjir&si=R3pUwznFmDBe0wSj",
+    videoCount: 28,
+    description: "The Emmanuel Methodist Church (EMC) Choir Homecoming performances under the direction of Kalyan Subrahmanyam.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqukPMVied3OlVd0zT-Imjir",
     imageQuery: 'singing',
     thumbnailUrl: "https://i.ytimg.com/vi/NywlHEmY8YY/hqdefault.jpg"
   },
   {
-    id: 'play-3',
+    id: 'PL6HjF0ftgoqukHKfMBYbjvIYwExv-zqCo',
     title: "The Chromatics - Sacred Arias Chromatics by Haydn, Mozart, Puccini, Stradella, Mendelssohn, Verdi",
-    videoCount: 6,
-    description: "Curated sacred arias and classical works performed live in Chennai by the renowned vocal ensemble The Chromatics, including compositions by Verdi and Mendelssohn.",
-    youtubeUrl: "https://youtube.com/playlist?list=PL6HjF0ftgoqukHKfMBYbjvIYwExv-zqCo&si=XwODzLFIC2PlbhPN",
+    videoCount: 13,
+    description: "Curated sacred arias and classical works performed live by the renowned vocal ensemble The Chromatics.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqukHKfMBYbjvIYwExv-zqCo",
     imageQuery: 'choir',
     thumbnailUrl: "https://i.ytimg.com/vi/GrHZCVTGj1I/hqdefault.jpg"
   },
   {
-    id: 'play-4',
+    id: 'PL6HjF0ftgoqvL10ZDw8kx3OLIP6VV8T97',
     title: "Bishop Heber Chapel Choir ( BHC ) - Christmas Carols 2025",
-    videoCount: 10,
-    description: "The famous Christmas Carols services and special hymns performed live by the prestigious Bishop Heber Chapel Choir in Chennai.",
-    youtubeUrl: "https://youtube.com/playlist?list=PL6HjF0ftgoqvL10ZDw8kx3OLIP6VV8T97&si=dDJXD9EuLHhi09g5",
-    imageQuery: 'violin',
+    videoCount: 11,
+    description: "Christmas Carols services and special hymns performed live by the Bishop Heber Chapel Choir.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqvL10ZDw8kx3OLIP6VV8T97",
+    imageQuery: 'carols',
     thumbnailUrl: "https://i.ytimg.com/vi/jiNrP52imwg/hqdefault.jpg"
   },
   {
-    id: 'play-5',
-    title: "Saso",
-    videoCount: 14,
-    description: "Magnificent symphonic orchestral and vocal programs performed by the South Asian Symphony Orchestra (SASO) live in Chennai.",
-    youtubeUrl: "https://youtube.com/playlist?list=PL6HjF0ftgoqui84vnHtk_1MfaqUZKeOPf&si=gxQFBuCcuUC_9Oyr",
-    imageQuery: 'concert',
+    id: 'PL6HjF0ftgoqui84vnHtk_1MfaqUZKeOPf',
+    title: "SASO - Mozart's Symphony No. 41, Gershwin's Rhapsody in Blue, and more",
+    videoCount: 3,
+    description: "Magnificent symphonic orchestral programs performed by the South Asian Symphony Orchestra (SASO) live in Chennai.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqui84vnHtk_1MfaqUZKeOPf",
+    imageQuery: 'orchestra',
     thumbnailUrl: "https://i.ytimg.com/vi/kFMY76NTCs8/hqdefault.jpg"
+  },
+  {
+    id: 'PL6HjF0ftgoqs7cZ69mdJqfoYIQKFkCPAy',
+    title: "A Journey Across Genres - The MMA & EBC",
+    videoCount: 22,
+    description: "A collaborative concert series between the Madras Musical Association and English Brass Collective.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqs7cZ69mdJqfoYIQKFkCPAy",
+    imageQuery: 'brass',
+    thumbnailUrl: "https://i.ytimg.com/vi/i6wb5LKamOc/hqdefault.jpg"
+  },
+  {
+    id: 'PL6HjF0ftgoquW81zBjg1r2s0h8fKUiWdb',
+    title: "The Music Madras 2025 Christmas Carol Collection",
+    videoCount: 21,
+    description: "Festive season Christmas carols captured across historical churches and concert halls in Chennai.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoquW81zBjg1r2s0h8fKUiWdb",
+    imageQuery: 'christmas',
+    thumbnailUrl: "https://i.ytimg.com/vi/8oa2qCWecCU/hqdefault.jpg"
+  },
+  {
+    id: 'PL6HjF0ftgoqvYdWbKZgILccVsXHq_xvYP',
+    title: "Carols by Candlelight 2025",
+    videoCount: 11,
+    description: "Atmospheric candlelit evening of choral carols and sacred hymns recorded live in Chennai.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqvYdWbKZgILccVsXHq_xvYP",
+    imageQuery: 'candlelight',
+    thumbnailUrl: "https://i.ytimg.com/vi/obOSTyeweyo/hqdefault.jpg"
+  },
+  {
+    id: 'PL6HjF0ftgoqusr1mpK4sCbJU7iwdm4CH5',
+    title: "TELC Arulnathar Lutheran Church",
+    videoCount: 21,
+    description: "Full service recordings, pipe organ preludes, and congregational anthems from TELC Arulnathar Church.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqusr1mpK4sCbJU7iwdm4CH5",
+    imageQuery: 'church',
+    thumbnailUrl: "https://i.ytimg.com/vi/FJBRS2J-DIQ/hqdefault.jpg"
+  },
+  {
+    id: 'PL6HjF0ftgoqtIFRkJLkEqeaFLe4ddhjt3',
+    title: "Messa di Gloria by Giacomo Puccini | Madras Musical Association | Augustine Paul | St Andrews' Kirk",
+    videoCount: 4,
+    description: "Giacomo Puccini's dramatic Messa di Gloria performed by the Madras Musical Association under Augustine Paul.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqtIFRkJLkEqeaFLe4ddhjt3",
+    imageQuery: 'mass',
+    thumbnailUrl: "https://i.ytimg.com/vi/rX5inzi4gvU/hqdefault.jpg"
+  },
+  {
+    id: 'PL6HjF0ftgoqtJk_OoDCi2P_8h-7IQ5GCK',
+    title: "Beethoven Cello Sonatas - 18 March 2026",
+    videoCount: 4,
+    description: "Masterful interpretations of Ludwig van Beethoven's cello sonatas recorded live in acoustic fidelity.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL6HjF0ftgoqtJk_OoDCi2P_8h-7IQ5GCK",
+    imageQuery: 'cello',
+    thumbnailUrl: "https://i.ytimg.com/vi/Pl08HHriJg4/hqdefault.jpg"
+  },
+  {
+    id: 'PLa2-iQevKyXA',
+    title: "The Spent Force - TELC Arulnathar Lutheran Church",
+    videoCount: 3,
+    description: "Acoustic gospel vocal quartet performances by Spent Force at TELC Arulnathar Church.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PLa2-iQevKyXA",
+    imageQuery: 'quartet',
+    thumbnailUrl: "https://i.ytimg.com/vi/GoK7GUIhSd4/hqdefault.jpg"
+  },
+  {
+    id: 'PLBSgc9UMeCmE',
+    title: "Musical Sunday (05 July 26) TELC Arulnathar Church",
+    videoCount: 17,
+    description: "Liturgical music, choral responses, and pipe organ anthems recorded live at TELC Arulnathar Church.",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PLBSgc9UMeCmE",
+    imageQuery: 'organ',
+    thumbnailUrl: "https://i.ytimg.com/vi/4lXPhchmoJo/hqdefault.jpg"
   }
 ];
 

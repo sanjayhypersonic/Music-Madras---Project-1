@@ -49,7 +49,7 @@ export function YouTubeProvider({ children }: { children: React.ReactNode }) {
       const [videosRes, playlistsRes, statsRes] = await Promise.all([
         getMusicMadrasVideos(forceRefresh),
         getMusicMadrasPlaylists(forceRefresh),
-        getMusicMadrasChannelStats()
+        getMusicMadrasChannelStats(forceRefresh)
       ]);
 
       if (videosRes.videos && videosRes.videos.length > 0) {
@@ -102,7 +102,7 @@ export function YouTubeProvider({ children }: { children: React.ReactNode }) {
         // Also refresh playlists & stats
         const [plRes, stRes] = await Promise.all([
           getMusicMadrasPlaylists(true),
-          getMusicMadrasChannelStats()
+          getMusicMadrasChannelStats(true)
         ]);
         if (plRes.playlists.length > 0) setPlaylists(plRes.playlists);
         if (stRes.stats) setChannelStats(stRes.stats);

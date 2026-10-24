@@ -409,7 +409,7 @@ export async function getMusicMadrasPlaylists(forceRefresh = false): Promise<Fet
   }
 
   try {
-    const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&channelId=${CHANNEL_ID}&maxResults=25&key=${apiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&channelId=${CHANNEL_ID}&maxResults=50&key=${apiKey}`;
     const res = await fetch(url);
     if (!res.ok) {
       return {
@@ -445,17 +445,39 @@ export async function getMusicMadrasPlaylists(forceRefresh = false): Promise<Fet
       };
     });
 
+    // Merge with any curated descriptions in PLAYLISTS_DATA if available
+    const playlistIdMap = new Map<string, Playlist>();
+    PLAYLISTS_DATA.forEach(p => playlistIdMap.set(p.id, p));
+    const combinedPlaylists = mappedPlaylists.map(pl => {
+      const curated = playlistIdMap.get(pl.id);
+      if (curated) {
+        return {
+          ...curated,
+          videoCount: pl.videoCount || curated.videoCount,
+          thumbnailUrl: pl.thumbnailUrl || curated.thumbnailUrl
+        };
+      }
+      return pl;
+    });
+
+    // Add any remaining curated playlists that might not have been returned in the batch
+    PLAYLISTS_DATA.forEach(p => {
+      if (!combinedPlaylists.some(cp => cp.id === p.id)) {
+        combinedPlaylists.push(p);
+      }
+    });
+
     try {
       localStorage.setItem(CACHE_KEY_PLAYLISTS, JSON.stringify({
         timestamp: Date.now(),
-        playlists: mappedPlaylists
+        playlists: combinedPlaylists
       }));
     } catch {
       // ignore
     }
 
     return {
-      playlists: mappedPlaylists,
+      playlists: combinedPlaylists,
       isLive: true,
       cachedAt: Date.now()
     };
@@ -480,14 +502,34 @@ export interface FetchChannelStatsResult {
   error?: string;
 }
 
+const CACHE_KEY_STATS = 'musicmadras_youtube_stats_cache_v5';
+
 // Fetcher for Channel Stats (subscribers, views, video counts)
-export async function getMusicMadrasChannelStats(): Promise<FetchChannelStatsResult> {
+export async function getMusicMadrasChannelStats(forceRefresh = false): Promise<FetchChannelStatsResult> {
   const apiKey = getYouTubeApiKey();
   const defaultStats: ChannelStats = {
     subscribers: CHANNEL_INFO.subscribers,
     videoCount: CHANNEL_INFO.videoCount,
     totalViews: CHANNEL_INFO.totalViews
   };
+
+  // 1. Check local cache first if not forcing refresh
+  if (!forceRefresh) {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_STATS);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.timestamp && Date.now() - parsed.timestamp < CACHE_TTL_MS && parsed.stats) {
+          return {
+            stats: parsed.stats,
+            isLive: true
+          };
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   if (!apiKey) {
     return { stats: defaultStats, isLive: false, error: 'NO_API_KEY' };
@@ -506,11 +548,21 @@ export async function getMusicMadrasChannelStats(): Promise<FetchChannelStatsRes
       return { stats: defaultStats, isLive: false };
     }
 
+    const subCount = item.statistics?.subscriberCount;
     const liveStats: ChannelStats = {
-      subscribers: formatCount(item.statistics?.subscriberCount),
-      videoCount: item.statistics?.videoCount || defaultStats.videoCount,
-      totalViews: formatCount(item.statistics?.viewCount)
+      subscribers: subCount ? formatCount(subCount) : defaultStats.subscribers,
+      videoCount: item.statistics?.videoCount ? item.statistics.videoCount.toString() : defaultStats.videoCount,
+      totalViews: item.statistics?.viewCount ? formatCount(item.statistics.viewCount) : defaultStats.totalViews
     };
+
+    try {
+      localStorage.setItem(CACHE_KEY_STATS, JSON.stringify({
+        timestamp: Date.now(),
+        stats: liveStats
+      }));
+    } catch {
+      // ignore
+    }
 
     return { stats: liveStats, isLive: true };
   } catch (err: any) {
