@@ -5,6 +5,7 @@ import { listSheetMusicRequests } from "../../../../../modules/db/repositories/s
 import { updateRequestStatusAction } from "./actions";
 import type { SheetMusicRequestStatus } from "@prisma/client";
 import { StatusBadge } from "../../../../../components/studio/StatusBadge";
+import { decodeMessage } from "../../../../../modules/studio/decodeMessage";
 
 const STATUSES: SheetMusicRequestStatus[] = ["NEW", "IN_REVIEW", "FULFILLED", "DECLINED"];
 
@@ -19,7 +20,7 @@ export default async function SheetMusicPage({ searchParams }: { searchParams: P
   return (
     <div>
       <h1>Sheet Music Requests</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
       {requests.length === 0 ? (
         <p className="studio-empty">No requests yet.</p>
       ) : (

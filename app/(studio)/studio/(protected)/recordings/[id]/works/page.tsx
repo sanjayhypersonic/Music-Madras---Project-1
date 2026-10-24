@@ -5,6 +5,7 @@ import { findRecordingById, getCanonicalContextForRevision } from "../../../../.
 import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { listMusicalWorksByComposer } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { attachWorkAction, detachWorkAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function WorksStepPage({
   params,
@@ -43,7 +44,7 @@ export default async function WorksStepPage({
     <div>
       <h2>Composer / Works</h2>
       <p>The musical works this specific recording features (this drives the &quot;Musical Works&quot; completeness check).</p>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       {context && context.directWorks.length > 0 ? (
         <ul>

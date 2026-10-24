@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findPerformanceById } from "../../../../../../../modules/db/repositories/performanceRepository";
@@ -23,6 +24,7 @@ import {
   restorePerformanceAction,
   updatePerformanceAction,
 } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-4H — the Performance editorial management view. Distinct from
 // the existing /studio/recordings/[id]/performance wizard step: that page
@@ -43,6 +45,8 @@ export default async function PerformanceDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const performance = await findPerformanceById(id);
@@ -76,7 +80,7 @@ export default async function PerformanceDetailPage({
       <h1>
         {performance.programme.title} at {performance.venue.name}
       </h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Status: <strong><StatusBadge status={performance.archivedAt ? "Archived" : "Active"} /></strong>

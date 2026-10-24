@@ -6,6 +6,7 @@ import { assignableRoles, roleRank } from "../../../../../modules/auth/userManag
 import { ConfirmSubmitButton } from "../../../../../components/studio/ConfirmSubmitButton";
 import { inviteUserAction, disableUserAction, reactivateUserAction, changeRoleAction } from "./actions";
 import { StatusBadge } from "../../../../../components/studio/StatusBadge";
+import { decodeMessage } from "../../../../../modules/studio/decodeMessage";
 
 // Phase 6J-1: the controls shown here mirror the server rules in
 // modules/auth/userManagementRules.ts (a courtesy only — the repositories
@@ -28,7 +29,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   return (
     <div>
       <h1>Users</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <div className="studio-table-scroll">
 <table>

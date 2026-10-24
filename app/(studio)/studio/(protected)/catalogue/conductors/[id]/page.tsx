@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findConductorById } from "../../../../../../../modules/db/repositories/conductorRepository";
 import { getConductorRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveConductorAction, restoreConductorAction, updateConductorAction } from "./actions";
 import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-4F — the Conductor editorial management view, mirroring the
 // Artist/Choir detail pages' shape. No public /conductors/[slug] route
@@ -22,6 +24,8 @@ export default async function ConductorDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const conductor = await findConductorById(id);
@@ -38,7 +42,7 @@ export default async function ConductorDetailPage({
         <Link href="/studio/catalogue/conductors">← Conductors</Link>
       </p>
       <h1>{conductor.name}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Status: <strong><StatusBadge status={conductor.archivedAt ? "Archived" : "Active"} /></strong>

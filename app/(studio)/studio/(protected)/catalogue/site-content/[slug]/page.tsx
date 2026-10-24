@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { EditorialBlockBody } from "../../../../../../../components/museum/EditorialBlockBody";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
@@ -16,6 +17,8 @@ export default async function EditorialBlockPage({ params, searchParams }: { par
   const session = await getCurrentStudioSession();
   if (!session || session.user.status !== "ACTIVE") redirect("/studio/signin");
   const { slug } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(slug)) notFound();
   const query = await searchParams;
   const block = findEditorialBlock(slug);
   if (!block) notFound();

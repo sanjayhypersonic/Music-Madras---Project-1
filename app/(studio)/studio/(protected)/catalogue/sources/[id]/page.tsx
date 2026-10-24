@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findSourceById } from "../../../../../../../modules/db/repositories/sourceRepository";
@@ -15,6 +16,7 @@ import {
   updateCitationAction,
   updateSourceAction,
 } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-13 — the Source editorial management view. Citations are
 // managed here, as children of their Source (the existing schema's only
@@ -32,6 +34,8 @@ export default async function SourceDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const source = await findSourceById(id);
@@ -48,7 +52,7 @@ export default async function SourceDetailPage({
         <Link href="/studio/catalogue/sources">← Sources</Link>
       </p>
       <h1>{source.title ?? source.url ?? "Untitled Source"}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <h2>AI evidence approval</h2>
       <p>

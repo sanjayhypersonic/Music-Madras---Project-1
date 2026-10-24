@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findVenueById } from "../../../../../../../modules/db/repositories/venueRepository";
@@ -8,6 +9,7 @@ import { getVenueRelatedContent } from "../../../../../../../modules/db/reposito
 import { archiveVenueAction, restoreVenueAction, updateVenueAction } from "./actions";
 import type { VenueType } from "@prisma/client";
 import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 const VENUE_TYPES: VenueType[] = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"];
 
@@ -28,6 +30,8 @@ export default async function VenueDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const venue = await findVenueById(id);
@@ -51,7 +55,7 @@ export default async function VenueDetailPage({
         <Link href="/studio/catalogue/venues">← Venues</Link>
       </p>
       <h1>{venue.name}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Status: <strong><StatusBadge status={venue.archivedAt ? "Archived" : "Active"} /></strong>

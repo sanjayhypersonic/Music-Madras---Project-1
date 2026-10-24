@@ -22,6 +22,7 @@ import {
   isRecordingEditorialTargetField,
 } from "../../../../../modules/mmke/contentIntelligence/recordingEditorialTargetFields";
 import { generateEditorialSuggestionAction } from "../content-suggestions/generateAction";
+import { decodeMessage } from "../../../../../modules/studio/decodeMessage";
 
 // Phase 6I-3 — the Editorial Operations Queue. The existing /studio/editorial
 // route (recordings grouped by editorial phase) now leads with a queue of what
@@ -172,7 +173,7 @@ export default async function EditorialPage({ searchParams }: { searchParams: Pr
         What needs an editor, or an explicit action, next. Everything here is derived from the Recordings and Content Suggestions themselves — nothing
         is assigned, scored, or published automatically.
       </p>
-      {params.error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(params.error)}</p>}
+      {params.error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(params.error)}</p>}
 
       <h2>Queue</h2>
       <ul style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1.25rem", listStyle: "none", padding: 0 }}>

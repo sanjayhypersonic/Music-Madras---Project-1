@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
 import {
@@ -13,6 +14,7 @@ import { applyToRecordingDraftAction, approveAction, rejectAction, requestChange
 import { findContentSuggestionApplication, getApplicableTargetField } from "../../../../../../modules/db/repositories/contentSuggestionApplicationRepository";
 import { describeApplyRefusalForEditor } from "../../../../../../modules/mmke/contentIntelligence/applyContentSuggestionRefusal";
 import type { ContentSuggestionEvidenceRef } from "../../../../../../modules/mmke/contentIntelligence/contentSuggestionEvidence";
+import { decodeMessage } from "../../../../../../modules/studio/decodeMessage";
 
 // Phase 6H-4 — the Content Suggestion detail/review view. Deliberately
 // minimal (brief: "do not build a complete Content Intelligence dashboard
@@ -49,6 +51,8 @@ export default async function ContentSuggestionDetailPage({
   }
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const suggestion = await findContentSuggestionById(id);
@@ -73,7 +77,7 @@ export default async function ContentSuggestionDetailPage({
         <Link href="/studio/content-suggestions">← Content Suggestions</Link>
       </p>
       <h1>{suggestion.suggestionType}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Target: <strong>{suggestion.targetEntityType}</strong>

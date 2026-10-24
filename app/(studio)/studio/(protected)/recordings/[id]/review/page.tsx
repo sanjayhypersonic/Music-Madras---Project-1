@@ -12,6 +12,7 @@ import { submitForReviewAction, publishAction, unpublishAction, restoreAction, a
 import { startNewDraftAction } from "../draftActions";
 import { describeReviewGuidance } from "../../../../../../../modules/publishing/reviewGuidance";
 import { reviewNoticeText } from "../../../../../../../modules/publishing/reviewNotices";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function ReviewStepPage({
   params,
@@ -74,7 +75,7 @@ export default async function ReviewStepPage({
   return (
     <div>
       <h2>Review &amp; Publish</h2>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
       {noticeText && !error && <p role="status" className="studio-alert studio-alert--success">{noticeText}</p>}
 
       <section aria-label="Where this recording stands" className="studio-panel">

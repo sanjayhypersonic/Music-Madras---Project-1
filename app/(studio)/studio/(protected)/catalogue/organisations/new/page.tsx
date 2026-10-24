@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { createOrganisationAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function NewOrganisationPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await getCurrentStudioSession();
@@ -18,7 +19,7 @@ export default async function NewOrganisationPage({ searchParams }: { searchPara
         <Link href="/studio/catalogue/organisations">← Organisations</Link>
       </p>
       <h1>New Organisation</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <form action={createOrganisationAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>

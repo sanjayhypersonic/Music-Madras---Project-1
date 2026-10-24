@@ -9,6 +9,7 @@ import { isRecordingPublished } from "../../../../../modules/mmke/catalogue/isRe
 import { formatAuditTimestamp } from "../../../../../modules/audit/auditDisplay";
 import { generateEditorialSuggestionAction } from "./generateAction";
 import type { ContentSuggestionStatus, ContentSuggestionType } from "@prisma/client";
+import { decodeMessage } from "../../../../../modules/studio/decodeMessage";
 
 // Phase 6H-4 — the Studio Content Suggestions list, mirroring the existing
 // Audit Log page's URL-filter convention (6G-15). RECORDING_WRITE-gated
@@ -91,7 +92,7 @@ export default async function ContentSuggestionsPage({ searchParams }: { searchP
         Proposed editorial changes awaiting human review. A suggestion never becomes canonical or public on its own — see{" "}
         <Link href="/studio/audit">the audit log</Link> for the full history of every decision made here.
       </p>
-      {params.error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(params.error)}</p>}
+      {params.error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(params.error)}</p>}
 
       <h2>Generate an editorial suggestion</h2>
       <p style={{ fontSize: "0.9rem", color: "var(--mm-text-muted)" }}>

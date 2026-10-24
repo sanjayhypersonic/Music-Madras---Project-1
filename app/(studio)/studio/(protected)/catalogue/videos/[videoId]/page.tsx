@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can, describeRolesThatCan } from "../../../../../../../modules/auth/policy";
 import { findYouTubeVideoById } from "../../../../../../../modules/db/repositories/youtubeVideoRepository";
@@ -30,6 +31,7 @@ import {
   unpublishVideoPageAction,
   updateEditorialFieldsAction,
 } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-1C — the per-video Studio manage page (brief "STUDIO ROUTE 2").
 // Extended Phase 6G-2A with the explicit Unlisted-approval control.
@@ -50,6 +52,8 @@ export default async function YouTubeVideoManagePage({
   if (!session) redirect("/studio/signin");
 
   const { videoId } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(videoId)) notFound();
   const { error } = await searchParams;
 
   const video = await findYouTubeVideoById(videoId);
@@ -100,7 +104,7 @@ export default async function YouTubeVideoManagePage({
         <Link href="/studio/catalogue/videos">← YouTube Video Catalogue</Link>
       </p>
       <h1>{video.title ?? "(untitled video)"}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       {video.thumbnailUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- internal Studio page, not the public Museum

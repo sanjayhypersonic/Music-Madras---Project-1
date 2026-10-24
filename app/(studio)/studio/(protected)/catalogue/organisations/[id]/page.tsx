@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findOrganisationById } from "../../../../../../../modules/db/repositories/organisationRepository";
@@ -7,6 +8,7 @@ import { listVenuesByOrganisation } from "../../../../../../../modules/db/reposi
 import EntityActivity from "../../../../../../../components/studio/EntityActivity";
 import { archiveOrganisationAction, restoreOrganisationAction, updateOrganisationAction } from "./actions";
 import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-4E — the Organisation editorial management view.
 // Phase 6G-14: Organisation now has a slug and a public
@@ -24,6 +26,8 @@ export default async function OrganisationDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const organisation = await findOrganisationById(id);
@@ -40,7 +44,7 @@ export default async function OrganisationDetailPage({
         <Link href="/studio/catalogue/organisations">← Organisations</Link>
       </p>
       <h1>{organisation.name}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Status: <strong><StatusBadge status={organisation.archivedAt ? "Archived" : "Active"} /></strong>

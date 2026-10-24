@@ -5,6 +5,7 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { listActiveOrganisations } from "../../../../../../../modules/db/repositories/organisationRepository";
 import { createVenueAction } from "./actions";
 import type { VenueType } from "@prisma/client";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 const VENUE_TYPES: VenueType[] = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"];
 
@@ -24,7 +25,7 @@ export default async function NewVenuePage({ searchParams }: { searchParams: Pro
         <Link href="/studio/catalogue/venues">← Venues</Link>
       </p>
       <h1>New Venue</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <form action={createVenueAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>

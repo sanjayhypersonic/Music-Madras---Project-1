@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findChoirById } from "../../../../../../../modules/db/repositories/choirRepository";
 import { getChoirRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveChoirAction, restoreChoirAction, updateChoirAction } from "./actions";
 import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-4F — the Choir editorial management view, mirroring the
 // Artist detail page's shape. No public /choirs/[slug] route exists yet.
@@ -21,6 +23,8 @@ export default async function ChoirDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const choir = await findChoirById(id);
@@ -37,7 +41,7 @@ export default async function ChoirDetailPage({
         <Link href="/studio/catalogue/choirs">← Choirs</Link>
       </p>
       <h1>{choir.name}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Status: <strong><StatusBadge status={choir.archivedAt ? "Archived" : "Active"} /></strong>

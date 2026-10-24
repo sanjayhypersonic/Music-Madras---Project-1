@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { createComposerAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function NewComposerPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await getCurrentStudioSession();
@@ -18,7 +19,7 @@ export default async function NewComposerPage({ searchParams }: { searchParams: 
         <Link href="/studio/catalogue/composers">← Composers</Link>
       </p>
       <h1>New Composer</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <form action={createComposerAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
         <label>

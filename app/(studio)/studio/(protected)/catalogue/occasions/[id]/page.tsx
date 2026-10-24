@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findOccasionById } from "../../../../../../../modules/db/repositories/occasionRepository";
@@ -8,6 +9,7 @@ import { archiveOccasionAction, restoreOccasionAction, updateOccasionAction } fr
 import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 import { OccasionConnections } from "../../../../../../../components/studio/OccasionConnections";
 import { loadOccasionWorkspace, type OccasionWorkspace } from "../../../../../../../modules/db/repositories/occasionWorkspaceRepository";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-12 — the Occasion editorial management view, mirroring the
 // established Composer detail-page pattern exactly. Extended with the read-only workspace: whether the Occasion has a public page and every item connected
@@ -25,6 +27,8 @@ export default async function OccasionDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const occasion = await findOccasionById(id);
@@ -48,7 +52,7 @@ export default async function OccasionDetailPage({
         <Link href="/studio/catalogue/occasions">← Occasions</Link>
       </p>
       <h1>{occasion.name}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Status: <strong><StatusBadge status={occasion.archivedAt ? "Archived" : "Active"} /></strong>

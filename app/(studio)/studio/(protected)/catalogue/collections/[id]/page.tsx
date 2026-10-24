@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findCollectionById } from "../../../../../../../modules/db/repositories/collectionRepository";
@@ -24,6 +25,7 @@ import {
   unpublishCollectionAction,
   updateCollectionAction,
 } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-4I — the Collection editorial management view, following the
 // established Programme/Performance detail-page pattern. Replaces the
@@ -51,6 +53,8 @@ export default async function CollectionDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const collection = await findCollectionById(id);
@@ -85,7 +89,7 @@ export default async function CollectionDetailPage({
         <Link href="/studio/catalogue/collections">← Collections</Link>
       </p>
       <h1>{collection.title}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Publication: <strong>{collection.status}</strong>

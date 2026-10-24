@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can, describeRolesThatCan } from "../../../../../../../modules/auth/policy";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { ReadOnlyStepNotice } from "../../../../../../../components/studio/ReadOnlyStepNotice";
 import { listProgrammes, findProgrammeById } from "../../../../../../../modules/db/repositories/programmeRepository";
 import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { listMusicalWorksByComposer } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { createProgrammeAction, addProgrammeItemAction, removeProgrammeItemAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function ProgrammeStepPage({
   params,
@@ -21,7 +23,8 @@ export default async function ProgrammeStepPage({
 
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
   const [programmes, composers] = await Promise.all([listProgrammes(), listActiveComposers()]);
-  const selectedProgramme = programmeId ? await findProgrammeById(programmeId) : null;
+  // A programme id from the URL that no programme could have (a NUL byte) selects nothing, rather than reaching the database.
+  const selectedProgramme = programmeId && isPlausibleSlug(programmeId) ? await findProgrammeById(programmeId) : null;
   const worksByComposer = selectedProgramme
     ? await Promise.all(composers.map(async (c) => ({ composer: c, works: await listMusicalWorksByComposer(c.id) })))
     : [];
@@ -30,7 +33,7 @@ export default async function ProgrammeStepPage({
     <div>
       <h2>Programme</h2>
       <p>The concert programme this recording belongs to — a real, ordered running order, not free text.</p>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <form method="get" style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", maxWidth: "28rem" }}>
         <label style={{ flex: 1 }}>

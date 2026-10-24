@@ -7,6 +7,7 @@ import { findPerformanceById } from "../../../../../../../modules/db/repositorie
 import { listProgrammes } from "../../../../../../../modules/db/repositories/programmeRepository";
 import { listActiveVenues } from "../../../../../../../modules/db/repositories/venueRepository";
 import { createPerformanceAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function PerformanceStepPage({
   params,
@@ -58,7 +59,7 @@ export default async function PerformanceStepPage({
     <div>
       <h2>Performance</h2>
       <p>Link this recording to the specific concert it was captured at.</p>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
       {(programmes.length === 0 || venues.length === 0) && (
         <p>
           You need at least one Programme and one Venue first — see the previous two steps.

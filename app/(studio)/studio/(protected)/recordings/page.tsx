@@ -5,6 +5,7 @@ import { can } from "../../../../../modules/auth/policy";
 import { createDraftRecording, listRecordingsForStudio } from "../../../../../modules/db/repositories/recordingRepository";
 import { slugify } from "../../../../../modules/mmke/slug/slugify";
 import { StatusBadge } from "../../../../../components/studio/StatusBadge";
+import { decodeMessage } from "../../../../../modules/studio/decodeMessage";
 
 export default async function RecordingsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await getCurrentStudioSession();
@@ -39,7 +40,7 @@ export default async function RecordingsPage({ searchParams }: { searchParams: P
       <p>
         <Link href="/studio/recordings/visibility">Public visibility →</Link> <span className="studio-muted">what visitors can find, what is published but not public, and why</span>
       </p>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <div className="studio-table-scroll">
 <table>

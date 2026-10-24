@@ -22,6 +22,7 @@ import {
   detachRightsAction,
   detachSourceAction,
 } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6L — Sources, Rights information and Occasions are part of a REVISION. This page shows the published version and the open draft side by side:
 // every link is marked "In the published version", "Added in this draft" (public only once the draft is published) or "Removed in this draft" (still
@@ -94,7 +95,7 @@ export default async function RelationshipsStepPage({
     <div>
       <h2>Relationships</h2>
       <p>The canonical relationships this recording resolves through — derived, not re-entered.</p>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       {!context ? (
         <p className="studio-empty">No revision to inspect yet.</p>

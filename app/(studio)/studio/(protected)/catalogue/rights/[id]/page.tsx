@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findRightsInformationById } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
 import { updateRightsInformationAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function RightsInformationDetailPage({
   params,
@@ -16,6 +18,8 @@ export default async function RightsInformationDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const rights = await findRightsInformationById(id);
@@ -31,7 +35,7 @@ export default async function RightsInformationDetailPage({
         <Link href="/studio/catalogue/rights">← Rights Information</Link>
       </p>
       <h1>{rights.holder ?? rights.licenseType ?? "Untitled Rights Information"}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <h2>Edit</h2>
       {canWrite ? (

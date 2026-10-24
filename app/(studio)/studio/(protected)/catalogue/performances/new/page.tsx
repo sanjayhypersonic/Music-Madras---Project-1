@@ -5,6 +5,7 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { listProgrammesForStudio } from "../../../../../../../modules/db/repositories/programmeRepository";
 import { listVenuesForStudio } from "../../../../../../../modules/db/repositories/venueRepository";
 import { createPerformanceAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function NewPerformancePage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await getCurrentStudioSession();
@@ -22,7 +23,7 @@ export default async function NewPerformancePage({ searchParams }: { searchParam
         <Link href="/studio/catalogue/performances">← Performances</Link>
       </p>
       <h1>New Performance</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       {programmes.length === 0 || venues.length === 0 ? (
         <p>

@@ -5,6 +5,7 @@ import { findRecordingById } from "../../../../../../../modules/db/repositories/
 import { listMediaForRevision } from "../../../../../../../modules/db/repositories/mediaResourceRepository";
 import { attachMediaAction } from "./actions";
 import type { MediaProvider, MediaRole } from "@prisma/client";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 const PROVIDERS: MediaProvider[] = ["YOUTUBE", "UPLOAD"];
 const ROLES: MediaRole[] = ["PRIMARY_VIDEO", "THUMBNAIL", "POSTER", "PROGRAMME_PDF", "SHEET_MUSIC", "AUDIO_MASTER"];
@@ -44,7 +45,7 @@ export default async function MediaStepPage({
         no file-upload infrastructure in this environment yet — provide a hosted URL (e.g. a YouTube link) rather
         than uploading a file.
       </p>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       {media.length === 0 ? (
         <p className="studio-empty">No media attached yet.</p>

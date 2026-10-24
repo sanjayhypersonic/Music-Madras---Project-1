@@ -7,6 +7,7 @@ import { listActiveArtists } from "../../../../../../../modules/db/repositories/
 import { listActiveChoirs } from "../../../../../../../modules/db/repositories/choirRepository";
 import { listActiveConductors } from "../../../../../../../modules/db/repositories/conductorRepository";
 import { addPerformerAction, removePerformerAction, addChoirAction, addConductorAction, discardParticipantChangesAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function ParticipantsStepPage({
   params,
@@ -46,7 +47,7 @@ export default async function ParticipantsStepPage({
   return (
     <div>
       <h2>Participants</h2>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
       {cloneStatus.isClone && (
         <div role="status" className={cloneStatus.originalChanged ? "studio-alert studio-alert--warning" : "studio-notice"}>
           <p>

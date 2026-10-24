@@ -5,6 +5,7 @@ import { ReadOnlyStepNotice } from "../../../../../../../components/studio/ReadO
 import { listActiveVenues } from "../../../../../../../modules/db/repositories/venueRepository";
 import { createVenueForRecordingAction } from "./actions";
 import type { VenueType } from "@prisma/client";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 const VENUE_TYPES: VenueType[] = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"];
 
@@ -30,7 +31,7 @@ export default async function VenueStepPage({
         Ensure the church or venue for this recording&apos;s performance exists — you will select it in the
         Performance step next.
       </p>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <ul>
         {venues.map((venue) => (

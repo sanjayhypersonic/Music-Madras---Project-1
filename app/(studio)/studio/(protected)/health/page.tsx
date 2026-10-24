@@ -7,6 +7,7 @@ import { emailDeliveryHealth } from "../../../../../modules/db/repositories/stud
 import { STEWARDSHIP_STALE_AFTER_MS, loadStewardshipHealth } from "../../../../../modules/db/repositories/stewardshipRunRepository";
 import { loadIncidentOverview } from "../../../../../modules/db/repositories/operationalIncidentRepository";
 import { resolveIncidentAction } from "./actions";
+import { decodeMessage } from "../../../../../modules/studio/decodeMessage";
 
 // Phase 6K lifecycle hardening (F10) — Studio's view of the scheduled maintenance job. It says plainly whether the job has been running, what each step
 // did last time, and what went wrong, from the durable run records (stewardship_runs / stewardship_step_runs). Nothing here starts a run or configures
@@ -45,7 +46,7 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
   return (
     <div>
       <h1>Health</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
       <p>
         What the scheduled maintenance job has been doing. It keeps the unlisted-video review, metadata checks, playlist checks and notification emails current. It is called by whatever scheduler this deployment uses
         (see docs/runbooks/scheduled-maintenance.md); this page only reports what that scheduler has actually run.

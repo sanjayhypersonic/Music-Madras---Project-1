@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { getConfiguredAIProvider } from "../../../../../../../modules/ai/provider/aiProviderRegistry";
@@ -42,6 +43,8 @@ export default async function PlaylistPageEditor({ params, searchParams }: { par
   const canEdit = true;
   const canPublish = can(session.user.role, "RECORDING_PUBLISH");
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error, notice } = await searchParams;
 
   const view = await loadPlaylistForStudio(id);

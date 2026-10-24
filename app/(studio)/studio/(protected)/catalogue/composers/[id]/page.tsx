@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findComposerById } from "../../../../../../../modules/db/repositories/composerRepository";
@@ -17,6 +18,7 @@ import {
   restoreComposerAction,
   updateComposerAction,
 } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-4C — the Composer editorial management view. Distinct from
 // the public /composers/[slug] page (brief §11: "do not reproduce the
@@ -35,6 +37,8 @@ export default async function ComposerDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const composer = await findComposerById(id);
@@ -59,7 +63,7 @@ export default async function ComposerDetailPage({
         <Link href="/studio/catalogue/composers">← Composers</Link>
       </p>
       <h1>{composer.name}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Status: <strong><StatusBadge status={composer.archivedAt ? "Archived" : "Active"} /></strong>

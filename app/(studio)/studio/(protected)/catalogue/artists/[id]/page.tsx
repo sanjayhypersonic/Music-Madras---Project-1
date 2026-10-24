@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
 import { findArtistById } from "../../../../../../../modules/db/repositories/artistRepository";
 import { getArtistRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveArtistAction, restoreArtistAction, updateArtistAction } from "./actions";
 import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 // Phase 6G-4F — the Artist editorial management view, mirroring the
 // Venue/Organisation detail pages' shape. No public /artists/[slug]
@@ -23,6 +25,8 @@ export default async function ArtistDetailPage({
   if (!session) redirect("/studio/signin");
 
   const { id } = await params;
+  // An id no row could have (a NUL byte, which PostgreSQL rejects as text, or an absurd length) is not found, not a database error. After the sign-in check, so a visitor who is not signed in is still sent to sign in.
+  if (!isPlausibleSlug(id)) notFound();
   const { error } = await searchParams;
 
   const artist = await findArtistById(id);
@@ -39,7 +43,7 @@ export default async function ArtistDetailPage({
         <Link href="/studio/catalogue/artists">← Artists</Link>
       </p>
       <h1>{artist.name}</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       <p>
         Status: <strong><StatusBadge status={artist.archivedAt ? "Archived" : "Active"} /></strong>

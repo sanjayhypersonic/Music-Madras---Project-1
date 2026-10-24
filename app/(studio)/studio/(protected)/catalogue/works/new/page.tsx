@@ -4,6 +4,7 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { createWorkAction } from "./actions";
+import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
 export default async function NewMusicalWorkPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await getCurrentStudioSession();
@@ -21,7 +22,7 @@ export default async function NewMusicalWorkPage({ searchParams }: { searchParam
         <Link href="/studio/catalogue/works">← Musical Works</Link>
       </p>
       <h1>New Musical Work</h1>
-      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {error && <p role="alert" className="studio-alert studio-alert--error">{decodeMessage(error)}</p>}
 
       {composers.length === 0 ? (
         <p>
