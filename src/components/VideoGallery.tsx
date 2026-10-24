@@ -430,16 +430,7 @@ export default function VideoGallery({
                   </p>
 
                   <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
-                    <span className="flex items-center gap-1.5 flex-wrap">
-                      <span>{video.views} views</span>
-                      {video.likesCount > 0 && (
-                        <span className="inline-flex items-center gap-0.5 text-zinc-400">
-                          • <Heart className="w-2.5 h-2.5 text-red-500 fill-current inline" />
-                          {video.likesCount}
-                        </span>
-                      )}
-                      <span>• {video.publishedAt}</span>
-                    </span>
+                    <span>{video.views} views • {video.publishedAt}</span>
                     <button
                       onClick={(e) => handleCopyLink(video, e)}
                       aria-label={`Copy YouTube link for ${video.title}`}
