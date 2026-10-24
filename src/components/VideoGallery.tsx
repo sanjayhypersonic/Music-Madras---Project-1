@@ -4,6 +4,7 @@ import { Video } from '../types';
 import { CHANNEL_INFO } from '../data';
 import SafeImage from './SafeImage';
 import { useYouTube } from '../context/YouTubeContext';
+import { parseViewsCount } from '../lib/youtube';
 
 const categoryDisplayNames: Record<string, string> = {
   all: 'All Highlights',
@@ -13,21 +14,6 @@ const categoryDisplayNames: Record<string, string> = {
   Vocal: 'Solo Vocals',
   Instrumental: 'Orchestra & Classical Instruments',
 };
-
-// Helper to convert strings like '1.4K', '980', '1.2M' to actual numbers for view ranking
-function parseViewsCount(viewsStr?: string): number {
-  if (!viewsStr) return 0;
-  const str = viewsStr.trim().toUpperCase();
-  if (str.endsWith('M')) {
-    return (parseFloat(str.replace('M', '')) || 0) * 1000000;
-  }
-  if (str.endsWith('K')) {
-    return (parseFloat(str.replace('K', '')) || 0) * 1000;
-  }
-  const clean = str.replace(/,/g, '');
-  const num = parseFloat(clean);
-  return isNaN(num) ? 0 : num;
-}
 
 interface VideoGalleryProps {
   selectedCategory: string;
@@ -115,7 +101,7 @@ export default function VideoGallery({
   const { displayVideos, top3Ids } = useMemo(() => {
     // If active search query or user requested all, show full list
     if (searchQuery.trim().length > 0 || showAllArchived || categoryMatchedVideos.length <= 12) {
-      const sorted = [...categoryMatchedVideos].sort((a, b) => parseViewsCount(b.views) - parseViewsCount(a.views));
+      const sorted = [...categoryMatchedVideos].sort((a, b) => parseViewsCount(b) - parseViewsCount(a));
       return {
         displayVideos: categoryMatchedVideos,
         top3Ids: new Set(sorted.slice(0, 3).map(v => v.id))
@@ -123,7 +109,7 @@ export default function VideoGallery({
     }
 
     // Sort by highest views descending
-    const sortedByViews = [...categoryMatchedVideos].sort((a, b) => parseViewsCount(b.views) - parseViewsCount(a.views));
+    const sortedByViews = [...categoryMatchedVideos].sort((a, b) => parseViewsCount(b) - parseViewsCount(a));
 
     // First 3: videos with the most views
     const top3 = sortedByViews.slice(0, 3);

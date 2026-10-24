@@ -3,8 +3,8 @@ import { VIDEOS_DATA, PLAYLISTS_DATA, CHANNEL_INFO } from '../data';
 
 export const CHANNEL_ID = 'UCROw3fAGxl5QSOar9HqXuZw';
 export const UPLOADS_PLAYLIST_ID = 'UUROw3fAGxl5QSOar9HqXuZw'; // Uploads playlist derived from channel ID
-const CACHE_KEY_VIDEOS = 'musicmadras_youtube_videos_cache';
-const CACHE_KEY_PLAYLISTS = 'musicmadras_youtube_playlists_cache';
+const CACHE_KEY_VIDEOS = 'musicmadras_youtube_videos_cache_v5';
+const CACHE_KEY_PLAYLISTS = 'musicmadras_youtube_playlists_cache_v5';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour client-side cache
 
 // Retrieve API key from environment or user-saved browser storage
@@ -143,6 +143,30 @@ export function formatIsoDuration(isoDuration?: string): string {
   return `${minutes}:${formattedSeconds}`;
 }
 
+// Convert view strings or Video objects to accurate numeric count for sorting
+export function parseViewsCount(videoOrStr?: Video | string | number): number {
+  if (videoOrStr === undefined || videoOrStr === null) return 0;
+  if (typeof videoOrStr === 'object') {
+    if (typeof videoOrStr.viewsCount === 'number' && videoOrStr.viewsCount > 0) {
+      return videoOrStr.viewsCount;
+    }
+    return parseViewsCount(videoOrStr.views);
+  }
+  if (typeof videoOrStr === 'number') return videoOrStr;
+  const str = videoOrStr.toString().trim().toUpperCase().replace(/VIEWS?/gi, '').trim();
+  if (str.endsWith('M') || str.includes('M')) {
+    const numPart = str.replace(/[^0-9.]/g, '');
+    return (parseFloat(numPart) || 0) * 1000000;
+  }
+  if (str.endsWith('K') || str.includes('K')) {
+    const numPart = str.replace(/[^0-9.]/g, '');
+    return (parseFloat(numPart) || 0) * 1000;
+  }
+  const clean = str.replace(/[^0-9.]/g, '');
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : num;
+}
+
 // Format numbers (e.g. 15400 -> 15.4K)
 export function formatCount(countStr?: string | number): string {
   if (countStr === undefined || countStr === null) return '1.2K';
@@ -222,33 +246,44 @@ export async function getMusicMadrasVideos(forceRefresh = false): Promise<FetchV
   }
 
   try {
-    // 3. Low-quota fetch: Get up to 50 uploads from playlist (Costs ONLY 1 quota unit)
-    const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${UPLOADS_PLAYLIST_ID}&maxResults=50&key=${apiKey}`;
-    const playlistRes = await fetch(playlistUrl);
+    // 3. Deep YouTube API integration:
+    // Query search with order=viewCount to guarantee all the most viewed videos are fetched
+    // Also query uploads playlist for recent recordings
+    const [popularSearchRes, uploadsRes] = await Promise.all([
+      fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${CHANNEL_ID}&order=viewCount&type=video&maxResults=50&key=${apiKey}`).catch(() => null),
+      fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${UPLOADS_PLAYLIST_ID}&maxResults=50&key=${apiKey}`).catch(() => null)
+    ]);
 
-    if (!playlistRes.ok) {
-      const errData = await playlistRes.json().catch(() => ({}));
-      console.warn('YouTube Playlist API warning:', errData);
-      return {
-        videos: VIDEOS_DATA,
-        isLive: false,
-        error: playlistRes.status === 403 ? 'QUOTA_EXCEEDED' : `API_ERROR_${playlistRes.status}`
-      };
+    const snippetItemsMap = new Map<string, any>();
+
+    if (popularSearchRes && popularSearchRes.ok) {
+      const searchData = await popularSearchRes.json();
+      (searchData.items || []).forEach((item: any) => {
+        const vidId = item.id?.videoId;
+        if (vidId) {
+          snippetItemsMap.set(vidId, item);
+        }
+      });
     }
 
-    const playlistData = await playlistRes.json();
-    const items = playlistData.items || [];
-    if (items.length === 0) {
+    if (uploadsRes && uploadsRes.ok) {
+      const uploadsData = await uploadsRes.json();
+      (uploadsData.items || []).forEach((item: any) => {
+        const vidId = item.snippet?.resourceId?.videoId;
+        if (vidId && !snippetItemsMap.has(vidId)) {
+          snippetItemsMap.set(vidId, item);
+        }
+      });
+    }
+
+    const uniqueVideoIds = Array.from(snippetItemsMap.keys());
+
+    if (uniqueVideoIds.length === 0) {
       return { videos: VIDEOS_DATA, isLive: false };
     }
 
-    // Extract video IDs
-    const videoIds: string[] = items
-      .map((item: any) => item.snippet?.resourceId?.videoId)
-      .filter((id: string | undefined): id is string => Boolean(id));
-
-    // 4. Batch fetch details for all video IDs (Costs ONLY 1 quota unit for up to 50 items)
-    const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(',')}&key=${apiKey}`;
+    // 4. Batch fetch statistics & details for all video IDs
+    const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${uniqueVideoIds.slice(0, 50).join(',')}&key=${apiKey}`;
     const detailsRes = await fetch(detailsUrl);
     
     let detailsMap = new Map<string, any>();
@@ -261,25 +296,25 @@ export async function getMusicMadrasVideos(forceRefresh = false): Promise<FetchV
 
     // 5. Map into clean Video objects matching application interface
     // Every single thumbnail comes strictly from YouTube's official CDN
-    const mappedVideos: Video[] = items.map((item: any, index: number) => {
-      const videoId = item.snippet?.resourceId?.videoId || `mm-${index}`;
+    const mappedVideos: Video[] = uniqueVideoIds.map((videoId: string, index: number) => {
+      const item = snippetItemsMap.get(videoId);
       const detail = detailsMap.get(videoId);
-      const title = item.snippet?.title || 'Music Madras Performance';
-      const description = item.snippet?.description || '';
+      const title = detail?.snippet?.title || item?.snippet?.title || 'Music Madras Performance';
+      const description = detail?.snippet?.description || item?.snippet?.description || '';
       
       const thumb = 
-        item.snippet?.thumbnails?.maxres?.url ||
-        item.snippet?.thumbnails?.high?.url ||
-        item.snippet?.thumbnails?.medium?.url ||
-        item.snippet?.thumbnails?.standard?.url ||
-        item.snippet?.thumbnails?.default?.url ||
+        detail?.snippet?.thumbnails?.maxres?.url ||
+        detail?.snippet?.thumbnails?.high?.url ||
+        item?.snippet?.thumbnails?.high?.url ||
+        item?.snippet?.thumbnails?.medium?.url ||
         `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
       const category = classifyVideoCategory(title, description);
       const duration = formatIsoDuration(detail?.contentDetails?.duration);
-      const views = formatCount(detail?.statistics?.viewCount);
+      const rawViews = parseInt(detail?.statistics?.viewCount || '0', 10);
+      const views = formatCount(rawViews);
       const likesCount = parseInt(detail?.statistics?.likeCount || '0', 10);
-      const publishedAt = formatPublishedDate(item.snippet?.publishedAt);
+      const publishedAt = formatPublishedDate(detail?.snippet?.publishedAt || item?.snippet?.publishedAt);
 
       // Extract artist if formatted like "Artist - Title" or "Title | Artist"
       let artist = 'Music Madras Ensemble';
@@ -303,6 +338,7 @@ export async function getMusicMadrasVideos(forceRefresh = false): Promise<FetchV
         category,
         duration,
         views,
+        viewsCount: rawViews,
         publishedAt,
         description: description.slice(0, 180) + (description.length > 180 ? '...' : ''),
         likesCount: likesCount > 0 ? likesCount : (85 + index * 12),

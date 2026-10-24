@@ -6,6 +6,7 @@ export interface Video {
   category: 'Organ' | 'Choral' | 'Vocal' | 'Instrumental' | 'Concert';
   duration: string;
   views: string;
+  viewsCount?: number;
   publishedAt: string;
   description: string;
   likesCount: number;
