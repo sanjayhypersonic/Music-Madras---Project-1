@@ -13,6 +13,7 @@ import {
   unpublishRecording,
 } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { describePublishRefusal } from "../../../../../../../modules/publishing/publishRefusal";
+import type { ReviewNoticeCode } from "../../../../../../../modules/publishing/reviewNotices";
 import { RECORDING_HOLD_REASONS, RecordingHoldError, imposeRecordingHold, liftRecordingHold } from "../../../../../../../modules/db/repositories/recordingHoldRepository";
 import type { RecordingHoldReason } from "@prisma/client";
 
@@ -27,9 +28,11 @@ import type { RecordingHoldReason } from "@prisma/client";
 
 // The workflow layout (step list, heading, phase) is preserved by Next across navigations, so a
 // lifecycle change must invalidate it or the old phase stays on screen (found in 6J-3B QA).
-function back(recordingId: string, error?: string): never {
+// A refusal comes back as `?error=` (text); a success as `?notice=<CODE>` (a fixed code the page maps to a fixed sentence: modules/publishing/reviewNotices.ts).
+function back(recordingId: string, error?: string, notice?: ReviewNoticeCode): never {
   revalidatePath(`/studio/recordings/${recordingId}`, "layout");
-  redirect(`/studio/recordings/${recordingId}/review${error ? `?error=${encodeURIComponent(error)}` : ""}`);
+  const query = error ? `?error=${encodeURIComponent(error)}` : notice ? `?notice=${notice}` : "";
+  redirect(`/studio/recordings/${recordingId}/review${query}`);
 }
 
 export async function submitForReviewAction(recordingId: string) {
@@ -44,7 +47,7 @@ export async function submitForReviewAction(recordingId: string) {
     if (err instanceof RecordingBusyError) back(recordingId, err.message);
     back(recordingId, "This recording can no longer be submitted for review (its status has changed).");
   }
-  back(recordingId);
+  back(recordingId, undefined, "SUBMITTED");
 }
 
 export async function publishAction(recordingId: string, expectedDraftRevisionId: string) {
@@ -63,7 +66,7 @@ export async function publishAction(recordingId: string, expectedDraftRevisionId
     expectedDraftRevisionId,
   });
   if (!result.ok) back(recordingId, describePublishRefusal(result.reason, result.missingCategories));
-  back(recordingId);
+  back(recordingId, undefined, "PUBLISHED");
 }
 
 export async function unpublishAction(recordingId: string) {
@@ -78,7 +81,7 @@ export async function unpublishAction(recordingId: string) {
     if (err instanceof RecordingBusyError) back(recordingId, err.message);
     back(recordingId, "This recording is not published, so it cannot be unpublished.");
   }
-  back(recordingId);
+  back(recordingId, undefined, "UNPUBLISHED");
 }
 
 export async function restoreAction(recordingId: string) {
@@ -93,7 +96,7 @@ export async function restoreAction(recordingId: string) {
     if (err instanceof RecordingBusyError) back(recordingId, err.message);
     back(recordingId, "This recording is not archived, so it cannot be restored.");
   }
-  back(recordingId);
+  back(recordingId, undefined, "RESTORED");
 }
 
 export async function archiveAction(recordingId: string) {
@@ -127,7 +130,7 @@ export async function imposeHoldAction(recordingId: string, formData: FormData) 
     if (err instanceof RecordingBusyError || err instanceof RecordingHoldError) back(recordingId, err.message);
     back(recordingId, "The hold could not be recorded.");
   }
-  back(recordingId);
+  back(recordingId, undefined, "HOLD_SET");
 }
 
 export async function liftHoldAction(recordingId: string) {
@@ -142,5 +145,5 @@ export async function liftHoldAction(recordingId: string) {
     if (err instanceof RecordingBusyError || err instanceof RecordingHoldError) back(recordingId, err.message);
     back(recordingId, "The hold could not be lifted.");
   }
-  back(recordingId);
+  back(recordingId, undefined, "HOLD_LIFTED");
 }

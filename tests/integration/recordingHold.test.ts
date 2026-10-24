@@ -272,7 +272,7 @@ describe("authorization is enforced on the server", () => {
     }
 
     as("admin");
-    expect(await redirectOf(() => post("impose"))).toBe(`/studio/recordings/${r.id}/review`);
+    expect(await redirectOf(() => post("impose"))).toBe(`/studio/recordings/${r.id}/review?notice=HOLD_SET`);
     expect((await holdColumns(r.id)).reason).toBe("COPYRIGHT");
 
     for (const who of [null, "editor"] as const) {
@@ -282,7 +282,7 @@ describe("authorization is enforced on the server", () => {
     }
 
     as("admin");
-    expect(await redirectOf(() => post("lift"))).toBe(`/studio/recordings/${r.id}/review`);
+    expect(await redirectOf(() => post("lift"))).toBe(`/studio/recordings/${r.id}/review?notice=HOLD_LIFTED`);
     expect((await holdColumns(r.id)).reason).toBeNull();
     const audit = await holdAudit(r.id);
     expect(audit.map((a) => a.action)).toEqual(["RECORDING_HOLD_SET", "RECORDING_HOLD_LIFTED"]);
@@ -299,14 +299,14 @@ describe("authorization is enforced on the server", () => {
     }
     for (const role of ["ADMINISTRATOR", "SUPER_ADMINISTRATOR", "FOUNDER"]) {
       asRole(role);
-      expect(await redirectOf(() => imposeHoldAction(r.id, form({ reason: "RIGHTS" }))), role).toBe(`/studio/recordings/${r.id}/review`);
+      expect(await redirectOf(() => imposeHoldAction(r.id, form({ reason: "RIGHTS" }))), role).toBe(`/studio/recordings/${r.id}/review?notice=HOLD_SET`);
       expect((await holdColumns(r.id)).reason, role).toBe("RIGHTS");
       // a role that may not lift is refused while the hold stands
       asRole("REVIEWER");
       expect(await redirectOf(() => liftHoldAction(r.id)), `${role} hold, reviewer lift`).toMatch(/permission to lift a hold/);
       expect((await holdColumns(r.id)).reason, role).toBe("RIGHTS");
       asRole(role);
-      expect(await redirectOf(() => liftHoldAction(r.id)), role).toBe(`/studio/recordings/${r.id}/review`);
+      expect(await redirectOf(() => liftHoldAction(r.id)), role).toBe(`/studio/recordings/${r.id}/review?notice=HOLD_LIFTED`);
       expect((await holdColumns(r.id)).reason, role).toBeNull();
     }
     expect((await holdAudit(r.id)).length).toBe(6); // three holds, three lifts, nothing from the refused attempts

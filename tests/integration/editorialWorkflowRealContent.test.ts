@@ -554,7 +554,7 @@ describe("4. publish through the Studio workflow", () => {
     asRole("ADMINISTRATOR");
     const before = await recordingRow(promise.recordingId);
     const draftId = before.currentDraftRevisionId!;
-    expect(await redirectOf(() => publishAction(promise.recordingId, draftId))).toBe(`/studio/recordings/${promise.recordingId}/review`);
+    expect(await redirectOf(() => publishAction(promise.recordingId, draftId))).toBe(`/studio/recordings/${promise.recordingId}/review?notice=PUBLISHED`);
 
     const after = await recordingRow(promise.recordingId);
     expect(after.status).toBe("PUBLISHED");
@@ -971,7 +971,7 @@ describe("8. unpublish and republish", () => {
   it("unpublishing removes the Recording from every public surface but deletes nothing", async () => {
     const before = await revisions(promise.recordingId);
     asRole("ADMINISTRATOR");
-    expect(await redirectOf(() => unpublishAction(promise.recordingId))).toBe(`/studio/recordings/${promise.recordingId}/review`);
+    expect(await redirectOf(() => unpublishAction(promise.recordingId))).toBe(`/studio/recordings/${promise.recordingId}/review?notice=UNPUBLISHED`);
 
     const row = await recordingRow(promise.recordingId);
     expect(row.status).toBe("DRAFT");
@@ -1078,7 +1078,7 @@ describe("8. unpublish and republish", () => {
     asRole("EDITOR");
     expect(await redirectOf(() => publishAction(promise.recordingId, row.currentDraftRevisionId!))).toMatch(/permission to publish/); // still not an editor action
     asRole("ADMINISTRATOR");
-    expect(await redirectOf(() => publishAction(promise.recordingId, row.currentDraftRevisionId!))).toBe(`/studio/recordings/${promise.recordingId}/review`);
+    expect(await redirectOf(() => publishAction(promise.recordingId, row.currentDraftRevisionId!))).toBe(`/studio/recordings/${promise.recordingId}/review?notice=PUBLISHED`);
 
     const after = await recordingRow(promise.recordingId);
     expect(after).toMatchObject({ status: "PUBLISHED", currentPublishedRevisionId: row.currentDraftRevisionId, currentDraftRevisionId: null });

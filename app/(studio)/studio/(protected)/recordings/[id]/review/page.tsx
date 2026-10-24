@@ -10,16 +10,19 @@ import { RevisionRelationshipDataError } from "../../../../../../../modules/db/r
 import { loadPublicationPreview, type PublicationPreview } from "../../../../../../../modules/db/repositories/recordingRevisionComparisonRepository";
 import { submitForReviewAction, publishAction, unpublishAction, restoreAction, archiveAction, imposeHoldAction, liftHoldAction } from "./actions";
 import { startNewDraftAction } from "../draftActions";
+import { describeReviewGuidance } from "../../../../../../../modules/publishing/reviewGuidance";
+import { reviewNoticeText } from "../../../../../../../modules/publishing/reviewNotices";
 
 export default async function ReviewStepPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, notice } = await searchParams;
+  const noticeText = reviewNoticeText(notice);
   const session = await getCurrentStudioSession();
   if (!session) redirect("/studio/signin");
 
@@ -56,10 +59,53 @@ export default async function ReviewStepPage({
   const canRestore = mayPublish && recording.status === "ARCHIVED";
   const canArchive = mayPublish && recording.status !== "ARCHIVED";
 
+  // Plain-language "where does this stand and what next" for THIS viewer. It only describes: the permission checks above and in the actions decide what is possible.
+  const mayEdit = can(session.user.role, "RECORDING_WRITE");
+  const guidance = describeReviewGuidance({
+    status: recording.status,
+    hasOpenDraft,
+    hasPublishedRevision,
+    report: completeness?.report ?? null,
+    held: recording.holdReason !== null,
+    viewer: { canEdit: mayEdit, canSubmitForReview: can(session.user.role, "EDITORIAL_REVIEW"), canPublish: mayPublish },
+    whoCan: { review: describeRolesThatCan("EDITORIAL_REVIEW"), publish: describeRolesThatCan("RECORDING_PUBLISH") },
+  });
+
   return (
     <div>
       <h2>Review &amp; Publish</h2>
       {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
+      {noticeText && !error && <p role="status" className="studio-alert studio-alert--success">{noticeText}</p>}
+
+      <section aria-label="Where this recording stands" className="studio-panel">
+        <p><strong>{guidance.summary}</strong></p>
+        {guidance.blockers.length > 0 && (
+          <>
+            <p>Required before it can be published:</p>
+            <ul>
+              {guidance.blockers.map((b) => (
+                <li key={b.category}>
+                  <strong>{b.category}</strong>: {b.message}{" "}
+                  {b.step && mayEdit && <a href={`/studio/recordings/${id}/${b.step.slug}`}>Go to {b.step.label}</a>}
+                  {b.step && !mayEdit && <span className="studio-muted">({b.step.label} step)</span>}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {guidance.suggestions.length > 0 && (
+          <p className="studio-muted">
+            Recommended, not required: {guidance.suggestions.map((s) => s.category).join(", ")}.
+          </p>
+        )}
+        <ul>
+          {guidance.actions.filter((a) => a.state !== "AVAILABLE").map((a) => (
+            <li key={a.key}>
+              <strong>{a.label}</strong>: {a.reason}
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <RecordingHoldPanel
         // The note is for people who can manage holds; anyone else sees that a hold exists, and why in kind, but not the note.

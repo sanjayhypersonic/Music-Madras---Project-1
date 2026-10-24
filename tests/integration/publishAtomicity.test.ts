@@ -474,7 +474,7 @@ describe("I. the Studio action: authorization unchanged, outcomes explicit, a re
     expect(await redirectOf(() => publishAction(rec.id, randomUUID()))).toMatch(/out of date/); // forged / stale expected id
     expect((await state(rec.id)).recording.currentPublishedRevisionId).toBeNull();
 
-    expect(await redirectOf(() => publishAction(rec.id, rec.draftId))).toBe(`/studio/recordings/${rec.id}/review`);
+    expect(await redirectOf(() => publishAction(rec.id, rec.draftId))).toBe(`/studio/recordings/${rec.id}/review?notice=PUBLISHED`);
     expect((await state(rec.id)).recording).toMatchObject({ status: "PUBLISHED", currentPublishedRevisionId: rec.draftId });
 
     expect(await redirectOf(() => publishAction(rec.id, rec.draftId))).toMatch(/no open draft/i); // replayed form
