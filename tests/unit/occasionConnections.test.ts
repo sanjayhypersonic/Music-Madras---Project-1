@@ -111,7 +111,7 @@ describe("source-level guarantees", () => {
 
   it("the loader reuses the public page's own eligibility fragments and never reads the frozen legacy rows", () => {
     const loader = code("modules/db/repositories/occasionWorkspaceRepository.ts");
-    for (const reused of ["eligiblePerformanceWhere", "eligibleProgrammeWhere", "PUBLIC_COLLECTION_WHERE", "PUBLISHED_REVISION_WHERE", "isRecordingPublished"]) expect(loader).toContain(reused);
+    for (const reused of ["eligiblePerformanceWhere", "eligibleProgrammeWhere", "PUBLIC_COLLECTION_WHERE", "PUBLISHED_REVISION_WHERE", "isRecordingPubliclyVisible"]) expect(loader).toContain(reused);
     expect(loader).not.toMatch(/entitySource|entityRights|entityOccasion|ForEntity\(/);
     expect(loader).toContain("recordingRevisionOccasion");
   });

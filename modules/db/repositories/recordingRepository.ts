@@ -4,7 +4,7 @@ import { writeAuditLog } from "../../audit/writeAuditLog";
 import { canForkNewDraft, canPublishCurrentDraft } from "../../publishing/revisionTransitions";
 import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
 import { computeNextOrder } from "../../mmke/programme/reorderProgrammeItems";
-import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
 import { generatePerformanceSlug } from "../../mmke/slug/generatePerformanceSlug";
 import { performanceParticipantsKey } from "../../publishing/performanceParticipantsKey";
@@ -1239,7 +1239,7 @@ export async function detachWorkFromRevision(
  * currentPublishedRevisionId, never by querying revisions directly by
  * status, so there is exactly one unambiguous definition of "what's live."
  *
- * Phase 6G-5A: now gated by isRecordingPublished (modules/mmke/catalogue),
+ * Phase 6G-5A: now gated by isRecordingPublished (modules/mmke/catalogue); since R-20 by isRecordingPubliclyVisible, which also refuses a HELD Recording,
  * the same predicate entityRelationshipsRepository.ts's resolveRelatedContent
  * uses. Before this phase, this function only checked
  * `currentPublishedRevision` truthiness, which an ARCHIVED Recording still
@@ -1256,7 +1256,7 @@ export async function findPublishedRecordingBySlug(
     include: { currentPublishedRevision: true },
   });
 
-  if (!recording?.currentPublishedRevision || !isRecordingPublished(recording)) {
+  if (!recording?.currentPublishedRevision || !isRecordingPubliclyVisible(recording)) {
     return null;
   }
 
@@ -1305,7 +1305,7 @@ export async function getPublishedRecordingContextBySlug(slug: string) {
     },
   });
 
-  if (!recording?.currentPublishedRevision || !isRecordingPublished(recording)) {
+  if (!recording?.currentPublishedRevision || !isRecordingPubliclyVisible(recording)) {
     return null;
   }
 

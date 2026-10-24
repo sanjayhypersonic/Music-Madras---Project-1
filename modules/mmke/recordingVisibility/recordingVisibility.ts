@@ -13,11 +13,13 @@
 //                  published-revision pointer, and the publish gate's REQUIRED categories (title, a work, a primary video).
 //   DISCOVERY_GAP  the Recording IS public, but something that would help visitors find or understand it is absent: no work, no performance (and so no venue),
 //                  no publicly shown video. The public page does not require any of these, so none is ever called a blocker for a public Recording.
-//   RESTRICTION    an explicit rule or decision limits what visitors see: a hold on a linked video, or a video the platform's own visibility rule withholds
-//                  (private, or unlisted without a recorded approval). Never inferred from a title or a keyword.
+//   RESTRICTION    an explicit rule or decision limits what visitors see: a Recording-level HOLD on the Recording itself (R-20), a hold on a linked video, or a
+//                  video the platform's own visibility rule withholds (private, or unlisted without a recorded approval). Never inferred from a title or a keyword.
+//                  A Recording hold withholds the whole Recording (bucket HELD) and is independent of any video hold: holding a video never holds its Recording.
 //   NOT_DETERMINED the facts do not establish the answer (an inconsistent pointer, a missing fact, an unexpected error). Reported, never guessed.
 //
-// A Recording lands in exactly ONE bucket (so the counts add up); gaps and restrictions are overlays on PUBLIC Recordings and can overlap each other.
+// A Recording lands in exactly ONE bucket (so the counts add up). Gaps are an overlay on PUBLIC Recordings; restrictions are an overlay on any Recording that has
+// one (a held Recording, or a public one with a restricted video); the two overlays can overlap each other.
 
 import { isRecordingPublished } from "../catalogue/isRecordingPublished";
 import { explainVideoExposure, isVideoExposed, type VideoExposureFacts } from "../catalogue/videoExposure";
@@ -30,6 +32,8 @@ export type VisibilityBucket =
   | "PUBLIC"
   /** A published revision is on record (or the status says published) but the Recording is not public: archived, unpublished, or marked published without a revision. */
   | "PUBLISHED_NOT_DISCOVERABLE"
+  /** Published, but withheld by a Recording-level hold (R-20): not public until the hold is lifted. */
+  | "HELD"
   /** Never published; still being prepared. */
   | "NOT_PUBLISHED_YET"
   /** The facts do not establish whether visitors can see it. */
@@ -58,6 +62,7 @@ export type FindingCode =
   | "VIDEO_PAGE_NOT_PUBLISHED"
   | "VIDEO_UNAVAILABLE"
   // explicit restrictions
+  | "RECORDING_HOLD"
   | "VIDEO_HOLD"
   | "VIDEO_PRIVATE"
   | "VIDEO_UNLISTED_NOT_APPROVED"
@@ -106,6 +111,8 @@ export interface RecordingVisibilityFacts {
   currentDraftRevisionId: string | null;
   /** The revision the published pointer names, as loaded; null when there is no pointer (or the row could not be read). */
   published: PublishedRevisionFacts | null;
+  /** The Recording-level hold, if any (R-20). Independent of every video hold. */
+  hold: { reason: string; note: string | null; setAt: Date } | null;
   /** The open draft revision, if any. */
   draft: DraftRevisionFacts | null;
   /** Exposure facts of the YouTube videos on the PUBLISHED revision, keyed by YouTubeVideo.id. */
@@ -126,6 +133,7 @@ export interface RecordingVisibility {
 export const BUCKET_LABEL: Record<VisibilityBucket, string> = {
   PUBLIC: "Publicly discoverable",
   PUBLISHED_NOT_DISCOVERABLE: "Published, but not public",
+  HELD: "On hold, withheld from the public",
   NOT_PUBLISHED_YET: "Not published yet",
   NOT_DETERMINED: "Not determined",
 };
@@ -308,11 +316,11 @@ function result(facts: RecordingVisibilityFacts, bucket: VisibilityBucket, findi
     findings,
     publicPath: bucket === "PUBLIC" ? `/recordings/${facts.slug}` : null,
     hasGaps: bucket === "PUBLIC" && findings.some((f) => f.kind === "DISCOVERY_GAP"),
-    hasRestrictions: bucket === "PUBLIC" && findings.some((f) => f.kind === "RESTRICTION"),
+    hasRestrictions: findings.some((f) => f.kind === "RESTRICTION"),
   };
 }
 
-function classify(facts: RecordingVisibilityFacts): RecordingVisibility {
+function classifyPublication(facts: RecordingVisibilityFacts): RecordingVisibility {
   const workingTitle = facts.draft?.title ?? facts.published?.title ?? null;
 
   if (facts.status === "PUBLISHED") {
@@ -354,6 +362,32 @@ function classify(facts: RecordingVisibilityFacts): RecordingVisibility {
   return result(facts, bucket, [statusBlocker, ...publishGateFindings(facts)], workingTitle);
 }
 
+/** The finding for a Recording-level hold. `alsoUnpublished`: the Recording is not public for another reason today, and the hold will keep it off the Museum even after that changes. */
+function holdFinding(facts: RecordingVisibilityFacts, hold: NonNullable<RecordingVisibilityFacts["hold"]>, alsoUnpublished: boolean): Finding {
+  const since = hold.setAt.toISOString().slice(0, 10);
+  const note = hold.note ? ` Note: ${hold.note}` : "";
+  const message = alsoUnpublished
+    ? `A Recording hold (${hold.reason.toLowerCase()}, recorded ${since}) is also in place. It will keep this recording off the public Museum even once it is published, until a person lifts it.${note}`
+    : `On hold (${hold.reason.toLowerCase()}, recorded ${since}): this recording is published but withheld from every public page, search and the sitemap until a person lifts the hold. Its publication state and revisions are unchanged, and its videos are not affected.${note}`;
+  return finding("RESTRICTION", "RECORDING_HOLD", message, fixLink(facts.id, "REVIEW"));
+}
+
+function classify(facts: RecordingVisibilityFacts): RecordingVisibility {
+  const hold = facts.hold;
+  if (hold === null) return classifyPublication(facts);
+
+  // A held Recording is withheld whatever else is true. If it is PUBLISHED (status and a published pointer) the hold is what keeps it off the Museum: its own
+  // bucket, with no gap or video analysis (nothing of it is public to be analysed). Otherwise it is not public for another reason and keeps that bucket,
+  // with the hold added as a restriction (so lifting it later cannot surprise anyone by exposing a recording that was meant to stay hidden).
+  const base = classifyPublication(facts);
+  if (facts.status === "PUBLISHED" && facts.currentPublishedRevisionId !== null) {
+    const findings: Finding[] = [holdFinding(facts, hold, false)];
+    const problem = pointerProblem(facts);
+    if (problem !== null) findings.push(finding("NOT_DETERMINED", "REVISION_POINTER_INCONSISTENT", `${problem} This is reported for review; the hold withholds the recording either way.`, fixLink(facts.id, "REVIEW")));
+    return result(facts, "HELD", findings, facts.published?.title ?? facts.draft?.title ?? null);
+  }
+  return result(facts, base.bucket, [...base.findings, holdFinding(facts, hold, true)], base.title);
+}
 /** Classifies one Recording. Never throws: unexpected data yields NOT_DETERMINED rather than taking the whole workspace down. */
 export function classifyRecordingVisibility(facts: RecordingVisibilityFacts): RecordingVisibility {
   try {
@@ -370,15 +404,15 @@ export function classifyRecordingVisibility(facts: RecordingVisibilityFacts): Re
   }
 }
 
-export type VisibilityView = "public" | "not-discoverable" | "gaps" | "restricted" | "undetermined" | "unpublished";
+export type VisibilityView = "public" | "not-discoverable" | "gaps" | "restricted" | "undetermined" | "unpublished" | "held";
 
-export const VISIBILITY_VIEWS: readonly VisibilityView[] = ["public", "not-discoverable", "gaps", "restricted", "undetermined", "unpublished"];
+export const VISIBILITY_VIEWS: readonly VisibilityView[] = ["public", "not-discoverable", "gaps", "restricted", "undetermined", "unpublished", "held"];
 
 export function parseVisibilityView(value: string | undefined): VisibilityView {
   return VISIBILITY_VIEWS.find((v) => v === value) ?? "public";
 }
 
-/** Which view a classified Recording belongs to. A Recording with gaps AND restrictions is in both views (they are overlays on "public"). */
+/** Which view a classified Recording belongs to. A Recording with gaps AND restrictions is in both views (they are overlays; a held Recording is in "held" and "restricted"). */
 export function inView(view: VisibilityView, r: RecordingVisibility): boolean {
   switch (view) {
     case "public":
@@ -393,26 +427,31 @@ export function inView(view: VisibilityView, r: RecordingVisibility): boolean {
       return r.bucket === "NOT_DETERMINED";
     case "unpublished":
       return r.bucket === "NOT_PUBLISHED_YET";
+    case "held":
+      return r.bucket === "HELD";
   }
 }
 
 export interface VisibilityCounts {
-  /** Recordings counted (the four buckets add up to this). */
+  /** Recordings counted (the five buckets add up to this). */
   counted: number;
   public: number;
   notDiscoverable: number;
+  held: number;
   unpublished: number;
   undetermined: number;
-  /** Overlays on `public`: each is a subset of it, and a Recording can be in both. */
+  /** Overlay on `public`: a subset of it. */
   withGaps: number;
+  /** Overlay on every bucket: any Recording with an explicit restriction (held, or public with a restricted video, or not public with a hold waiting). */
   withRestrictions: number;
 }
 
 export function countVisibility(results: readonly RecordingVisibility[]): VisibilityCounts {
-  const counts: VisibilityCounts = { counted: results.length, public: 0, notDiscoverable: 0, unpublished: 0, undetermined: 0, withGaps: 0, withRestrictions: 0 };
+  const counts: VisibilityCounts = { counted: results.length, public: 0, notDiscoverable: 0, held: 0, unpublished: 0, undetermined: 0, withGaps: 0, withRestrictions: 0 };
   for (const r of results) {
     if (r.bucket === "PUBLIC") counts.public += 1;
     else if (r.bucket === "PUBLISHED_NOT_DISCOVERABLE") counts.notDiscoverable += 1;
+    else if (r.bucket === "HELD") counts.held += 1;
     else if (r.bucket === "NOT_PUBLISHED_YET") counts.unpublished += 1;
     else counts.undetermined += 1;
     if (r.hasGaps) counts.withGaps += 1;

@@ -1,9 +1,9 @@
 import { prisma } from "../client";
-import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import type { OccasionPageCollection, OccasionPagePerformance, OccasionPageProgramme, OccasionPageRecording, PublicOccasionPageData } from "../../mmke/occasionPage/occasionPageContract";
 import { findPublicCollectionsByIds } from "./collectionRepository";
 import { listEntitiesForOccasion, listEntitiesForOccasions } from "./occasionRepository";
-import { PUBLISHED_REVISION_WHERE, eligiblePerformanceWhere, eligibleProgrammeWhere } from "./publicEligibility";
+import { PUBLISHED_REVISION_WHERE, RECORDING_NOT_HELD_WHERE, eligiblePerformanceWhere, eligibleProgrammeWhere } from "./publicEligibility";
 
 // Public Occasion pages — the reader behind /occasions/[slug], its sitemap entry and archive search. ONE definition of "public": getPublicOccasionPageData
 // returns null unless the Occasion is active and something public is attached to it; filterPublicOccasionIds is its set-based twin (a constant number of
@@ -71,13 +71,13 @@ export async function getPublicOccasionPageData(slug: string): Promise<PublicOcc
       ? []
       : (
           await prisma.recording.findMany({
-            where: { id: { in: recordingIds }, status: "PUBLISHED" },
+            where: { id: { in: recordingIds }, status: "PUBLISHED", ...RECORDING_NOT_HELD_WHERE },
             include: { currentPublishedRevision: { select: { title: true } } },
             orderBy: [{ createdAt: "desc" }, { id: "asc" }],
             take: LIST_LIMIT,
           })
         )
-          .filter((r) => isRecordingPublished(r))
+          .filter((r) => isRecordingPubliclyVisible(r))
           .map((r) => ({ id: r.id, slug: r.slug, title: r.currentPublishedRevision?.title ?? null }));
 
   // Reachability: an Occasion with nothing public attached is not public (and never an empty page).
@@ -118,7 +118,7 @@ export async function filterPublicOccasionIds(occasionIds: readonly string[]): P
   const publishedRecordingIds = new Set(
     recordingIds.length === 0
       ? []
-      : (await prisma.recording.findMany({ where: { id: { in: recordingIds }, status: "PUBLISHED" }, include: { currentPublishedRevision: { select: { title: true } } } })).filter((r) => isRecordingPublished(r)).map((r) => r.id)
+      : (await prisma.recording.findMany({ where: { id: { in: recordingIds }, status: "PUBLISHED", ...RECORDING_NOT_HELD_WHERE }, include: { currentPublishedRevision: { select: { title: true } } } })).filter((r) => isRecordingPubliclyVisible(r)).map((r) => r.id)
   );
 
   const eligiblePerformanceIds = new Set(performances.map((p) => p.id));

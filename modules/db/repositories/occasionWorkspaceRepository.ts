@@ -1,5 +1,5 @@
 import { prisma } from "../client";
-import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import {
   classifyCollection,
   classifyPerformance,
@@ -21,7 +21,7 @@ import { PUBLISHED_REVISION_WHERE, eligiblePerformanceWhere, eligibleProgrammeWh
 //
 // READ-ONLY and separate from the public readers (occasionPageRepository.ts): it creates no draft, writes nothing, and its result is only ever shown in Studio.
 // It does NOT define "public" a second time. Visibility is asked of the database with the same fragments the public page uses — eligiblePerformanceWhere,
-// eligibleProgrammeWhere, PUBLIC_COLLECTION_WHERE, PUBLISHED_REVISION_WHERE and isRecordingPublished — and the facts loaded beside it only EXPLAIN a "no"
+// eligibleProgrammeWhere, PUBLIC_COLLECTION_WHERE, PUBLISHED_REVISION_WHERE and isRecordingPubliclyVisible — and the facts loaded beside it only EXPLAIN a "no"
 // (modules/mmke/occasionWorkspace/occasionConnections.ts). A Recording's occasion is read from the REVISION-SCOPED table (recording_revision_occasions): from its
 // PUBLISHED revision for what is public, and from its open draft revision only to say "linked in the draft". The frozen legacy Recording-level rows are not read
 // (listEntitiesForOccasion never returns them), so a legacy row can neither connect an item nor make an Occasion public.
@@ -110,6 +110,7 @@ export async function loadOccasionWorkspace(occasionId: string): Promise<Occasio
             slug: true,
             status: true,
             currentPublishedRevisionId: true,
+            holdReason: true,
             currentPublishedRevision: { select: { title: true } },
             currentDraftRevision: { select: { title: true } },
           },
@@ -151,10 +152,10 @@ export async function loadOccasionWorkspace(occasionId: string): Promise<Occasio
     const carriesByPointer = pointerCarry.has(r.id);
     const olderOnly = linkedRecordingIds.has(r.id) && !carriesByPointer && !draftCarry.has(r.id) && !derivedIds.has(r.id);
     const via: ConnectionVia = carriesByPointer ? "PUBLISHED_REVISION" : carriesDraftOnly ? "DRAFT_REVISION_ONLY" : olderOnly ? "OLDER_REVISION_ONLY" : "VIA_PERFORMANCE";
-    const published = isRecordingPublished(r);
+    const published = isRecordingPubliclyVisible(r);
     // The page lists a Recording when it is published AND (its published revision carries the Occasion OR it records a listed Performance).
     const visible = published && (carriesPublished || derivedIds.has(r.id));
-    const own = classifyRecording({ visible, via: carriesPublished ? "PUBLISHED_REVISION" : derivedIds.has(r.id) ? "VIA_PERFORMANCE" : via, recordingStatus: r.status, publishedRevisionCarries: carriesByPointer, draftRevisionCarries: draftCarry.has(r.id), onlyOlderRevisionCarries: olderOnly });
+    const own = classifyRecording({ visible, via: carriesPublished ? "PUBLISHED_REVISION" : derivedIds.has(r.id) ? "VIA_PERFORMANCE" : via, recordingStatus: r.status, publishedRevisionCarries: carriesByPointer, draftRevisionCarries: draftCarry.has(r.id), onlyOlderRevisionCarries: olderOnly, held: r.holdReason !== null });
     items.push({
       kind: "RECORDING",
       id: r.id,

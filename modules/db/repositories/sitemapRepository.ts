@@ -1,6 +1,7 @@
 import { prisma } from "../client";
-import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import {
+  PUBLIC_RECORDING_WHERE,
   eligibleArtistWhere,
   eligibleChoirWhere,
   eligibleComposerWhere,
@@ -66,16 +67,16 @@ export function listPublicPerformanceSitemapEntries(): Promise<SitemapSlugEntry[
 }
 
 /**
- * Recording: the where-clause's `status: "PUBLISHED"` is the same cheap
- * coarse filter searchRecordings uses; isRecordingPublished is re-applied
- * as the authoritative gate afterward — never a second, independently
+ * Recording: the where-clause is the SQL twin of isRecordingPubliclyVisible
+ * (PUBLISHED and not held, R-20) and the function is re-applied as the
+ * authoritative gate afterward — never a second, independently
  * invented publication rule.
  */
 export async function listPublicRecordingSitemapEntries(): Promise<SitemapSlugEntry[]> {
   const rows = await prisma.recording.findMany({
-    where: { status: "PUBLISHED" },
-    select: { slug: true, updatedAt: true, status: true, currentPublishedRevisionId: true },
+    where: PUBLIC_RECORDING_WHERE,
+    select: { slug: true, updatedAt: true, status: true, currentPublishedRevisionId: true, holdReason: true },
   });
 
-  return rows.filter(isRecordingPublished).map((row) => ({ slug: row.slug, updatedAt: row.updatedAt }));
+  return rows.filter(isRecordingPubliclyVisible).map((row) => ({ slug: row.slug, updatedAt: row.updatedAt }));
 }

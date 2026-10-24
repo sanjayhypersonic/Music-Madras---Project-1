@@ -38,9 +38,22 @@ import type { Prisma } from "@prisma/client";
 //
 // No schema change: eligibility is derived from relations that already exist.
 
-/** A revision that is currently some PUBLISHED Recording's live revision. */
+/**
+ * The database-side twin of isRecordingPubliclyVisible's "not held" half: a Recording with a Recording-level hold (project register R-20) is withheld from
+ * every public surface, whatever its publication state.
+ */
+export const RECORDING_NOT_HELD_WHERE = { holdReason: null } satisfies Prisma.RecordingWhereInput;
+
+/** A Recording that is publicly visible right now: PUBLISHED with a published revision and not held (the SQL twin of isRecordingPubliclyVisible). */
+export const PUBLIC_RECORDING_WHERE = { status: "PUBLISHED", currentPublishedRevisionId: { not: null }, ...RECORDING_NOT_HELD_WHERE } satisfies Prisma.RecordingWhereInput;
+
+/**
+ * A revision that is currently some PUBLICLY VISIBLE Recording's live revision: the Recording is PUBLISHED and not held. Every entity-eligibility fragment
+ * below is built on this, so holding a Recording also stops its performance, venue, programme, work, composer and participants from being discoverable
+ * through that Recording alone (they stay discoverable through any other public content), exactly as unpublishing it does.
+ */
 export const PUBLISHED_REVISION_WHERE: Prisma.RecordingRevisionWhereInput = {
-  currentPublishedOf: { is: { status: "PUBLISHED" } },
+  currentPublishedOf: { is: { status: "PUBLISHED", ...RECORDING_NOT_HELD_WHERE } },
 };
 
 export const eligiblePerformanceWhere: Prisma.PerformanceWhereInput = {

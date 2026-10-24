@@ -367,17 +367,17 @@ describe("inconsistent records are reported, never crash the workspace", () => {
 });
 
 describe("counts, overlap and bounds", () => {
-  it("the four buckets add up to what was counted; gaps and restrictions are subsets of public; every recording is in exactly one bucket", async () => {
+  it("the five buckets add up to what was counted; gaps are a subset of public; every recording is in exactly one bucket", async () => {
     const w = await loadRecordingVisibilityWorkspace({ view: "public", page: 1 });
     const { counts } = w;
-    expect(counts.public + counts.notDiscoverable + counts.unpublished + counts.undetermined).toBe(counts.counted);
+    expect(counts.public + counts.notDiscoverable + counts.held + counts.unpublished + counts.undetermined).toBe(counts.counted);
     expect(counts.counted).toBe(w.totalRecordings);
     expect(w.truncated).toBe(false);
     expect(counts.withGaps).toBeLessThanOrEqual(counts.public);
-    expect(counts.withRestrictions).toBeLessThanOrEqual(counts.public);
+    expect(counts.withRestrictions).toBeLessThanOrEqual(counts.counted); // restrictions overlay every bucket (a held recording, or a public one with a restricted video)
     expect(w.viewTotal).toBe(counts.public);
     const sizes = await Promise.all(VISIBILITY_VIEWS.map(async (view) => (await loadRecordingVisibilityWorkspace({ view, page: 1 })).viewTotal));
-    expect(sizes).toEqual([counts.public, counts.notDiscoverable, counts.withGaps, counts.withRestrictions, counts.undetermined, counts.unpublished]);
+    expect(sizes).toEqual([counts.public, counts.notDiscoverable, counts.withGaps, counts.withRestrictions, counts.undetermined, counts.unpublished, counts.held]);
   });
 
   it("the public count equals the number of recordings the sitemap lists, and the sitemap lists no recording the workspace calls non-public", async () => {

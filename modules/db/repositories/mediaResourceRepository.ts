@@ -1,6 +1,6 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
-import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import { withEditableDraftRevision } from "./recordingRepository";
 import type { MediaProvider, MediaResource, MediaRole, Prisma } from "@prisma/client";
 
@@ -127,9 +127,10 @@ export async function findPublishedRecordingSlugForYouTubeVideo(youtubeVideoId: 
 
   const recording = await prisma.recording.findFirst({
     where: { currentPublishedRevisionId: { in: candidateRevisionIds } },
-    select: { slug: true, status: true, currentPublishedRevisionId: true },
+    select: { slug: true, status: true, currentPublishedRevisionId: true, holdReason: true },
   });
-  if (!recording || !isRecordingPublished(recording)) return null;
+  // A Recording-level hold (R-20) also removes the video page's link to its Recording; the video itself is a separate asset with its own rules.
+  if (!recording || !isRecordingPubliclyVisible(recording)) return null;
 
   return recording.slug;
 }

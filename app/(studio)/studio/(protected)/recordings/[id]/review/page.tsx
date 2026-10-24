@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
-import { can } from "../../../../../../../modules/auth/policy";
+import { can, describeRolesThatCan } from "../../../../../../../modules/auth/policy";
 import { findRecordingById, getRecordingRevisionCompletenessReport } from "../../../../../../../modules/db/repositories/recordingRepository";
 import { isReadyToPublish } from "../../../../../../../modules/mmke/completeness/checkRecordingRevisionCompleteness";
 import { ConfirmSubmitButton } from "../../../../../../../components/studio/ConfirmSubmitButton";
 import { RevisionComparison } from "../../../../../../../components/studio/RevisionComparison";
+import { RecordingHoldPanel } from "../../../../../../../components/studio/RecordingHoldPanel";
 import { RevisionRelationshipDataError } from "../../../../../../../modules/db/repositories/recordingRelationshipReadersRepository";
 import { loadPublicationPreview, type PublicationPreview } from "../../../../../../../modules/db/repositories/recordingRevisionComparisonRepository";
-import { submitForReviewAction, publishAction, unpublishAction, restoreAction, archiveAction } from "./actions";
+import { submitForReviewAction, publishAction, unpublishAction, restoreAction, archiveAction, imposeHoldAction, liftHoldAction } from "./actions";
 import { startNewDraftAction } from "../draftActions";
 
 export default async function ReviewStepPage({
@@ -60,6 +61,14 @@ export default async function ReviewStepPage({
       <h2>Review &amp; Publish</h2>
       {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
+      <RecordingHoldPanel
+        hold={recording.holdReason && recording.holdSetAt ? { reason: recording.holdReason, note: recording.holdNote, setAt: recording.holdSetAt } : null}
+        isLive={isLive}
+        canManage={mayPublish}
+        publishers={describeRolesThatCan("RECORDING_PUBLISH")}
+        impose={imposeHoldAction.bind(null, id)}
+        lift={liftHoldAction.bind(null, id)}
+      />
       {!completeness ? (
         <p className="studio-empty">No revision to review yet.</p>
       ) : (

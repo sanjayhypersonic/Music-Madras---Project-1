@@ -183,6 +183,7 @@ model StudioUser {
   performancesUpdated       Performance[]                 @relation("PerformanceUpdatedBy")
   recordingsCreated         Recording[]                   @relation("RecordingCreatedBy")
   recordingsUpdated         Recording[]                   @relation("RecordingUpdatedBy")
+  recordingsHeld            Recording[]                   @relation("RecordingHoldSetBy")
   revisionsCreated          RecordingRevision[]           @relation("RevisionCreatedBy")
   revisionsUpdated          RecordingRevision[]           @relation("RevisionUpdatedBy")
   artistsCreated            Artist[]                      @relation("ArtistCreatedBy")
@@ -720,8 +721,17 @@ model Recording {
   createdById                String
   updatedById                String
 
-  createdBy StudioUser @relation("RecordingCreatedBy", fields: [createdById], references: [id])
-  updatedBy StudioUser @relation("RecordingUpdatedBy", fields: [updatedById], references: [id])
+  // Recording-level HOLD (project register R-20): an explicit, recorded decision to withhold this Recording from the public Museum, independent of its
+  // publication state and of any hold on its videos. Publication state and revisions are untouched; lifting the hold only restores eligibility under the
+  // existing rules and never publishes anything. All four columns are set together or all null (a database CHECK). History is the audit log.
+  holdReason  RecordingHoldReason?
+  holdNote    String?
+  holdSetAt   DateTime?
+  holdSetById String?
+
+  createdBy StudioUser  @relation("RecordingCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser  @relation("RecordingUpdatedBy", fields: [updatedById], references: [id])
+  holdSetBy StudioUser? @relation("RecordingHoldSetBy", fields: [holdSetById], references: [id], onDelete: SetNull)
 
   // Pointers into the revision history below. Nullable and SetNull on
   // delete because these are pointers, not ownership — the true ownership
@@ -2322,6 +2332,14 @@ enum VideoReviewState {
 }
 
 enum VideoExposureHold {
+  RIGHTS
+  COPYRIGHT
+  PRIVACY
+  OTHER
+}
+
+/// Why a Recording is held (same four kinds as a video hold, deliberately a separate type: a Recording hold and a video hold are independent).
+enum RecordingHoldReason {
   RIGHTS
   COPYRIGHT
   PRIVACY

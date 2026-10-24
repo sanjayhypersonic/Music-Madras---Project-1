@@ -60,7 +60,15 @@ export default async function RecordingsPage({ searchParams }: { searchParams: P
                     recording.slug}
                 </Link>
               </td>
-              <td><StatusBadge status={recording.status} /></td>
+              <td>
+                <StatusBadge status={recording.status} />
+                {recording.holdReason && (
+                  <>
+                    {" "}
+                    <StatusBadge status="ON_HOLD" tone="warning">On hold</StatusBadge>
+                  </>
+                )}
+              </td>
               <td>{recording.updatedAt.toISOString()}</td>
             </tr>
           ))}

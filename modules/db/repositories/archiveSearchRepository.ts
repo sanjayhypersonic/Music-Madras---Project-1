@@ -1,5 +1,5 @@
 import { prisma } from "../client";
-import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import { likeNeedle } from "../../mmke/search/searchText";
 import { rankCandidates, type RankCandidate } from "../../mmke/search/searchRanking";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
@@ -7,6 +7,7 @@ import { PUBLIC_COLLECTION_WHERE } from "./collectionRepository";
 import { PUBLIC_LEARNING_GUIDE_WHERE } from "./learningGuideRepository";
 import { filterPublicOccasionIds } from "./occasionPageRepository";
 import {
+  RECORDING_NOT_HELD_WHERE,
   eligibleArtistWhere,
   eligibleChoirWhere,
   eligibleComposerWhere,
@@ -234,6 +235,7 @@ export async function searchRecordings(
   const currentPage = clampPage(page);
   const where = {
     status: "PUBLISHED" as const,
+    ...RECORDING_NOT_HELD_WHERE, // a Recording-level hold withholds it from search, and from the total (R-20)
     ...(query
       ? {
           currentPublishedRevision: {
@@ -269,10 +271,10 @@ export async function searchRecordings(
           take,
         })
       ).map((r) => ({ id: r.id, label: r.currentPublishedRevision?.title ?? "" })),
-    load: (ids) => prisma.recording.findMany({ where: { id: { in: ids }, status: "PUBLISHED" }, include: recordingInclude }),
+    load: (ids) => prisma.recording.findMany({ where: { id: { in: ids }, status: "PUBLISHED", ...RECORDING_NOT_HELD_WHERE }, include: recordingInclude }),
   });
 
-  const published = rows.filter((recording) => isRecordingPublished(recording) && recording.currentPublishedRevision);
+  const published = rows.filter((recording) => isRecordingPubliclyVisible(recording) && recording.currentPublishedRevision);
 
   const candidateYouTubeVideoIds = Array.from(
     new Set(

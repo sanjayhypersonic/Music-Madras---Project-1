@@ -3,6 +3,7 @@ import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
 import { findPublicCollectionsByIds } from "./collectionRepository";
 import {
+  RECORDING_NOT_HELD_WHERE,
   eligibleArtistWhere,
   eligibleChoirWhere,
   eligibleComposerWhere,
@@ -17,7 +18,7 @@ import {
   isActiveWork,
 } from "./publicEligibility";
 import { assembleEntityPageData } from "../../mmke/entityPage/assembleEntityPageData";
-import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import { getPublishedRecordingContextBySlug } from "./recordingRepository";
 import { assembleRecordingPageData } from "../../mmke/recordingPage/assembleRecordingPageData";
 import type { RecordingPageData } from "../../mmke/recordingPage/recordingPageContract";
@@ -222,11 +223,11 @@ export async function resolveRelatedContent(input: RelatedContentInput): Promise
     candidateRevisionIds.length > 0
       ? ((
           await prisma.recording.findMany({
-            where: { status: "PUBLISHED", currentPublishedRevisionId: { in: candidateRevisionIds } },
+            where: { status: "PUBLISHED", ...RECORDING_NOT_HELD_WHERE, currentPublishedRevisionId: { in: candidateRevisionIds } },
             include: { currentPublishedRevision: true },
             orderBy: { createdAt: "desc" },
           })
-        ).filter((r) => isRecordingPublished(r)) as RecordingWithPublishedRevision[])
+        ).filter((r) => isRecordingPubliclyVisible(r)) as RecordingWithPublishedRevision[])
       : [];
 
   const recordingIds = recordings.map((r) => r.id);
@@ -775,7 +776,7 @@ export async function getPublicCollectionPageData(slug: string): Promise<Collect
   if (!collection || collection.status !== "PUBLISHED" || collection.archivedAt !== null) return null;
 
   const publishedRecordingLinks = collection.recordingLinks.filter(
-    (link) => link.recording.currentPublishedRevision !== null && isRecordingPublished(link.recording)
+    (link) => link.recording.currentPublishedRevision !== null && isRecordingPubliclyVisible(link.recording)
   );
 
   // Archived Works (or Works of an archived Composer) are never publicly
@@ -988,7 +989,7 @@ export async function getPublicLearningGuidePageData(slug: string): Promise<Lear
   // published — isRecordingPublished (Phase 6G-5A) is the single
   // authoritative predicate, never a second one re-derived here.
   const publishedRecordingLinks = guide.recordingLinks.filter(
-    (link) => link.recording.currentPublishedRevision !== null && isRecordingPublished(link.recording)
+    (link) => link.recording.currentPublishedRevision !== null && isRecordingPubliclyVisible(link.recording)
   );
 
   return assembleLearningGuidePageData({

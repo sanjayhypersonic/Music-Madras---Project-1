@@ -14,7 +14,7 @@ import {
 
 // The Studio "Recording public visibility" workspace's loader. READ-ONLY: it contains no create/update/delete, takes no lock and writes no audit entry, and
 // opening the page changes nothing. It reads each Recording through its OWN published-revision pointer (never by revision status) and reads the open draft
-// only to explain what stops an unpublished Recording from being published. It never reads Sources, Rights or Occasions, so the frozen legacy
+// only to explain what stops an unpublished Recording from being published, and the Recording's own hold (R-20) as a fact. It never reads Sources, Rights or Occasions, so the frozen legacy
 // Recording-level relationship rows (entityType "RECORDING") cannot reach it. The rules themselves live in modules/mmke/recordingVisibility (which reuses
 // isRecordingPublished, isVideoExposed and the publish gate); this file only gathers facts.
 //
@@ -55,6 +55,9 @@ const BATCH_SELECT = {
   updatedAt: true,
   currentPublishedRevisionId: true,
   currentDraftRevisionId: true,
+  holdReason: true,
+  holdNote: true,
+  holdSetAt: true,
   currentPublishedRevision: {
     select: {
       id: true,
@@ -154,7 +157,7 @@ export async function loadRecordingVisibilityWorkspace(input: { view: Visibility
     // Video facts are needed only for what a visitor can currently see: the published revision of a PUBLISHED Recording.
     const videoIds = new Set<string>();
     for (const row of batch) {
-      if (row.status !== "PUBLISHED") continue;
+      if (row.status !== "PUBLISHED" || row.holdReason !== null) continue; // a held Recording is withheld whole: its videos are not analysed here
       for (const media of row.currentPublishedRevision?.mediaResources ?? []) if (media.provider === "YOUTUBE" && media.youtubeVideoId) videoIds.add(media.youtubeVideoId);
     }
     const videos = await loadVideoFacts([...videoIds]);
@@ -165,6 +168,7 @@ export async function loadRecordingVisibilityWorkspace(input: { view: Visibility
         status: row.status,
         currentPublishedRevisionId: row.currentPublishedRevisionId,
         currentDraftRevisionId: row.currentDraftRevisionId,
+        hold: row.holdReason && row.holdSetAt ? { reason: row.holdReason, note: row.holdNote, setAt: row.holdSetAt } : null,
         published: publishedFacts(row),
         draft: draftFacts(row),
         videos,

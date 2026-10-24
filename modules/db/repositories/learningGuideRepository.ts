@@ -2,7 +2,7 @@ import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { SlugConflictError } from "../../mmke/slug/SlugConflictError";
 import { isUniqueConstraintViolation } from "../isUniqueConstraintViolation";
-import { isRecordingPublished } from "../../mmke/catalogue/isRecordingPublished";
+import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
 import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
 import { deriveLearningGuideExcerpt } from "../../mmke/learningGuide/deriveLearningGuideExcerpt";
 import type { LearningGuideIndexPage } from "../../mmke/learningGuidePage/learningGuidePageContract";
@@ -415,10 +415,10 @@ export async function listPublicLearningGuidesForWorkIds(workIds: string[]): Pro
 export async function listPublicLearningGuidesForRecording(recordingId: string): Promise<LearningGuide[]> {
   const links = await prisma.learningGuideRecording.findMany({
     where: { recordingId, learningGuide: PUBLIC_LEARNING_GUIDE_WHERE },
-    include: { learningGuide: true, recording: { select: { status: true, currentPublishedRevisionId: true } } },
+    include: { learningGuide: true, recording: { select: { status: true, currentPublishedRevisionId: true, holdReason: true } } },
   });
 
   return dedupeById(
-    links.filter((link) => isRecordingPublished(link.recording)).map((link) => link.learningGuide)
+    links.filter((link) => isRecordingPubliclyVisible(link.recording)).map((link) => link.learningGuide)
   );
 }

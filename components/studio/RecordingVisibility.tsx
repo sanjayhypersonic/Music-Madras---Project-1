@@ -14,15 +14,16 @@ import { StatusBadge, type StatusTone } from "./StatusBadge";
 
 const BASE = "/studio/recordings/visibility";
 
-const BUCKET_TONE: Record<VisibilityBucket, StatusTone> = { PUBLIC: "success", PUBLISHED_NOT_DISCOVERABLE: "warning", NOT_PUBLISHED_YET: "neutral", NOT_DETERMINED: "info" };
+const BUCKET_TONE: Record<VisibilityBucket, StatusTone> = { PUBLIC: "success", PUBLISHED_NOT_DISCOVERABLE: "warning", HELD: "warning", NOT_PUBLISHED_YET: "neutral", NOT_DETERMINED: "info" };
 const KIND_TONE: Record<FindingKind, StatusTone> = { BLOCKER: "error", DISCOVERY_GAP: "info", RESTRICTION: "warning", NOT_DETERMINED: "neutral" };
 
 const VIEW_TEXT: Record<VisibilityView, { title: string; blurb: string }> = {
   public: { title: "Publicly discoverable", blurb: "Has a public page, a sitemap entry and an archive-search result." },
   "not-discoverable": { title: "Published, but not public", blurb: "A published revision is on record (or the status says published), yet visitors cannot see it: archived, unpublished, or marked published without a revision." },
   gaps: { title: "Public, with discovery gaps", blurb: "Public, but something that helps visitors find it is missing: a work, a performance and venue, or a publicly shown video. A subset of Publicly discoverable." },
-  restricted: { title: "Public, affected by a restriction", blurb: "Public, but an explicit hold or visibility rule withholds a linked video. A subset of Publicly discoverable." },
+  restricted: { title: "Affected by a restriction", blurb: "An explicit hold or visibility rule applies: a Recording hold, a hold on a linked video, or a video the visibility rules withhold. Overlaps the groups above." },
   undetermined: { title: "Not determined", blurb: "The recorded facts do not establish whether visitors can see it. Reported rather than guessed." },
+  held: { title: "On hold", blurb: "Published, but withheld from the public by a Recording hold until a person lifts it. Independent of any hold on its videos." },
   unpublished: { title: "Not published yet", blurb: "Still being prepared; never published." },
 };
 
@@ -49,16 +50,17 @@ export function RecordingVisibility({ workspace }: { workspace: RecordingVisibil
       <section className="studio-panel" aria-labelledby="visibility-summary">
         <h2 id="visibility-summary">Where every recording stands</h2>
         <p className="studio-muted">
-          Each recording is in exactly one of these four groups, so they add up to {counts.counted}.
+          Each recording is in exactly one of these five groups, so they add up to {counts.counted}.
         </p>
         <ul className="studio-compare__items">
           <Tile view="public" count={counts.public} current={view} />
           <Tile view="not-discoverable" count={counts.notDiscoverable} current={view} />
+          <Tile view="held" count={counts.held} current={view} />
           <Tile view="unpublished" count={counts.unpublished} current={view} />
           <Tile view="undetermined" count={counts.undetermined} current={view} />
         </ul>
-        <h3>Within the publicly discoverable recordings</h3>
-        <p className="studio-muted">These two overlap with each other and are already counted in Publicly discoverable; they are not additional recordings.</p>
+        <h3>Overlapping views</h3>
+        <p className="studio-muted">These are not additional recordings: gaps are a subset of Publicly discoverable, and restrictions can include held recordings and public ones with a restricted video. They can overlap each other.</p>
         <ul className="studio-compare__items">
           <Tile view="gaps" count={counts.withGaps} current={view} />
           <Tile view="restricted" count={counts.withRestrictions} current={view} />
@@ -144,7 +146,7 @@ export function RecordingVisibility({ workspace }: { workspace: RecordingVisibil
           </nav>
         )}
         <p className="studio-muted">
-          This view is read-only. Public means the Recording is published and has a published revision; what a visitor sees is read from that published revision only, never from an open
+          This view is read-only. Public means the Recording is published, has a published revision and is not on hold; what a visitor sees is read from that published revision only, never from an open
           draft. A gap is not a blocker: the public page does not require a work, a performance or a video. Links open the existing Studio records; changing a published recording starts a new draft.
         </p>
       </section>

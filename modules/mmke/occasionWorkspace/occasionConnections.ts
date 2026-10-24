@@ -102,6 +102,8 @@ export interface RecordingFacts {
   draftRevisionCarries: boolean;
   /** Neither the published nor the draft revision carries it: only an older, superseded revision did. */
   onlyOlderRevisionCarries?: boolean;
+  /** The Recording is under a Recording-level hold (R-20): withheld from every public surface whatever else is true. */
+  held?: boolean;
 }
 
 export function classifyRecording(facts: RecordingFacts): Classification {
@@ -111,6 +113,7 @@ export function classifyRecording(facts: RecordingFacts): Classification {
       : { status: "VISIBLE", reason: "Listed on the public page: the recording is published and its published revision carries this occasion." };
   }
   if (facts.recordingStatus === "ARCHIVED") return { status: "ARCHIVED", reason: "This recording is archived; an archived recording is never public." };
+  if (facts.held) return { status: "EXCLUDED", reason: "Excluded: the recording is under a Recording hold, so it is withheld from every public page until the hold is lifted." };
   if (facts.draftRevisionCarries && !facts.publishedRevisionCarries) {
     return { status: "DRAFT", reason: "Linked only in the open draft revision. It appears on the public page only after that draft is published." };
   }

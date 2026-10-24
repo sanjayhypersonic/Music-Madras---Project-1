@@ -38,6 +38,7 @@ const publicRecording = (over: Partial<RecordingVisibilityFacts> = {}, rev: Part
   status: "PUBLISHED",
   currentPublishedRevisionId: "rev-pub",
   currentDraftRevisionId: null,
+  hold: null,
   published: fullRevision(rev),
   draft: null,
   videos: new Map([["vid-1", video]]),
@@ -50,6 +51,7 @@ const unpublished = (over: Partial<RecordingVisibilityFacts> = {}): RecordingVis
   status: "DRAFT",
   currentPublishedRevisionId: null,
   currentDraftRevisionId: "rev-draft",
+  hold: null,
   published: null,
   draft: { id: "rev-draft", title: "Working title", workCount: 1, hasPerformance: true, hasPrimaryVideo: true },
   videos: new Map(),
@@ -289,6 +291,59 @@ describe("recordings that are not public, and why", () => {
   });
 });
 
+describe("a Recording-level hold (R-20)", () => {
+  const held = { reason: "RIGHTS", note: "Claim received", setAt: new Date("2026-10-20T10:00:00Z") };
+
+  it("a held PUBLISHED recording is HELD: no public link, one restriction, and no gap or video analysis (nothing of it is public)", () => {
+    const r = classifyRecordingVisibility(publicRecording({ hold: held }, { works: [], performance: null, media: [] }));
+    expect(r).toMatchObject({ bucket: "HELD", publicPath: null, hasGaps: false, hasRestrictions: true, title: "Published title" });
+    expect(r.findings).toHaveLength(1);
+    expect(r.findings[0]).toMatchObject({ kind: "RESTRICTION", code: "RECORDING_HOLD", fix: { href: "/studio/recordings/rec-1/review" } });
+    expect(r.findings[0].message).toMatch(/On hold \(rights, recorded 2026-10-20\)/);
+    expect(r.findings[0].message).toMatch(/Note: Claim received/);
+    expect(r.findings[0].message).toMatch(/publication state and revisions are unchanged, and its videos are not affected/);
+  });
+
+  it("a hold on a Recording and a hold on its video are independent: a held VIDEO leaves the Recording PUBLIC, a held RECORDING does not mention its (public) video", () => {
+    const videoHeld = classifyRecordingVisibility(publicRecording({}, {}, { ...publicVideo, hold: "RIGHTS" }));
+    expect(videoHeld.bucket).toBe("PUBLIC");
+    expect(codes(videoHeld)).toEqual(["VIDEO_HOLD"]);
+    const recordingHeld = classifyRecordingVisibility(publicRecording({ hold: held }));
+    expect(recordingHeld.bucket).toBe("HELD");
+    expect(codes(recordingHeld)).toEqual(["RECORDING_HOLD"]);
+  });
+
+  it("a hold on a recording that is not public anyway keeps its bucket and its blockers, and adds the hold as a restriction that will outlast publication", () => {
+    const draft = classifyRecordingVisibility(unpublished({ hold: held }));
+    expect(draft.bucket).toBe("NOT_PUBLISHED_YET");
+    expect(codes(draft)).toEqual(["NOT_PUBLISHED_YET", "RECORDING_HOLD"]);
+    expect(draft.findings[1].message).toMatch(/even once it is published/);
+    expect(draft).toMatchObject({ hasRestrictions: true, publicPath: null });
+    const archived = classifyRecordingVisibility(publicRecording({ status: "ARCHIVED", hold: held }));
+    expect(archived.bucket).toBe("PUBLISHED_NOT_DISCOVERABLE");
+    expect(codes(archived)).toEqual(["ARCHIVED", "RECORDING_HOLD"]);
+    const unpublishedAfterPublished = classifyRecordingVisibility(publicRecording({ status: "DRAFT", hold: held }));
+    expect(unpublishedAfterPublished.bucket).toBe("PUBLISHED_NOT_DISCOVERABLE");
+    expect(codes(unpublishedAfterPublished)).toContain("RECORDING_HOLD");
+  });
+
+  it("a held recording whose pointer is inconsistent is still HELD (the hold withholds it either way) and the inconsistency is reported alongside", () => {
+    const r = classifyRecordingVisibility(publicRecording({ hold: held }, { recordingId: "someone-else" }));
+    expect(r.bucket).toBe("HELD");
+    expect(codes(r)).toEqual(["RECORDING_HOLD", "REVISION_POINTER_INCONSISTENT"]);
+    expect(kinds(r)).toEqual(["RESTRICTION", "NOT_DETERMINED"]);
+  });
+
+  it("held recordings are in the 'held' view and, as restricted, in the 'restricted' view; a recording held while unpublished is only 'restricted'", () => {
+    const published = classifyRecordingVisibility(publicRecording({ hold: held }));
+    const draft = classifyRecordingVisibility(unpublished({ hold: held }));
+    expect(VISIBILITY_VIEWS.filter((v) => inView(v, published))).toEqual(["restricted", "held"]);
+    expect(VISIBILITY_VIEWS.filter((v) => inView(v, draft))).toEqual(["restricted", "unpublished"]);
+    const counts = countVisibility([published, draft, classifyRecordingVisibility(publicRecording())]);
+    expect(counts).toMatchObject({ counted: 3, public: 1, held: 1, unpublished: 1, withRestrictions: 2 });
+    expect(counts.public + counts.notDiscoverable + counts.held + counts.unpublished + counts.undetermined).toBe(counts.counted);
+  });
+});
 describe("views and counts", () => {
   const results = [
     classifyRecordingVisibility(publicRecording()),
@@ -301,21 +356,21 @@ describe("views and counts", () => {
 
   it("the four buckets add up to the total; gaps and restrictions are overlapping subsets of public, and counted once each", () => {
     const counts = countVisibility(results);
-    expect(counts).toEqual({ counted: 6, public: 3, notDiscoverable: 1, unpublished: 1, undetermined: 1, withGaps: 2, withRestrictions: 1 });
-    expect(counts.public + counts.notDiscoverable + counts.unpublished + counts.undetermined).toBe(counts.counted);
+    expect(counts).toEqual({ counted: 6, public: 3, notDiscoverable: 1, held: 0, unpublished: 1, undetermined: 1, withGaps: 2, withRestrictions: 1 });
+    expect(counts.public + counts.notDiscoverable + counts.held + counts.unpublished + counts.undetermined).toBe(counts.counted);
     expect(counts.withGaps).toBeLessThanOrEqual(counts.public);
   });
 
   it("each view picks exactly its recordings; the recording with both a gap and a restriction is in both overlay views and in 'public' once", () => {
     const count = (view: (typeof VISIBILITY_VIEWS)[number]) => results.filter((r) => inView(view, r)).length;
-    expect(VISIBILITY_VIEWS.map(count)).toEqual([3, 1, 2, 1, 1, 1]);
+    expect(VISIBILITY_VIEWS.map(count)).toEqual([3, 1, 2, 1, 1, 1, 0]);
   });
 
   it("an unknown or missing view falls back to 'public'; every bucket and kind has a label", () => {
     expect(parseVisibilityView("nonsense")).toBe("public");
     expect(parseVisibilityView(undefined)).toBe("public");
     for (const view of VISIBILITY_VIEWS) expect(parseVisibilityView(view)).toBe(view);
-    expect(Object.keys(BUCKET_LABEL).sort()).toEqual(["NOT_DETERMINED", "NOT_PUBLISHED_YET", "PUBLIC", "PUBLISHED_NOT_DISCOVERABLE"]);
+    expect(Object.keys(BUCKET_LABEL).sort()).toEqual(["HELD", "NOT_DETERMINED", "NOT_PUBLISHED_YET", "PUBLIC", "PUBLISHED_NOT_DISCOVERABLE"]);
     expect(Object.keys(FINDING_KIND_LABEL).sort()).toEqual(["BLOCKER", "DISCOVERY_GAP", "NOT_DETERMINED", "RESTRICTION"]);
   });
 
