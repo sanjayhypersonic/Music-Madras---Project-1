@@ -36,6 +36,9 @@ export default async function RecordingsPage({ searchParams }: { searchParams: P
   return (
     <div>
       <h1>Recordings</h1>
+      <p>
+        <Link href="/studio/recordings/visibility">Public visibility →</Link> <span className="studio-muted">what visitors can find, what is published but not public, and why</span>
+      </p>
       {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <div className="studio-table-scroll">
