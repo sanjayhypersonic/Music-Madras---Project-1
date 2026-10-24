@@ -62,7 +62,8 @@ export default async function ReviewStepPage({
       {error && <p role="alert" className="studio-alert studio-alert--error">{decodeURIComponent(error)}</p>}
 
       <RecordingHoldPanel
-        hold={recording.holdReason && recording.holdSetAt ? { reason: recording.holdReason, note: recording.holdNote, setAt: recording.holdSetAt } : null}
+        // The note is for people who can manage holds; anyone else sees that a hold exists, and why in kind, but not the note.
+        hold={recording.holdReason && recording.holdSetAt ? { reason: recording.holdReason, note: mayPublish ? recording.holdNote : null, setAt: recording.holdSetAt } : null}
         isLive={isLive}
         canManage={mayPublish}
         publishers={describeRolesThatCan("RECORDING_PUBLISH")}

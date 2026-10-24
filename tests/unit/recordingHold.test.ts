@@ -3,6 +3,7 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 import { isRecordingPublished, isRecordingPubliclyVisible } from "../../modules/mmke/catalogue/isRecordingPublished";
 import { classifyRecording } from "../../modules/mmke/occasionWorkspace/occasionConnections";
+import { can } from "../../modules/auth/policy";
 
 // Recording-level holds (project register R-20): the predicate, and source-level guarantees that enforcement lives in the canonical public readers, that the hold
 // actions are authorized on the server, and that a hold can never change publication state or touch the legacy relationship rows.
@@ -109,5 +110,42 @@ describe("the hold actions and repository", () => {
     expect(page).toMatch(/canManage=\{mayPublish\}/);
     expect(page).toMatch(/impose=\{imposeHoldAction\.bind\(null, id\)\}/);
     expect(page).toMatch(/lift=\{liftHoldAction\.bind\(null, id\)\}/);
+  });
+});
+
+describe("who may do what with a Recording hold", () => {
+  it("only roles that may publish can impose or lift a hold (the same permission as a video hold and as publish/unpublish/archive)", () => {
+    const allowed = ["ADMINISTRATOR", "SUPER_ADMINISTRATOR", "FOUNDER"] as const;
+    const refused = ["CONTRIBUTOR", "EDITOR", "REVIEWER"] as const;
+    for (const role of allowed) expect(can(role, "RECORDING_PUBLISH"), role).toBe(true);
+    for (const role of refused) expect(can(role, "RECORDING_PUBLISH"), role).toBe(false);
+  });
+
+  it("hold NOTES are for those roles only: the loader drops them unless told otherwise, and both pages pass the permission, never a constant", () => {
+    const loader = code("modules/db/repositories/recordingVisibilityRepository.ts");
+    expect(loader).toMatch(/includeHoldNotes\?:\s*boolean/);
+    expect(loader).toMatch(/note:\s*input\.includeHoldNotes === true \? row\.holdNote : null/); // secure by default: only an explicit true shows it
+    const workspace = code("app/(studio)/studio/(protected)/recordings/visibility/page.tsx");
+    expect(workspace).toMatch(/includeHoldNotes:\s*can\(session\.user\.role,\s*"RECORDING_PUBLISH"\)/);
+    const review = code("app/(studio)/studio/(protected)/recordings/[id]/review/page.tsx");
+    expect(review).toMatch(/note:\s*mayPublish \? recording\.holdNote : null/);
+    expect(review).toMatch(/const mayPublish = can\(session\.user\.role, "RECORDING_PUBLISH"\)/);
+  });
+
+  it("nothing else reads a Recording's hold note: not a public reader, not the Occasion workspace, not the Recordings list", () => {
+    for (const file of [
+      "modules/db/repositories/recordingRepository.ts",
+      "modules/db/repositories/archiveSearchRepository.ts",
+      "modules/db/repositories/sitemapRepository.ts",
+      "modules/db/repositories/entityRelationshipsRepository.ts",
+      "modules/db/repositories/learningGuideRepository.ts",
+      "modules/db/repositories/mediaResourceRepository.ts",
+      "modules/db/repositories/occasionPageRepository.ts",
+      "modules/db/repositories/occasionWorkspaceRepository.ts",
+      "modules/db/repositories/publicEligibility.ts",
+      "app/(studio)/studio/(protected)/recordings/page.tsx",
+    ]) {
+      expect(code(file), file).not.toMatch(/holdNote/);
+    }
   });
 });

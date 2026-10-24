@@ -147,7 +147,11 @@ function draftFacts(row: BatchRow): DraftRevisionFacts | null {
 }
 
 /** Scans Recordings (bounded), classifies each with the shared rules, and returns the counts plus one page of the chosen view. */
-export async function loadRecordingVisibilityWorkspace(input: { view: VisibilityView; page: number }): Promise<RecordingVisibilityWorkspace> {
+/**
+ * `includeHoldNotes` is false unless the caller says the viewer may read them. A Recording hold's note (a rights, copyright or privacy matter) is for people who
+ * can manage holds; it is dropped HERE, before classification, so it can never reach a finding message, the page or the response by any other route.
+ */
+export async function loadRecordingVisibilityWorkspace(input: { view: VisibilityView; page: number; includeHoldNotes?: boolean }): Promise<RecordingVisibilityWorkspace> {
   const totalRecordings = await prisma.recording.count();
   const rows: RecordingVisibilityRow[] = [];
 
@@ -168,7 +172,7 @@ export async function loadRecordingVisibilityWorkspace(input: { view: Visibility
         status: row.status,
         currentPublishedRevisionId: row.currentPublishedRevisionId,
         currentDraftRevisionId: row.currentDraftRevisionId,
-        hold: row.holdReason && row.holdSetAt ? { reason: row.holdReason, note: row.holdNote, setAt: row.holdSetAt } : null,
+        hold: row.holdReason && row.holdSetAt ? { reason: row.holdReason, note: input.includeHoldNotes === true ? row.holdNote : null, setAt: row.holdSetAt } : null,
         published: publishedFacts(row),
         draft: draftFacts(row),
         videos,

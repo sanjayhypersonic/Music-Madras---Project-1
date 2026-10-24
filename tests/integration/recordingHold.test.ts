@@ -132,9 +132,9 @@ async function newOccasion() {
   return o;
 }
 
-async function rowIn(view: VisibilityView, id: string): Promise<RecordingVisibilityRow | undefined> {
+async function rowIn(view: VisibilityView, id: string, includeHoldNotes = false): Promise<RecordingVisibilityRow | undefined> {
   for (let page = 1; ; page++) {
-    const w = await loadRecordingVisibilityWorkspace({ view, page });
+    const w = await loadRecordingVisibilityWorkspace({ view, page, includeHoldNotes });
     const hit = w.rows.find((r) => r.id === id);
     if (hit) return hit;
     if (page >= Math.ceil(w.viewTotal / w.pageSize)) return undefined;
@@ -289,6 +289,28 @@ describe("authorization is enforced on the server", () => {
     expect(audit.every((a) => a.actorId === users.admin)).toBe(true);
   }, T);
 
+  it("the permission matrix: contributor, editor and reviewer are refused; administrator, super administrator and founder may impose and lift", async () => {
+    const asRole = (role: string) => mockGetCurrentStudioSession.mockResolvedValue({ user: { id: users.admin, role, name: role, email: `${role}@example.test`, status: "ACTIVE" } });
+    const r = await makeRecording({});
+    for (const role of ["CONTRIBUTOR", "EDITOR", "REVIEWER"]) {
+      asRole(role);
+      expect(await redirectOf(() => imposeHoldAction(r.id, form({ reason: "RIGHTS" }))), role).toMatch(/permission to put a recording on hold/);
+      expect((await holdColumns(r.id)).reason, role).toBeNull();
+    }
+    for (const role of ["ADMINISTRATOR", "SUPER_ADMINISTRATOR", "FOUNDER"]) {
+      asRole(role);
+      expect(await redirectOf(() => imposeHoldAction(r.id, form({ reason: "RIGHTS" }))), role).toBe(`/studio/recordings/${r.id}/review`);
+      expect((await holdColumns(r.id)).reason, role).toBe("RIGHTS");
+      // a role that may not lift is refused while the hold stands
+      asRole("REVIEWER");
+      expect(await redirectOf(() => liftHoldAction(r.id)), `${role} hold, reviewer lift`).toMatch(/permission to lift a hold/);
+      expect((await holdColumns(r.id)).reason, role).toBe("RIGHTS");
+      asRole(role);
+      expect(await redirectOf(() => liftHoldAction(r.id)), role).toBe(`/studio/recordings/${r.id}/review`);
+      expect((await holdColumns(r.id)).reason, role).toBeNull();
+    }
+    expect((await holdAudit(r.id)).length).toBe(6); // three holds, three lifts, nothing from the refused attempts
+  }, T);
   it("a hold action with no kind, or on a recording that is already held, reports the problem and changes nothing", async () => {
     const r = await makeRecording({});
     as("admin");
@@ -418,7 +440,12 @@ describe("the Recording visibility workspace shows the hold", () => {
     expect(during.public + during.notDiscoverable + during.held + during.unpublished + during.undetermined).toBe(during.counted);
     expect(await rowIn("public", r.id)).toBeUndefined();
 
-    const held = await rowIn("held", r.id);
+    // Notes are for people who can manage holds: the default (and what a contributor, editor or reviewer gets) carries no note at all, in any field.
+    const anonymous = await rowIn("held", r.id);
+    expect(anonymous?.visibility.bucket).toBe("HELD");
+    expect(anonymous?.visibility.findings[0].message).not.toMatch(/Takedown notice|Note:/);
+    expect(JSON.stringify(anonymous)).not.toContain("Takedown notice");
+    const held = await rowIn("held", r.id, true);
     expect(held?.visibility).toMatchObject({ bucket: "HELD", publicPath: null, hasRestrictions: true, hasGaps: false });
     expect(held?.status).toBe("PUBLISHED"); // the publication state is shown as it is: the hold does not rewrite it
     expect(held?.visibility.findings).toEqual([expect.objectContaining({ kind: "RESTRICTION", code: "RECORDING_HOLD", fix: { label: expect.any(String), href: `/studio/recordings/${r.id}/review` } })]);

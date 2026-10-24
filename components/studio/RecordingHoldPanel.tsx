@@ -82,7 +82,7 @@ export function RecordingHoldPanel({
                   </select>
                 </label>
                 <label>
-                  Note (optional, visible to Studio users only)
+                  Note (optional; only people who can manage holds can read it)
                   <textarea name="note" rows={2} maxLength={500} />
                 </label>
                 <ConfirmSubmitButton
