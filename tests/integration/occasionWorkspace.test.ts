@@ -10,7 +10,8 @@ import { createVenue } from "../../modules/db/repositories/venueRepository";
 import { createProgramme } from "../../modules/db/repositories/programmeRepository";
 import { createPerformance } from "../../modules/db/repositories/performanceRepository";
 import { archiveRecording, createDraftRecording, forkDraftFromPublished, publishCurrentDraft, publishRecordingDraft, unpublishRecording } from "../../modules/db/repositories/recordingRepository";
-import { publishedRecordingAtVenue, type PublishedContentHandle } from "./helpers/publishedContent";
+import { publishRecordingFor, publishedRecordingAtVenue, type PublishedContentHandle } from "./helpers/publishedContent";
+import { imposeRecordingHold, liftRecordingHold } from "../../modules/db/repositories/recordingHoldRepository";
 
 // The Studio Occasion workspace against the isolated test database: every connected item with its status and reason, the verdicts equal to what the PUBLIC page
 // actually lists, Recording occasions read from the right revisions (never the frozen legacy rows), and nothing written by loading it. Synthetic fixtures only.
@@ -198,6 +199,77 @@ describe("every kind of connection, with its status and reason", () => {
   }, T);
 });
 
+describe("a performance whose only published Recording is held (R-20)", () => {
+  const reasonOf = (w: OccasionWorkspace, kind: string, id: string) => find(w, kind, id)?.reason ?? "";
+
+  it("says the Recording is held, not that no Recording is published; never-published and unpublished recordings still say 'no published recording'; lifting the hold shows it", async () => {
+    const o = await newOccasion();
+    const held = await liveAtNewVenue(); // its only published recording will be held
+    const heldViaProgramme = await liveAtNewVenue(); // same, reached through its attached programme
+    const unpublished = await liveAtNewVenue(); // its only recording is unpublished
+    await unpublishRecording(unpublished.recordingId, users.admin);
+    const programmeB = await createProgramme({ slug: uniq("prog"), title: `Workspace no-recording programme ${TOKEN}`, actorId: users.admin });
+    const performanceB = await createPerformance({ programmeId: programmeB.id, venueId: await venue(), actorId: users.admin });
+    draftOnly.push({ programmeId: programmeB.id, performanceId: performanceB.id }); // no recording at all
+    await tag("PERFORMANCE", held.performanceId!, o.id);
+    await tag("PROGRAMME", heldViaProgramme.programmeId!, o.id);
+    await tag("PERFORMANCE", unpublished.performanceId!, o.id);
+    await tag("PERFORMANCE", performanceB.id, o.id);
+
+    const before = await loadOccasionWorkspace(o.id);
+    expect(find(before!, "PERFORMANCE", held.performanceId!)).toMatchObject({ status: "VISIBLE" });
+
+    await imposeRecordingHold({ recordingId: held.recordingId, reason: "RIGHTS", actorId: users.admin });
+    await imposeRecordingHold({ recordingId: heldViaProgramme.recordingId, reason: "PRIVACY", actorId: users.admin });
+    const during = await loadOccasionWorkspace(o.id);
+
+    for (const [kind, id] of [["PERFORMANCE", held.performanceId!], ["PERFORMANCE", heldViaProgramme.performanceId!], ["PROGRAMME", heldViaProgramme.programmeId!]] as const) {
+      expect(find(during!, kind, id), `${kind} ${id}`).toMatchObject({ status: "EXCLUDED", publicHref: null });
+      expect(reasonOf(during!, kind, id), `${kind} ${id}`).toMatch(/under a Recording hold/);
+      expect(reasonOf(during!, kind, id), `${kind} ${id}`).not.toMatch(/no published recording uses/);
+    }
+    // the other two are NOT held, and keep their honest "no published recording" wording
+    for (const id of [unpublished.performanceId!, performanceB.id]) {
+      expect(find(during!, "PERFORMANCE", id)).toMatchObject({ status: "DRAFT" });
+      expect(reasonOf(during!, "PERFORMANCE", id)).toMatch(/no published recording uses this performance/);
+      expect(reasonOf(during!, "PERFORMANCE", id)).not.toMatch(/hold/);
+    }
+    // the verdicts still equal the public page: nothing held is on it
+    expect(await getPublicOccasionPageData(o.slug)).toBeNull();
+
+    await liftRecordingHold({ recordingId: held.recordingId, actorId: users.admin });
+    await liftRecordingHold({ recordingId: heldViaProgramme.recordingId, actorId: users.admin });
+    const after = await loadOccasionWorkspace(o.id);
+    expect(find(after!, "PERFORMANCE", held.performanceId!)).toMatchObject({ status: "VISIBLE" });
+    expect(find(after!, "PROGRAMME", heldViaProgramme.programmeId!)).toMatchObject({ status: "VISIBLE" });
+    expect(reasonOf(after!, "PERFORMANCE", held.performanceId!)).not.toMatch(/hold/);
+  }, T);
+
+  it("a performance with one held and one visible published recording is VISIBLE (the hold only matters when it is the reason)", async () => {
+    const o = await newOccasion();
+    const first = await liveAtNewVenue();
+    const second = await publishRecordingFor({ actorId: users.admin, performanceId: first.performanceId! });
+    handles.push(second);
+    await tag("PERFORMANCE", first.performanceId!, o.id);
+    await imposeRecordingHold({ recordingId: first.recordingId, reason: "OTHER", actorId: users.admin });
+    const w = await loadOccasionWorkspace(o.id);
+    expect(find(w!, "PERFORMANCE", first.performanceId!)).toMatchObject({ status: "VISIBLE" });
+    await liftRecordingHold({ recordingId: first.recordingId, actorId: users.admin });
+  }, T);
+
+  it("explaining a hold writes nothing: no hold, publication or audit row changes by loading the workspace", async () => {
+    const o = await newOccasion();
+    const live = await liveAtNewVenue();
+    await tag("PERFORMANCE", live.performanceId!, o.id);
+    await imposeRecordingHold({ recordingId: live.recordingId, reason: "COPYRIGHT", actorId: users.admin });
+    const state = async () => JSON.stringify({ rec: await prisma.recording.findUniqueOrThrow({ where: { id: live.recordingId } }), audits: await prisma.auditLogEntry.count() });
+    const before = await state();
+    await loadOccasionWorkspace(o.id);
+    await loadOccasionWorkspace(o.id);
+    expect(await state()).toBe(before);
+    await liftRecordingHold({ recordingId: live.recordingId, actorId: users.admin });
+  }, T);
+});
 describe("the Occasion's own state", () => {
   it("an occasion with nothing attached has no page and says why; an unknown id is null", async () => {
     const o = await newOccasion();

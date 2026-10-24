@@ -28,6 +28,24 @@ describe("performances", () => {
     expect(classifyPerformance({ ...perf, hasPublishedRecording: false })).toMatchObject({ status: "DRAFT", reason: expect.stringMatching(/no published recording/) });
   });
 
+  it("a performance whose published recording is held says so (EXCLUDED), distinct from 'no published recording' (DRAFT); neither is guessed from the other", () => {
+    expect(classifyPerformance({ ...perf, hasPublishedRecording: false, hasHeldRecording: true })).toMatchObject({ status: "EXCLUDED", reason: expect.stringMatching(/under a Recording hold/) });
+    expect(classifyPerformance({ ...perf, hasPublishedRecording: false, hasHeldRecording: false })).toMatchObject({ status: "DRAFT", reason: expect.stringMatching(/no published recording uses/) });
+    expect(classifyPerformance({ ...perf, hasPublishedRecording: false })).toMatchObject({ status: "DRAFT" }); // the fact is optional: absent means "not asked", not "held"
+    // a visible performance, and a more specific reason (archived parents), always win over the hold explanation
+    expect(classifyPerformance({ ...perf, visible: true, hasHeldRecording: true }).status).toBe("VISIBLE");
+    expect(classifyPerformance({ ...perf, venueArchived: true, hasPublishedRecording: false, hasHeldRecording: true }).reason).toMatch(/venue is archived/);
+    // a held recording that is not the reason (a visible one exists elsewhere) leaves the unexplained case 'not determined'
+    expect(classifyPerformance({ ...perf, hasPublishedRecording: true, hasHeldRecording: true }).status).toBe("UNKNOWN");
+  });
+
+  it("a programme with a held recording under one of its performances says so; otherwise it keeps the plain 'none of its performances is public' wording", () => {
+    expect(classifyProgramme({ visible: false, archived: false, hasHeldRecording: true })).toMatchObject({ status: "EXCLUDED", reason: expect.stringMatching(/under a Recording hold/) });
+    expect(classifyProgramme({ visible: false, archived: false, hasHeldRecording: false })).toMatchObject({ status: "DRAFT", reason: expect.stringMatching(/none of its performances is public/) });
+    expect(classifyProgramme({ visible: true, archived: false, hasHeldRecording: true }).status).toBe("VISIBLE");
+    expect(classifyProgramme({ visible: false, archived: true, hasHeldRecording: true }).status).toBe("ARCHIVED");
+  });
+
   it("says 'not determined' when the facts give no reason, and never calls an unexplained item draft or archived", () => {
     expect(classifyPerformance(perf)).toMatchObject({ status: "UNKNOWN", reason: expect.stringMatching(/^Not determined/) });
   });

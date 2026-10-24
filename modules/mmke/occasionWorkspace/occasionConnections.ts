@@ -54,7 +54,10 @@ export interface PerformanceFacts {
   archived: boolean;
   programmeArchived: boolean;
   venueArchived: boolean;
+  /** A PUBLISHED, publicly visible Recording uses this performance (the public page's own rule, which already excludes a held Recording). */
   hasPublishedRecording: boolean;
+  /** A published Recording uses it but is under a Recording hold (R-20). Asked of the canonical rules; never inferred from hasPublishedRecording being false. */
+  hasHeldRecording?: boolean;
 }
 
 export function classifyPerformance(facts: PerformanceFacts): Classification {
@@ -62,6 +65,9 @@ export function classifyPerformance(facts: PerformanceFacts): Classification {
   if (facts.archived) return { status: "ARCHIVED", reason: "This performance is archived; an archived performance is never public." };
   if (facts.programmeArchived) return { status: "EXCLUDED", reason: "Excluded: its programme is archived." };
   if (facts.venueArchived) return { status: "EXCLUDED", reason: "Excluded: its venue is archived." };
+  if (!facts.hasPublishedRecording && facts.hasHeldRecording) {
+    return { status: "EXCLUDED", reason: "Not public: a published recording of this performance exists, but it is under a Recording hold, so it is withheld until the hold is lifted. A performance becomes public only through a published recording that is not on hold." };
+  }
   if (!facts.hasPublishedRecording) return { status: "DRAFT", reason: "Not public yet: no published recording uses this performance. A performance becomes public only through a published recording." };
   return unknown("performance");
 }
@@ -69,12 +75,15 @@ export function classifyPerformance(facts: PerformanceFacts): Classification {
 export interface ProgrammeFacts {
   visible: boolean;
   archived: boolean;
+  /** A published Recording of one of its performances is under a Recording hold (R-20). */
+  hasHeldRecording?: boolean;
 }
 
 export function classifyProgramme(facts: ProgrammeFacts): Classification {
   if (facts.visible) return { status: "VISIBLE", reason: "Listed on the public page: at least one of its performances is public." };
   if (facts.archived) return { status: "ARCHIVED", reason: "This programme is archived; an archived programme is never public." };
   // The rule is "not archived and has a public performance": not archived and not visible can only mean it has none yet.
+  if (facts.hasHeldRecording) return { status: "EXCLUDED", reason: "Not public: none of its performances is public, and a published recording of one of them is under a Recording hold, so it is withheld until the hold is lifted." };
   return { status: "DRAFT", reason: "Not public yet: none of its performances is public (a performance needs a published recording)." };
 }
 

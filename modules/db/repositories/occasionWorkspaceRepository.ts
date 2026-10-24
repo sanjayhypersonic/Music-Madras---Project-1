@@ -15,7 +15,7 @@ import {
 } from "../../mmke/occasionWorkspace/occasionConnections";
 import { PUBLIC_COLLECTION_WHERE } from "./collectionRepository";
 import { listEntitiesForOccasion } from "./occasionRepository";
-import { PUBLISHED_REVISION_WHERE, eligiblePerformanceWhere, eligibleProgrammeWhere } from "./publicEligibility";
+import { PUBLISHED_REVISION_WHERE, RECORDING_NOT_HELD_WHERE, eligiblePerformanceWhere, eligibleProgrammeWhere } from "./publicEligibility";
 
 // The Studio Occasion workspace's READER: everything connected to one Occasion and, for each item, whether it is on the public Occasion page and why not.
 //
@@ -91,6 +91,21 @@ export async function loadOccasionWorkspace(occasionId: string): Promise<Occasio
   const derivedRevisions =
     visiblePerformanceIds.size === 0 ? [] : await prisma.recordingRevision.findMany({ where: { AND: [PUBLISHED_REVISION_WHERE, { performanceId: { in: [...visiblePerformanceIds] } }] }, select: { recordingId: true }, take: LIST_LIMIT });
 
+  // Which of these Performances (and so Programmes) have a PUBLISHED Recording that a Recording hold withholds. Used only to EXPLAIN a "not public" verdict: it asks
+  // the canonical rules directly (published = the Recording's own status PUBLISHED with its published revision; held = NOT the not-held fragment), and is never
+  // inferred from missing public data.
+  const shownPerformanceIds = performanceFacts.map((p) => p.id);
+  const heldRevisions =
+    shownPerformanceIds.length === 0
+      ? []
+      : await prisma.recordingRevision.findMany({
+          where: { performanceId: { in: shownPerformanceIds }, currentPublishedOf: { is: { status: "PUBLISHED", NOT: RECORDING_NOT_HELD_WHERE } } },
+          select: { performanceId: true, performance: { select: { programmeId: true } } },
+          take: LIST_LIMIT,
+        });
+  const heldPerformanceIds = new Set(heldRevisions.flatMap((r) => (r.performanceId ? [r.performanceId] : [])));
+  const heldProgrammeIds = new Set(heldRevisions.flatMap((r) => (r.performance ? [r.performance.programmeId] : [])));
+
   const draftCarry = new Set(revisionLinks.filter((l) => l.revision.currentDraftOf !== null).map((l) => l.revision.recordingId));
   // Which Recordings' CURRENT published revision (by pointer, whatever the recording's status now is) carries the Occasion: used only to EXPLAIN an exclusion
   // (an unpublished or archived recording whose published revision carries it). What is PUBLIC is decided by publishedCarryIds (the page's own fragment).
@@ -124,7 +139,7 @@ export async function loadOccasionWorkspace(occasionId: string): Promise<Occasio
   const directPerformance = new Set(taggedPerformanceIds);
   for (const p of performanceFacts) {
     const via: ConnectionVia = directPerformance.has(p.id) ? "DIRECT" : "VIA_PROGRAMME";
-    const own = classifyPerformance({ visible: visiblePerformanceIds.has(p.id), archived: p.archivedAt !== null, programmeArchived: p.programme.archivedAt !== null, venueArchived: p.venue.archivedAt !== null, hasPublishedRecording: p.revisions.length > 0 });
+    const own = classifyPerformance({ visible: visiblePerformanceIds.has(p.id), archived: p.archivedAt !== null, programmeArchived: p.programme.archivedAt !== null, venueArchived: p.venue.archivedAt !== null, hasPublishedRecording: p.revisions.length > 0, hasHeldRecording: heldPerformanceIds.has(p.id) });
     const c = wrap(own);
     items.push({
       kind: "PERFORMANCE",
@@ -139,7 +154,7 @@ export async function loadOccasionWorkspace(occasionId: string): Promise<Occasio
     });
   }
   for (const p of programmeFacts) {
-    const own = classifyProgramme({ visible: visibleProgrammeIds.has(p.id), archived: p.archivedAt !== null });
+    const own = classifyProgramme({ visible: visibleProgrammeIds.has(p.id), archived: p.archivedAt !== null, hasHeldRecording: heldProgrammeIds.has(p.id) });
     items.push({ kind: "PROGRAMME", id: p.id, label: p.title, via: "DIRECT", ...wrap(own), studioHref: `/studio/catalogue/programmes/${p.id}`, manageHref: `/studio/catalogue/programmes/${p.id}`, publicHref: own.status === "VISIBLE" && !occasionArchived ? `/programmes/${p.slug}` : null, detail: null });
   }
   for (const c0 of collectionFacts) {
