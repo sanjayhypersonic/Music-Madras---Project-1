@@ -34,12 +34,22 @@ export const FINGERPRINT_TABLES = [
 ] as const;
 
 /** Lifecycle integrity checks. Each query counts VIOLATIONS; a healthy database reports 0 for every one. */
-export const INTEGRITY_CHECKS: ReadonlyArray<{ name: string; description: string; sql: string }> = [
+/**
+ * `introducedBy` names the migration that creates what the check reads. While that migration is NOT yet applied the check is NOT APPLICABLE (null), not a failure:
+ * the pre-change fingerprint of a database that is about to receive the migration (runbook section 2) must be able to pass. Once the migration IS applied, a check
+ * that cannot run is a problem again.
+ */
+export const INTEGRITY_CHECKS: ReadonlyArray<{ name: string; description: string; sql: string; introducedBy?: string }> = [
   { name: "publishedWithoutRevision", description: "PUBLISHED recordings with no published revision", sql: `select count(*)::int as n from recordings where status = 'PUBLISHED' and "currentPublishedRevisionId" is null` },
   { name: "publishedPointerOfAnotherRecording", description: "published pointers naming a revision of a different recording", sql: `select count(*)::int as n from recordings r join recording_revisions v on v.id = r."currentPublishedRevisionId" where v."recordingId" <> r.id` },
   { name: "publishedPointerNotPublished", description: "published pointers naming a revision that is not marked PUBLISHED", sql: `select count(*)::int as n from recordings r join recording_revisions v on v.id = r."currentPublishedRevisionId" where v."revisionStatus" <> 'PUBLISHED'` },
   { name: "draftPointerNotDraft", description: "draft pointers naming a revision that is not a DRAFT of that recording", sql: `select count(*)::int as n from recordings r join recording_revisions v on v.id = r."currentDraftRevisionId" where v."revisionStatus" <> 'DRAFT' or v."recordingId" <> r.id` },
-  { name: "holdWithoutTime", description: "recording holds recorded without a time (should be impossible: a CHECK enforces it)", sql: `select count(*)::int as n from recordings where ("holdReason" is null) <> ("holdSetAt" is null)` },
+  {
+    name: "holdWithoutTime",
+    description: "recording holds recorded without a time (should be impossible: a CHECK enforces it)",
+    sql: `select count(*)::int as n from recordings where ("holdReason" is null) <> ("holdSetAt" is null)`,
+    introducedBy: "20261024100000_recording_level_holds",
+  },
 ];
 
 export interface DatabaseFingerprint {
@@ -48,7 +58,13 @@ export interface DatabaseFingerprint {
   target: string;
   migrations: { applied: number; latest: string | null; failed: string[] };
   counts: Record<string, number>;
-  integrity: Record<string, number>;
+  /** Violations per check; null = not applicable yet (the migration that introduces the check has not been applied to this database). */
+  integrity: Record<string, number | null>;
+}
+
+/** Whether a check can be judged on a database whose finished migrations are `finished`. */
+export function isCheckApplicable(check: { introducedBy?: string }, finished: ReadonlySet<string>): boolean {
+  return check.introducedBy === undefined || finished.has(check.introducedBy);
 }
 
 export interface FingerprintDifference {
@@ -60,18 +76,26 @@ export interface FingerprintDifference {
 const integrityMessage = (name: string, n: number) => (n < 0 ? `${name}: the check could not run (a table or column is missing)` : `${name}: ${n} violation(s)`);
 
 /** What differs between the fingerprint taken at the restore point's creation (`expected`) and the one taken of the database being verified (`actual`). */
-export function compareFingerprints(expected: DatabaseFingerprint, actual: DatabaseFingerprint): FingerprintDifference[] {
+export function compareFingerprints(expected: DatabaseFingerprint, actual: DatabaseFingerprint, options: { afterMigration?: boolean } = {}): FingerprintDifference[] {
   const out: FingerprintDifference[] = [];
   if (actual.migrations.failed.length > 0) out.push({ kind: "MIGRATIONS", message: `a migration is failed or half-applied: ${actual.migrations.failed.join(", ")}` });
-  if (expected.migrations.latest !== actual.migrations.latest || expected.migrations.applied !== actual.migrations.applied) {
+  // After a CONTROLLED migration the database legitimately has more migrations (and the tables they add) than the pre-change fingerprint; it must never have FEWER,
+  // and every table the old fingerprint counted must still hold the same number of rows.
+  const moreMigrationsAreExpected = options.afterMigration === true && actual.migrations.applied > expected.migrations.applied;
+  if (!moreMigrationsAreExpected && (expected.migrations.latest !== actual.migrations.latest || expected.migrations.applied !== actual.migrations.applied)) {
     out.push({ kind: "MIGRATIONS", message: `migrations differ: expected ${expected.migrations.applied} applied, latest ${expected.migrations.latest ?? "none"}; found ${actual.migrations.applied} applied, latest ${actual.migrations.latest ?? "none"}` });
+  }
+  if (options.afterMigration === true && actual.migrations.applied < expected.migrations.applied) {
+    out.push({ kind: "MIGRATIONS", message: `fewer migrations applied after the change (${actual.migrations.applied}) than before it (${expected.migrations.applied})` });
   }
   for (const table of Object.keys(expected.counts)) {
     if (!(table in actual.counts)) out.push({ kind: "MISSING_TABLE", message: `${table}: present in the expected fingerprint, absent in the database checked` });
     else if (expected.counts[table] !== actual.counts[table]) out.push({ kind: "COUNT", message: `${table}: expected ${expected.counts[table]} rows, found ${actual.counts[table]}` });
   }
-  for (const table of Object.keys(actual.counts)) if (!(table in expected.counts)) out.push({ kind: "MISSING_TABLE", message: `${table}: present in the database checked, absent in the expected fingerprint` });
-  for (const [name, n] of Object.entries(actual.integrity)) if (n !== 0) out.push({ kind: "INTEGRITY", message: integrityMessage(name, n) });
+  for (const table of Object.keys(actual.counts)) {
+    if (!(table in expected.counts) && !moreMigrationsAreExpected) out.push({ kind: "MISSING_TABLE", message: `${table}: present in the database checked, absent in the expected fingerprint` });
+  }
+  for (const [name, n] of Object.entries(actual.integrity)) if (n !== null && n !== 0) out.push({ kind: "INTEGRITY", message: integrityMessage(name, n) });
   return out;
 }
 
@@ -79,7 +103,7 @@ export function compareFingerprints(expected: DatabaseFingerprint, actual: Datab
 export function integrityProblems(fingerprint: DatabaseFingerprint): FingerprintDifference[] {
   const out: FingerprintDifference[] = [];
   if (fingerprint.migrations.failed.length > 0) out.push({ kind: "MIGRATIONS", message: `a migration is failed or half-applied: ${fingerprint.migrations.failed.join(", ")}` });
-  for (const [name, n] of Object.entries(fingerprint.integrity)) if (n !== 0) out.push({ kind: "INTEGRITY", message: integrityMessage(name, n) });
+  for (const [name, n] of Object.entries(fingerprint.integrity)) if (n !== null && n !== 0) out.push({ kind: "INTEGRITY", message: integrityMessage(name, n) });
   return out;
 }
 

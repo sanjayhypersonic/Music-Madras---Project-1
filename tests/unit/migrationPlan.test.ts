@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { EXPECTED_MIGRATIONS } from "../../modules/config/expectedMigrations";
-import { assessPending, assessRollback, compareMigrations, decideApply, describeDatabaseTarget, type ApplyRequest, type AppliedMigrationRow } from "../../modules/ops/migrationPlan";
+import { ROLLBACK_DATA_RISKS, assessPending, assessRollback, assessRollbackDataRisks, compareMigrations, decideApply, describeDatabaseTarget, type ApplyRequest, type AppliedMigrationRow } from "../../modules/ops/migrationPlan";
 import { renderManifest } from "../../modules/ops/migrationManifest";
 import { readdirSync } from "fs";
 
@@ -138,5 +138,45 @@ describe("the operator scripts' safety properties (source level)", () => {
     expect(src).toMatch(/DOTENV_CONFIG_PATH:\s*emptyDotenv/);
     expect(src.indexOf("decideApply(")).toBeLessThan(src.indexOf("spawnSync("));
     expect(src.indexOf("if (!decision.allowed) refuse(")).toBeLessThan(src.indexOf("spawnSync("));
+  });
+});
+
+describe("assessRollbackDataRisks: a schema-compatible rollback can still stop protecting data", () => {
+  const HOLDS = "20261024100000_recording_level_holds";
+  const VIDEO = "20261021110000_phase6k2_video_exposure_approvals_and_review";
+  const REL = "20261020120000_phase6j11b_recording_revision_relationships";
+  const all = [REL, VIDEO, HOLDS];
+  const counts = (over: Record<string, number | null> = {}) => ({ "recording-holds": 0, "video-exposure-holds": 0, "revision-scoped-relationships": 0, ...over });
+
+  it("names a Recording hold as BLOCKING when the previous release has no holds, and says what would happen", () => {
+    const findings = assessRollbackDataRisks([], all, counts({ "recording-holds": 2 }));
+    expect(findings.blocking).toHaveLength(1);
+    expect(findings.blocking[0]).toMatch(/2 Recording\(s\) are on hold.*show them/);
+  });
+
+  it("no rows, no finding; a risk for data the previous release understands (or the database never had) is skipped", () => {
+    expect(assessRollbackDataRisks([], all, counts())).toEqual({ blocking: [], warnings: [] });
+    expect(assessRollbackDataRisks([HOLDS], all, counts({ "recording-holds": 5 }))).toEqual({ blocking: [], warnings: [] });
+    expect(assessRollbackDataRisks([], [REL], counts({ "recording-holds": 5 }))).toEqual({ blocking: [], warnings: [] });
+  });
+
+  it("video holds block; revision-scoped relationships only warn", () => {
+    const findings = assessRollbackDataRisks([], all, counts({ "video-exposure-holds": 1, "revision-scoped-relationships": 9 }));
+    expect(findings.blocking).toHaveLength(1);
+    expect(findings.warnings).toHaveLength(1);
+    expect(findings.warnings[0]).toMatch(/9 revision-scoped/);
+  });
+
+  it("a count that could not be taken is BLOCKING: unknown is not safe", () => {
+    expect(assessRollbackDataRisks([], all, counts({ "recording-holds": null })).blocking[0]).toMatch(/could not run/);
+  });
+
+  it("every risk names a migration this code actually ships, and a read-only query", () => {
+    const shipped = new Set(readdirSync(path.resolve(__dirname, "../../prisma/migrations")));
+    for (const risk of ROLLBACK_DATA_RISKS) {
+      expect(shipped.has(risk.introducedBy), risk.id).toBe(true);
+      expect(risk.sql.trim().toLowerCase().startsWith("select"), risk.id).toBe(true);
+      expect(risk.sql).not.toMatch(/\b(insert|update|delete|drop|alter|truncate)\b/i);
+    }
   });
 });

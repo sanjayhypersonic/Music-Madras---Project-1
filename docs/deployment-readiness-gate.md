@@ -62,7 +62,8 @@ Record the evidence (command or request, status, timestamp, who) for each item. 
 ## 6. What is still pending
 
 - Selection of the hosting provider, and the provider-specific implementation of sections 2 and 4 (preview/staging environments, pre-promotion checks, traffic routing, instant rollback, readiness probes).
-- CI automation, error reporting, uptime monitoring and alerting.
+- CI automation, the external uptime monitor and log-drain alert rules. (An application-side operator alert to `ALERT_WEBHOOK_URL` now exists and is tested with a fake destination; it still needs a real destination and a proven test: register R-28, O-07.)
 - ~~A dedicated readiness route~~ **done**: `GET /api/ready` checks the database and that every migration this release needs is applied. A host's probe should still check both `/api/health` and `/api/ready`.
+- Rehearsal of the migration, fingerprint, rollback-check and restore steps on **disposable local databases** is done and recorded (`docs/runbooks/production-launch.md` section 11); what remains is the same on a clone of the real data on the chosen host.
 - A rehearsal of the whole gate on the chosen host, recorded as evidence. **Until that rehearsal passes, this gate is not operational.**
 </content>

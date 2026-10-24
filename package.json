@@ -34,6 +34,8 @@
     "migrations:manifest": "tsx scripts/writeMigrationManifest.ts",
     "ops:check-config": "tsx scripts/checkProductionConfig.ts",
     "ops:smoke": "tsx scripts/smokeTest.ts",
+    "ops:test-alert": "tsx scripts/testAlert.ts",
+    "ops:probe-visibility": "tsx scripts/visibilityProbe.ts",
     "ops:verify-database": "tsx scripts/verifyDatabase.ts"
   },
   "dependencies": {

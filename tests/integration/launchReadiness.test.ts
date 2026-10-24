@@ -6,6 +6,7 @@ import { loadReadinessFacts } from "../../modules/db/repositories/readinessRepos
 import { assessReadiness } from "../../modules/ops/readiness";
 import { compareMigrations } from "../../modules/ops/migrationPlan";
 import { FINGERPRINT_TABLES, INTEGRITY_CHECKS } from "../../modules/ops/databaseFingerprint";
+import { ROLLBACK_DATA_RISKS } from "../../modules/ops/migrationPlan";
 import { reportRequestError } from "../../modules/ops/reportRequestError";
 import { createDraftRecording, findPublishedRecordingBySlug, publishCurrentDraft } from "../../modules/db/repositories/recordingRepository";
 import * as entityPages from "../../modules/db/repositories/entityRelationshipsRepository";
@@ -87,6 +88,10 @@ describe("the database fingerprint, run for real", () => {
     const tables = await present();
     for (const table of FINGERPRINT_TABLES) expect(tables.has(table), table).toBe(true);
     for (const check of INTEGRITY_CHECKS) expect(await run(check.sql), check.name).toBeGreaterThanOrEqual(0);
+  }, T);
+
+  it("every rollback data-risk query runs against the current schema (a rollback-check must never report a risk it could not measure)", async () => {
+    for (const risk of ROLLBACK_DATA_RISKS) expect(await run(risk.sql), risk.id).toBeGreaterThanOrEqual(0);
   }, T);
 
   it("DETECTS a lifecycle pointer that has been corrupted, and sees it clean again after repair", async () => {

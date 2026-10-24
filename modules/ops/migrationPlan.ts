@@ -127,6 +127,64 @@ export function assessRollback(input: { previousShipped: readonly string[]; data
   return { compatible: reasons.length === 0, extraForPrevious, missingForPrevious: missing, reasons };
 }
 
+// ROLLBACK DATA RISKS. assessRollback answers a SCHEMA question: would the previous release's queries still run? It cannot know what the previous release does with
+// DATA it has never heard of. Returning traffic to a release that predates a protective feature does not remove that feature's data; it makes the release ignore it:
+// a Recording on hold would be shown publicly again by a release that has no holds. Each risk below names the migration that introduced the data, a read-only count
+// of the rows that matter, and whether finding any is BLOCKING (content that was withheld would become public) or a WARNING (stale or hidden, but not a disclosure).
+
+export interface RollbackDataRisk {
+  id: string;
+  /** The migration that introduced the data. The risk applies only when the database has it and the previous release does not. */
+  introducedBy: string;
+  severity: "BLOCKING" | "WARNING";
+  /** A read-only query returning one row with a count `n`. */
+  sql: string;
+  describe: (n: number) => string;
+}
+
+export const ROLLBACK_DATA_RISKS: readonly RollbackDataRisk[] = [
+  {
+    id: "recording-holds",
+    introducedBy: "20261024100000_recording_level_holds",
+    severity: "BLOCKING",
+    sql: `select count(*)::int as n from recordings where "holdReason" is not null`,
+    describe: (n) => `${n} Recording(s) are on hold. The previous release does not know holds and would show them (and what only they made public) on the public Museum again.`,
+  },
+  {
+    id: "video-exposure-holds",
+    introducedBy: "20261021110000_phase6k2_video_exposure_approvals_and_review",
+    severity: "BLOCKING",
+    sql: `select count(*)::int as n from video_exposure_reviews where "holdReason" is not null`,
+    describe: (n) => `${n} video(s) are on hold. The previous release does not know video holds and approvals and could expose them.`,
+  },
+  {
+    id: "revision-scoped-relationships",
+    introducedBy: "20261020120000_phase6j11b_recording_revision_relationships",
+    severity: "WARNING",
+    sql: `select ((select count(*) from recording_revision_sources) + (select count(*) from recording_revision_rights) + (select count(*) from recording_revision_occasions))::int as n`,
+    describe: (n) => `${n} revision-scoped source, rights and occasion link(s) exist. The previous release does not read them: it reads the frozen legacy rows, so those relationships would be missing or out of date until the current release returns.`,
+  },
+];
+
+export interface RollbackDataFindings {
+  blocking: string[];
+  warnings: string[];
+}
+
+/** `counts` maps a risk id to its count, or to null when the count could not be taken (treated as blocking: unknown is not safe). */
+export function assessRollbackDataRisks(previousShipped: readonly string[], databaseFinished: readonly string[], counts: Readonly<Record<string, number | null>>): RollbackDataFindings {
+  const previous = new Set(previousShipped);
+  const db = new Set(databaseFinished);
+  const out: RollbackDataFindings = { blocking: [], warnings: [] };
+  for (const risk of ROLLBACK_DATA_RISKS) {
+    if (!db.has(risk.introducedBy) || previous.has(risk.introducedBy)) continue; // the database lacks the data, or the previous release understands it
+    const n = counts[risk.id];
+    if (n === undefined) continue;
+    if (n === null) out.blocking.push(`${risk.id}: the check could not run, so it cannot be shown that the previous release is safe with this data.`);
+    else if (n > 0) (risk.severity === "BLOCKING" ? out.blocking : out.warnings).push(risk.describe(n));
+  }
+  return out;
+}
 /** `host:port/database`, never credentials. */
 export function describeDatabaseTarget(connectionString: string): string | null {
   try {

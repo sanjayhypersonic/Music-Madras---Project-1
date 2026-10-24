@@ -1,4 +1,5 @@
 import { parsePublicSiteUrl } from "./siteOrigin";
+import { parseAlertConfig } from "../ops/operatorAlert";
 
 // Phase 6J-9A — fail-fast validation of the security-critical configuration a PRODUCTION
 // server cannot run safely without. Called once at server start (instrumentation.ts). Verified on
@@ -115,6 +116,14 @@ export function assessProductionConfig(env: Env): ProductionConfigReport {
     });
   } else if (env.CRON_SECRET.trim().length < MIN_CRON_SECRET_LENGTH) {
     problems.push({ variable: "CRON_SECRET", problem: `is too short (use at least ${MIN_CRON_SECRET_LENGTH} random characters).` });
+  }
+
+  // --- operator alerts (optional capability; but a value that cannot work is refused) -----------------------------------
+  const alerts = parseAlertConfig(env);
+  if (alerts.state === "INVALID") {
+    problems.push({ variable: "ALERT_WEBHOOK_URL", problem: alerts.reason });
+  } else if (alerts.state === "UNSET") {
+    warnings.push({ variable: "ALERT_WEBHOOK_URL", problem: "is not set; the application sends no alert to anyone (it relies entirely on the host's uptime monitor and log-drain alert rules, which must then exist)." });
   }
 
   return { problems, warnings };

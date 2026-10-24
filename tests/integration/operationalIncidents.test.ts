@@ -217,6 +217,71 @@ describe("the recurring-incident notification", () => {
   }, T);
 });
 
+describe("the operator alert when an incident recurs (ALERT_WEBHOOK_URL)", () => {
+  const WEBHOOK = "https://hooks.example.test/services/T1/B1/integration-webhook-token";
+  const sent: Array<{ url: string; body: Record<string, unknown> }> = [];
+
+  it("sends ONE alert at the recurrence, none at the first occurrence or inside the window, with only a code (no subject id, no URL), and never when unconfigured", async () => {
+    const { resetAlertCooldowns } = await import("../../modules/ops/operatorAlert");
+    resetAlertCooldowns();
+    sent.length = 0;
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      sent.push({ url, body: JSON.parse(init.body as string) });
+      return new Response("ok", { status: 200 });
+    });
+    try {
+      // unconfigured: the recurrence is still evaluated, but nothing leaves the process
+      const quiet = newSubject();
+      const t0 = new Date("2026-05-01T09:00:00Z");
+      await rec(quiet, t0);
+      expect((await rec(quiet, new Date(t0.getTime() + 1000))).notificationEvaluated).toBe(true);
+      expect(sent).toHaveLength(0);
+
+      vi.stubEnv("ALERT_WEBHOOK_URL", WEBHOOK);
+      await prisma.operationalIncident.deleteMany({ where: { subjectId: quiet.id } });
+      await resetNotification();
+      resetAlertCooldowns();
+      const subject = newSubject();
+      await rec(subject, t0);
+      expect(sent).toHaveLength(0); // a first occurrence interrupts nobody
+      expect((await rec(subject, new Date(t0.getTime() + 1000))).notificationEvaluated).toBe(true);
+      expect(sent).toHaveLength(1);
+      expect(sent[0].url).toBe(WEBHOOK);
+      expect(sent[0].body).toMatchObject({ event: "operator_alert", kind: "INCIDENT_RECURRING", code: "PUBLISHED_REVISION_NOT_PUBLISHED" });
+      expect(JSON.stringify(sent[0].body)).not.toContain(subject.id);
+      expect(JSON.stringify(sent[0].body)).not.toContain("integration-webhook-token");
+      for (let i = 2; i < 12; i += 1) await rec(subject, new Date(t0.getTime() + i * 1000));
+      expect(sent).toHaveLength(1); // inside the window: no flood
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  }, T);
+
+  it("a broken alert destination never stops the incident from being recorded or the in-app notification from being raised", async () => {
+    const { resetAlertCooldowns } = await import("../../modules/ops/operatorAlert");
+    resetAlertCooldowns();
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("getaddrinfo ENOTFOUND hooks.example.test");
+    });
+    vi.stubEnv("ALERT_WEBHOOK_URL", WEBHOOK);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const subject = newSubject();
+      await rec(subject);
+      const outcome = await rec(subject);
+      expect(outcome.notificationEvaluated).toBe(true);
+      expect((await rowsFor(subject.id))[0].occurrenceCount).toBe(2);
+      expect(await notification()).not.toBeNull();
+      expect(logged.mock.calls.map((c) => c.join(" ")).join("\n")).not.toContain("integration-webhook-token");
+    } finally {
+      logged.mockRestore();
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  }, T);
+});
+
 describe("resolution and reopening", () => {
   it("resolving keeps the incident on record, resolves the notification when nothing recurring is left, and audits who did it", async () => {
     await resetNotification();

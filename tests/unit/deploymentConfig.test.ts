@@ -16,6 +16,7 @@ const GOOD = {
   SMTP_URL: "smtps://user:pw@smtp.example.net:465",
   EMAIL_FROM: "studio@museum.example",
   CRON_SECRET: "fedcba9876543210fedcba9876543210fedcba",
+  ALERT_WEBHOOK_URL: "https://hooks.example.net/services/T1/B1/webhooktoken",
 };
 const problemsOf = (over: Record<string, string | undefined>) => assessDeploymentConfig({ ...GOOD, ...over }).problems.map((p) => p.variable);
 const warningsOf = (over: Record<string, string | undefined>) => assessDeploymentConfig({ ...GOOD, ...over }).warnings.map((w) => w.variable);

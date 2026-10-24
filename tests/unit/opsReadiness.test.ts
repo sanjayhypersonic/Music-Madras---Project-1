@@ -37,7 +37,11 @@ describe("the /api/ready route (source level)", () => {
   it("returns only a status word to the caller, never a code, a migration name or a database detail; is dynamic and uncacheable", () => {
     expect(route).toMatch(/export const dynamic = "force-dynamic"/);
     expect(route).toMatch(/"Cache-Control": "no-store"/);
-    expect(route).not.toMatch(/result\.code|result\.detail|EXPECTED_MIGRATIONS\s*\)\s*,\s*\{/);
+    // The response bodies carry a status word only. The code goes to the log line and, as a bounded code, to the operator alert; never to the caller.
+    expect(route).not.toMatch(/Response\.json\([^;]*result\.(code|detail)/);
+    expect(route).not.toMatch(/result\.detail|EXPECTED_MIGRATIONS\s*\)\s*,\s*\{/);
+    expect((route.match(/result\.code/g) ?? []).length).toBe(2); // the alert's code and its dedupe key, both inside sendOperatorAlert(...)
+    expect(route).toMatch(/sendOperatorAlert\(\{ kind: "NOT_READY", code: result\.code/);
     expect(route.match(/Response\.json\(\{ status:/g)?.length).toBe(2);
     expect(route).toMatch(/console\.error\(readinessLogLine\(result\)\)/);
   });

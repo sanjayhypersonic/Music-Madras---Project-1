@@ -93,4 +93,4 @@ The job is hosting-neutral. Any of these can call it; pick according to where th
 
 ## Not done
 
-No scheduler, no hosting choice, no monitoring or alerting service. Studio → Health reports what ran; alerting on a stopped or failing schedule from outside the application is the deployment's to add.
+No scheduler and no hosting choice. Studio → Health reports what ran. Since 2026-10-25 a run that does not fully succeed (and one that cannot be recorded) also sends an operator alert to `ALERT_WEBHOOK_URL` when that is configured (`docs/runbooks/production-launch.md` section 12); a schedule that has **stopped** sends nothing, so alerting on a missing call (the host's scheduler failure alerts, and the red notice in Studio → Health after three hours) is still the deployment's to add. The route declares `maxDuration = 60`; a host that does not honour it must be configured to allow a request of at least a minute.

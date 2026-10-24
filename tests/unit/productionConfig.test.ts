@@ -17,6 +17,7 @@ const GOOD_ENV = {
   SMTP_URL: `smtps://mailer:${SECRET_SENTINEL}@smtp.example.org:465`,
   EMAIL_FROM: "Music Madras <studio@example.org>",
   CRON_SECRET: `${SECRET_SENTINEL}-cron-0123456789abcdef`,
+  ALERT_WEBHOOK_URL: `https://hooks.example.org/services/${SECRET_SENTINEL}-webhook-token`,
 };
 
 const problemsFor = (overrides: Record<string, string | undefined>) => assessProductionConfig({ ...GOOD_ENV, ...overrides }).problems.map((p) => p.variable);
@@ -131,6 +132,27 @@ describe("assertProductionConfig", () => {
     expect(message).not.toContain(SECRET_SENTINEL);
     expect(message).not.toContain("tiny-secret-xyz");
     expect(message).not.toContain("mysql://"); // the offending value is not echoed (the hint text itself names the expected scheme)
+  });
+});
+
+describe("ALERT_WEBHOOK_URL (operator alerts)", () => {
+  it("is optional but warned about when unset, because then the application tells no one", () => {
+    const report = assessProductionConfig({ ...GOOD_ENV, ALERT_WEBHOOK_URL: undefined });
+    expect(report.problems).toEqual([]);
+    expect(report.warnings.map((w) => w.variable)).toEqual(["ALERT_WEBHOOK_URL"]);
+  });
+
+  it("refuses a value that cannot work (not https, credentials in the URL, this machine, not a URL) and never echoes it", () => {
+    for (const value of ["http://hooks.example.org/x", "https://user:pw@hooks.example.org/x", "https://localhost/x", "not a url"]) {
+      const report = assessProductionConfig({ ...GOOD_ENV, ALERT_WEBHOOK_URL: value });
+      expect(report.problems.map((p) => p.variable)).toEqual(["ALERT_WEBHOOK_URL"]);
+      expect(JSON.stringify(report)).not.toContain(value);
+    }
+    expect(() => assertProductionConfig({ ...GOOD_ENV, ALERT_WEBHOOK_URL: "http://hooks.example.org/x" })).toThrow(ProductionConfigurationError);
+  });
+
+  it("a valid URL is accepted and its secret path never appears in the report", () => {
+    expect(JSON.stringify(assessProductionConfig(GOOD_ENV))).not.toContain(SECRET_SENTINEL);
   });
 });
 

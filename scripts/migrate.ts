@@ -21,7 +21,7 @@ import { existsSync, readFileSync, readdirSync } from "fs";
 import os from "os";
 import path from "path";
 import { Client } from "pg";
-import { assessPending, assessRollback, compareMigrations, decideApply, describeDatabaseTarget, type AppliedMigrationRow, type MigrationStatus } from "../modules/ops/migrationPlan";
+import { ROLLBACK_DATA_RISKS, assessPending, assessRollback, assessRollbackDataRisks, compareMigrations, decideApply, describeDatabaseTarget, type AppliedMigrationRow, type MigrationStatus } from "../modules/ops/migrationPlan";
 import { summariseFindings } from "../modules/ops/migrationSafety";
 
 const EXIT = { OK: 0, FAILED: 2, REFUSED: 4 } as const;
@@ -57,6 +57,30 @@ async function readRows(url: string): Promise<AppliedMigrationRow[]> {
   } finally {
     await client.end();
   }
+}
+
+/** Read-only counts of the rows a rollback would stop protecting (modules/ops/migrationPlan.ts ROLLBACK_DATA_RISKS); null when a count could not be taken. */
+async function countRollbackDataRisks(url: string): Promise<Record<string, number | null>> {
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  const counts: Record<string, number | null> = {};
+  try {
+    await client.query("BEGIN READ ONLY");
+    for (const risk of ROLLBACK_DATA_RISKS) {
+      try {
+        await client.query("SAVEPOINT risk");
+        counts[risk.id] = Number((await client.query<{ n: number }>(risk.sql)).rows[0].n);
+        await client.query("RELEASE SAVEPOINT risk");
+      } catch {
+        counts[risk.id] = null;
+        await client.query("ROLLBACK TO SAVEPOINT risk");
+      }
+    }
+    await client.query("ROLLBACK");
+  } finally {
+    await client.end();
+  }
+  return counts;
 }
 
 function sqlMap(names: string[]): Record<string, string> {
@@ -118,14 +142,19 @@ async function main(): Promise<number> {
     }
     const finished = rows.filter((r) => r.finishedAt !== null && r.rolledBackAt === null).map((r) => r.name);
     const report = assessRollback({ previousShipped: previous, databaseFinished: finished, sqlByName: sqlMap(finished) });
-    if (json) console.log(JSON.stringify({ target, previousRef: ref, compatible: report.compatible, extraForPrevious: report.extraForPrevious.map((a) => ({ name: a.name, additiveOnly: a.additiveOnly })), missingForPrevious: report.missingForPrevious, reasons: report.reasons }, null, 2));
+    // The schema answer is not the whole answer: data the previous release does not understand (holds above all) would stop being protected.
+    const dataRisks = assessRollbackDataRisks(previous, finished, await countRollbackDataRisks(url));
+    const safe = report.compatible && dataRisks.blocking.length === 0;
+    if (json) console.log(JSON.stringify({ target, previousRef: ref, safe, schemaCompatible: report.compatible, extraForPrevious: report.extraForPrevious.map((a) => ({ name: a.name, additiveOnly: a.additiveOnly })), missingForPrevious: report.missingForPrevious, reasons: report.reasons, dataBlocking: dataRisks.blocking, dataWarnings: dataRisks.warnings }, null, 2));
     else {
       console.log(`Target: ${target}   previous release: ${ref} (${previous.length} migrations)`);
       console.log(`Migrations the previous release does not know: ${report.extraForPrevious.length}`);
       for (const a of report.extraForPrevious) console.log(`  ${a.name}: ${a.additiveOnly ? "additive, the previous release can run on it" : "NOT backward-compatible"}`);
-      console.log(report.compatible ? "RESULT: returning traffic to the previous release is safe for the schema." : `RESULT: NOT safe.\n  - ${report.reasons.join("\n  - ")}`);
+      for (const w of dataRisks.warnings) console.log(`  WARNING (data): ${w}`);
+      if (safe) console.log("RESULT: returning traffic to the previous release is safe for the schema and for the data it would stop protecting. (This is a compatibility check, not a rollback: the database keeps the newer additions.)");
+      else console.log(`RESULT: NOT safe.\n  - ${[...report.reasons, ...dataRisks.blocking].join("\n  - ")}`);
     }
-    return report.compatible ? EXIT.OK : EXIT.FAILED;
+    return safe ? EXIT.OK : EXIT.FAILED;
   }
 
   // apply

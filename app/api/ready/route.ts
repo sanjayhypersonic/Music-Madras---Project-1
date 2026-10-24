@@ -1,6 +1,7 @@
 import { EXPECTED_MIGRATIONS } from "../../../modules/config/expectedMigrations";
 import { loadReadinessFacts } from "../../../modules/db/repositories/readinessRepository";
 import { assessReadiness, readinessLogLine } from "../../../modules/ops/readiness";
+import { sendOperatorAlert } from "../../../modules/ops/operatorAlert";
 
 // READINESS probe (launch readiness; docs/deployment-readiness-gate.md §3-§4). /api/health only says the process is up; this says the deployment can serve real
 // traffic: the database answers AND it has applied every migration this release was built for (modules/config/expectedMigrations.ts). A host's readiness check,
@@ -29,6 +30,10 @@ export async function GET() {
   }
   const result = assessReadiness(EXPECTED_MIGRATIONS, await loadReadinessFacts());
   memo = { at: now, ready: result.ready };
-  if (!result.ready) console.error(readinessLogLine(result));
+  if (!result.ready) {
+    console.error(readinessLogLine(result));
+    // Tell the operator once per cooldown per instance (the code only; never the migration names or the database's own error).
+    await sendOperatorAlert({ kind: "NOT_READY", code: result.code, dedupeKey: `ready:${result.code}` });
+  }
   return Response.json({ status: result.ready ? "ready" : "not-ready" }, { status: result.ready ? 200 : 503, headers: NO_STORE });
 }

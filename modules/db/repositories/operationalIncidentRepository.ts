@@ -12,6 +12,7 @@ import {
   type IncidentInput,
   type OperationalIncidentKindName,
 } from "../../mmke/operations/operationalIncidents";
+import { sendOperatorAlert } from "../../ops/operatorAlert";
 import { raiseNotification, refreshOpenNotificationText, resolveNotification } from "./studioNotificationRepository";
 
 // Operational incidents (project register R-15, first slice) — the durable, deduplicated record of integrity problems the platform detects and works
@@ -75,6 +76,8 @@ export async function recordOperationalIncident(input: IncidentInput, now: Date 
       try {
         await syncIncidentNotification(incident.kind);
         outcome.notificationEvaluated = true;
+        // The same moment, outside the application: a recurring incident is the one that deserves a person's attention (once per notification window).
+        await sendOperatorAlert({ kind: "INCIDENT_RECURRING", code: incident.reasonCode, dedupeKey: `incident:${row.id}` });
       } catch (err) {
         // The notification could not be raised: hand the claim back so the NEXT recurrence tries again instead of waiting out the window. The incident
         // itself is already recorded; failing here must not lose it. (If even this release fails, the retry waits for the window: see the limitation.)
