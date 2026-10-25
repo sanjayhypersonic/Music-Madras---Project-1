@@ -48,7 +48,7 @@ Generate a value with any secure generator and store it only in the deployment's
 | Email delivery | every few minutes (a queued email should not wait; retries back off 1 min → 2 min, capped at 1 h) |
 | Lifecycle, metadata, review and playlist checks | hourly is plenty (reminders are at most one per `unlistedReview.cadenceDays`) |
 
-One schedule every 5–15 minutes covers all of it. Overlapping runs are safe (see above). Studio's own "run when a page is opened" refresh also runs the first four steps, throttled, but keeps no record and sends no email.
+One schedule every 5–15 minutes covers all of it. **The repository's `vercel.json` currently schedules once a day at 03:30 UTC (09:00 IST)**, the most the free Vercel Hobby plan allows: the sweeps are fine daily, but queued notification emails then wait up to a day and Studio → Health's "probably stopped" notice now appears only after 26 hours without a run (24 h, the Hobby plan's up-to-an-hour timing latitude, and a margin; `modules/jobs/stewardshipSchedule.ts`), so one missed day is noticed (register R-29). Overlapping runs are safe (see above). Studio's own "run when a page is opened" refresh also runs the first four steps, throttled, but keeps no record and sends no email.
 
 **Duration.** Each run bounds the time the sweeps may keep starting new batches (40 seconds); the email step still runs after them. Whatever platform runs the scheduler must allow a request of at least a minute; this is a hosting decision and is not made here.
 

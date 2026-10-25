@@ -1,4 +1,5 @@
 import { prisma } from "../client";
+import { STEWARDSHIP_STALE_AFTER_MS, isStewardshipOverdue } from "../../jobs/stewardshipSchedule";
 import type { Prisma, StewardshipRunStatus, StewardshipStepStatus } from "@prisma/client";
 
 // Phase 6K lifecycle hardening (F10) — the durable record of the scheduled stewardship job, and the lease that keeps two invocations from running it at
@@ -16,8 +17,9 @@ export const STEWARDSHIP_LEASE_NAME = "stewardship";
 export const STEWARDSHIP_LEASE_MS = 10 * 60_000;
 /** Runs kept (the oldest are pruned when a run finishes). */
 export const STEWARDSHIP_RETAINED_RUNS = 500;
-/** How long without a run starting before Studio says the job has probably stopped. A reporting threshold only: nothing is decided by it. */
-export const STEWARDSHIP_STALE_AFTER_MS = 3 * 60 * 60_000;
+// How long without a run starting before Studio says the job has probably stopped: 26 hours, for the once-a-day schedule in vercel.json
+// (modules/jobs/stewardshipSchedule.ts says why). A reporting threshold only: nothing is decided by it.
+export { STEWARDSHIP_STALE_AFTER_MS };
 
 export type StepName = "lifecycleInvariants" | "metadataReview" | "unlistedReview" | "playlistChecks" | "emailDelivery";
 
@@ -162,7 +164,7 @@ export async function loadStewardshipHealth(now: Date = new Date()): Promise<Ste
     lastRunAt: lastRun?.startedAt ?? null,
     lastRunStatus: lastRun?.status ?? null,
     lastFullSuccessAt: lastFull?.startedAt ?? null,
-    stale: lastRun === null || now.getTime() - lastRun.startedAt.getTime() > STEWARDSHIP_STALE_AFTER_MS,
+    stale: isStewardshipOverdue(lastRun?.startedAt ?? null, now),
     steps,
     recentRuns: recent.map((r) => ({ id: r.id, trigger: r.trigger, status: r.status, startedAt: r.startedAt, finishedAt: r.finishedAt, problems: r.steps.filter((s) => s.status === "FAILED" || s.status === "PARTIAL").length })),
   };
