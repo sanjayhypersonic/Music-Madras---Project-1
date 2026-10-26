@@ -14,9 +14,10 @@ import { CHANNEL_INFO, VIDEOS_DATA } from './data';
 import MusicMadrasStudio from './components/studio/MusicMadrasStudio';
 import { KnowledgePack } from './components/studio/types';
 import { YouTubeProvider, useYouTube } from './context/YouTubeContext';
+import { getLatestUpload } from './lib/youtube';
 
 function AppContent() {
-  const { videos, channelStats } = useYouTube();
+  const { videos, playlists, channelStats } = useYouTube();
   const [activeTab, setActiveTab] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
@@ -177,7 +178,6 @@ function AppContent() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Card 1: MusicMadras Archive */}
-                  {/* Card 1: Showcases */}
                   <div 
                     onClick={() => setActiveTab('all')}
                     className="group bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/50 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col justify-between"
@@ -185,8 +185,8 @@ function AppContent() {
                     <div>
                       <div className="relative h-32 w-full overflow-hidden bg-black">
                         <SafeImage 
-                          src="https://i.ytimg.com/vi/zEQmnmwr5UE/hqdefault.jpg"
-                          alt="MusicMadras Archive — Dingiri Dingalae"
+                          src={videos[0]?.thumbnailUrl || "https://i.ytimg.com/vi/zEQmnmwr5UE/hqdefault.jpg"}
+                          alt={`MusicMadras Archive — ${videos[0]?.title || 'Dingiri Dingalae'}`}
                           fallbackType="music"
                           title="MusicMadras Archive"
                           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-90"
@@ -220,8 +220,8 @@ function AppContent() {
                     <div>
                       <div className="relative h-32 w-full overflow-hidden bg-black">
                         <SafeImage 
-                          src="https://i.ytimg.com/vi/rUrS7Pb2W90/hqdefault.jpg"
-                          alt="Curated Playlists — Christian Wedding Music"
+                          src={playlists[0]?.thumbnailUrl || "https://i.ytimg.com/vi/rUrS7Pb2W90/hqdefault.jpg"}
+                          alt={`Curated Playlists — ${playlists[0]?.title || 'Curated Series'}`}
                           fallbackType="playlist"
                           title="Curated Playlists"
                           className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 opacity-90"
@@ -318,34 +318,151 @@ function AppContent() {
                   </div>
                 </div>
 
-                {/* Featured Video Archives Grid */}
-                <div className="space-y-6 pt-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <h3 className="font-serif text-lg font-bold text-zinc-100 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-                        Featured Concert highlights
-                      </h3>
-                      <p className="text-[11px] text-zinc-400">
-                        Top live classical recordings captured on location with absolute sound precision.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setActiveTab('all');
-                        if (videos.length > 0) {
-                          setActiveVideoId(videos[0].id);
-                        }
-                      }}
-                      aria-label="View all live concert highlights"
-                      className="text-xs font-bold text-amber-500 hover:underline flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1"
-                    >
-                      View All Highlights →
-                    </button>
-                  </div>
+                {/* Homepage Spotlight Recital: Dynamically features the newest uploaded live video sorted strictly by date */}
+                {(() => {
+                  const latestRelease = getLatestUpload(videos) || videos[0];
+                  const featuredConcerts = videos.filter(v => v.id !== latestRelease?.id).slice(0, 3);
+                  if (!latestRelease) return null;
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {videos.slice(0, 3).map((video) => (
+                  return (
+                    <>
+                      <div className="relative overflow-hidden rounded-3xl border border-amber-500/30 bg-gradient-to-br from-zinc-900/90 via-zinc-900/50 to-zinc-950 p-6 md:p-8 shadow-2xl backdrop-blur-md">
+                        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+                        
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+                          {/* Video Preview */}
+                          <div 
+                            onClick={() => {
+                              setActiveVideoId(latestRelease.id);
+                              setActiveTab('all');
+                            }}
+                            className="lg:col-span-7 group relative aspect-video w-full overflow-hidden rounded-2xl bg-black cursor-pointer shadow-xl border border-zinc-800 hover:border-amber-500/50 transition-all duration-300"
+                          >
+                            <SafeImage
+                              src={latestRelease.thumbnailUrl}
+                              alt={latestRelease.title}
+                              fallbackType="video"
+                              title={latestRelease.title}
+                              className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-black/20" />
+                            
+                            {/* Play Button Overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-16 h-16 rounded-full bg-amber-500 text-zinc-950 flex items-center justify-center shadow-2xl transform scale-90 group-hover:scale-110 transition-transform duration-300">
+                                <Play className="w-7 h-7 fill-current pl-1" />
+                              </div>
+                            </div>
+
+                            {/* Video Tags */}
+                            <div className="absolute top-3 left-3 flex items-center gap-2">
+                              <span className="flex items-center gap-1.5 px-3 py-1 bg-red-600 text-white text-[10px] font-black uppercase rounded-full shadow-md">
+                                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                Latest Live Release
+                              </span>
+                              <span className="px-2.5 py-1 bg-black/75 backdrop-blur-sm text-amber-400 border border-amber-500/30 text-[10px] font-bold rounded-full uppercase">
+                                {latestRelease.category}
+                              </span>
+                            </div>
+
+                            <div className="absolute bottom-3 right-3 px-2 py-0.5 bg-black/85 backdrop-blur-sm rounded text-[11px] font-mono font-bold text-zinc-200">
+                              {latestRelease.duration}
+                            </div>
+                          </div>
+
+                          {/* Recital Context & Metadata */}
+                          <div className="lg:col-span-5 space-y-4 text-left">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+                                <Radio className="w-3.5 h-3.5 animate-pulse" />
+                                <span>@MusicMadras Live Acoustic Capture</span>
+                              </div>
+                              <h3 
+                                onClick={() => {
+                                  setActiveVideoId(latestRelease.id);
+                                  setActiveTab('all');
+                                }}
+                                className="font-serif text-xl sm:text-2xl font-bold text-zinc-100 hover:text-amber-400 transition-colors cursor-pointer leading-tight"
+                              >
+                                {latestRelease.title}
+                              </h3>
+                              <p className="text-sm text-amber-400 font-medium">
+                                {latestRelease.artist}
+                              </p>
+                            </div>
+
+                            <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
+                              {latestRelease.description}
+                            </p>
+
+                            <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-zinc-400 font-semibold border-t border-zinc-800/80">
+                              <span className="px-2.5 py-1 bg-zinc-800/70 rounded-lg text-zinc-300">
+                                {latestRelease.views} views
+                              </span>
+                              <span className="px-2.5 py-1 bg-zinc-800/70 rounded-lg text-zinc-300">
+                                {latestRelease.publishedAt}
+                              </span>
+                              <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg">
+                                4K Acoustic Master
+                              </span>
+                            </div>
+
+                            <div className="pt-2 flex flex-wrap items-center gap-3">
+                              <button
+                                onClick={() => {
+                                  setActiveVideoId(latestRelease.id);
+                                  setActiveTab('all');
+                                }}
+                                aria-label={`Watch live recording of ${latestRelease.title}`}
+                                className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                              >
+                                <Play className="w-4 h-4 fill-current" />
+                                Watch Recording
+                              </button>
+                              
+                              <a
+                                href={`https://www.youtube.com/watch?v=${latestRelease.youtubeId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="Open recital on YouTube in a new browser tab"
+                                className="px-4 py-2.5 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                              >
+                                <Youtube className="w-4 h-4 text-red-500" />
+                                YouTube Link
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Featured Video Archives Grid */}
+                      <div className="space-y-6 pt-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <h3 className="font-serif text-lg font-bold text-zinc-100 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
+                              Featured Concert highlights
+                            </h3>
+                            <p className="text-[11px] text-zinc-400">
+                              Top live classical recordings captured on location with absolute sound precision.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setActiveTab('all');
+                              if (videos.length > 0) {
+                                setActiveVideoId(videos[0].id);
+                              }
+                            }}
+                            aria-label="View all live concert highlights"
+                            className="text-xs font-bold text-amber-500 hover:underline flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded px-1"
+                          >
+                            View All Highlights →
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {featuredConcerts.map((video) => (
                       <div
                         key={video.id}
                         onClick={() => {
@@ -396,6 +513,9 @@ function AppContent() {
                     ))}
                   </div>
                 </div>
+              </>
+            );
+          })()}
 
                 {/* Sub-hero badge */}
                 <div className="bg-zinc-900/15 border border-zinc-850 p-6 md:p-8 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6">

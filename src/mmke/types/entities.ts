@@ -164,7 +164,7 @@ export interface Conductor {
   id: string;
   name: string;
   biography: string;
-  associatedOrganisations: string[]; // e.g., ["Music Madras Choir", "Royal College of Organists"]
+  associatedOrganisations: string[]; // e.g., ["Vocal Ensemble", "Royal College of Organists"]
   performanceIds: string[];
 }
 

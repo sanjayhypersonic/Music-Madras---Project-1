@@ -239,6 +239,73 @@ export function formatPublishedDate(publishedAt?: string): string {
   }
 }
 
+// Sanitize artist names to remove any deprecated specific choir labels
+export function sanitizeArtistName(artist: string): string {
+  if (!artist) return 'Vocal Ensemble';
+  if (/st\.?\s*andrew'?s\s*kirk\s*choir/i.test(artist)) {
+    return 'Wedding Choir';
+  }
+  if (/music\s*madras\s*vocal\s*ensemble/i.test(artist)) {
+    return 'Wedding Choir';
+  }
+  if (/music\s*madras\s*choir/i.test(artist)) {
+    return 'Vocal Ensemble';
+  }
+  return artist;
+}
+
+// Extract timestamp for strict sorting by latest upload date
+export function getVideoPublishTimestamp(video: Video): number {
+  if (video.publishedAtRaw) {
+    const t = new Date(video.publishedAtRaw).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  
+  // Parse relative strings like "2 days ago", "9 days ago", "2 weeks ago", "1 month ago"
+  const text = (video.publishedAt || '').toLowerCase().trim();
+  const now = Date.now();
+  
+  if (text.includes('just now') || text.includes('today')) {
+    return now;
+  }
+  if (text.includes('yesterday')) {
+    return now - 86400 * 1000;
+  }
+  
+  const hourMatch = text.match(/(\d+)\s*hour/);
+  if (hourMatch) {
+    return now - parseInt(hourMatch[1], 10) * 3600 * 1000;
+  }
+  
+  const dayMatch = text.match(/(\d+)\s*day/);
+  if (dayMatch) {
+    return now - parseInt(dayMatch[1], 10) * 86400 * 1000;
+  }
+  
+  const weekMatch = text.match(/(\d+)\s*week/);
+  if (weekMatch) {
+    return now - parseInt(weekMatch[1], 10) * 7 * 86400 * 1000;
+  }
+  
+  const monthMatch = text.match(/(\d+)\s*month/);
+  if (monthMatch) {
+    return now - parseInt(monthMatch[1], 10) * 30 * 86400 * 1000;
+  }
+  
+  const yearMatch = text.match(/(\d+)\s*year/);
+  if (yearMatch) {
+    return now - parseInt(yearMatch[1], 10) * 365 * 86400 * 1000;
+  }
+  
+  return 0;
+}
+
+// Retrieves the latest video strictly by upload/publish date
+export function getLatestUpload(videos: Video[]): Video | undefined {
+  if (!videos || videos.length === 0) return undefined;
+  return [...videos].sort((a, b) => getVideoPublishTimestamp(b) - getVideoPublishTimestamp(a))[0];
+}
+
 export interface FetchVideosResult {
   videos: Video[];
   isLive: boolean;
@@ -304,16 +371,7 @@ export async function getMusicMadrasVideos(forceRefresh = false): Promise<FetchV
 
     const snippetItemsMap = new Map<string, any>();
 
-    if (popularSearchRes && popularSearchRes.ok) {
-      const searchData = await popularSearchRes.json();
-      (searchData.items || []).forEach((item: any) => {
-        const vidId = item.id?.videoId;
-        if (vidId) {
-          snippetItemsMap.set(vidId, item);
-        }
-      });
-    }
-
+    // Prioritize uploads playlist items so newest uploads are preserved in order
     if (uploadsRes && uploadsRes.ok) {
       const uploadsData = await uploadsRes.json();
       (uploadsData.items || []).forEach((item: any) => {
@@ -323,7 +381,7 @@ export async function getMusicMadrasVideos(forceRefresh = false): Promise<FetchV
         }
       });
 
-      // If uploads has a nextPageToken, optionally fetch page 2 to get more uploads
+      // If uploads has a nextPageToken, fetch page 2 to get more recent uploads
       if (uploadsData.nextPageToken) {
         try {
           const uploadsRes2 = await fetch(
@@ -342,6 +400,17 @@ export async function getMusicMadrasVideos(forceRefresh = false): Promise<FetchV
           // ignore page 2 failure
         }
       }
+    }
+
+    // Next add popular search results so any other catalog performances are included
+    if (popularSearchRes && popularSearchRes.ok) {
+      const searchData = await popularSearchRes.json();
+      (searchData.items || []).forEach((item: any) => {
+        const vidId = item.id?.videoId;
+        if (vidId && !snippetItemsMap.has(vidId)) {
+          snippetItemsMap.set(vidId, item);
+        }
+      });
     }
 
     const uniqueVideoIds = Array.from(snippetItemsMap.keys());
@@ -409,6 +478,7 @@ export async function getMusicMadrasVideos(forceRefresh = false): Promise<FetchV
           artist = parts[0].trim();
         }
       }
+      artist = sanitizeArtistName(artist);
 
       return {
         id: videoId,
@@ -428,6 +498,9 @@ export async function getMusicMadrasVideos(forceRefresh = false): Promise<FetchV
         tags: detail?.snippet?.tags || []
       };
     });
+
+    // Sort mappedVideos strictly by latest upload date descending
+    mappedVideos.sort((a, b) => getVideoPublishTimestamp(b) - getVideoPublishTimestamp(a));
 
     const now = Date.now();
 

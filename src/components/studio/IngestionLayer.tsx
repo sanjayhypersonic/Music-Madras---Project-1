@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Youtube, 
   UploadCloud, 
@@ -17,6 +17,7 @@ import {
   Bookmark
 } from 'lucide-react';
 import { RecordingDraft } from './types';
+import { useYouTube } from '../../context/YouTubeContext';
 
 interface IngestionLayerProps {
   recordings: RecordingDraft[];
@@ -35,52 +36,49 @@ export default function IngestionLayer({
   onIngestNew, 
   onSelectRecording 
 }: IngestionLayerProps) {
+  const { videos: channelVideos, refreshFeed, isRefreshing: isGlobalRefreshing } = useYouTube();
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'duration'>('date');
+  const [ingestedIds, setIngestedIds] = useState<string[]>([]);
 
-  // Simulated raw YouTube Feed representing newly found uploads
-  const [pendingUploads, setPendingUploads] = useState([
-    {
-      youtubeId: 'W_I7vE0P95w',
-      title: "J.S. Bach - Fantasia and Fugue in G minor BWV 542 | Jeremiah Christopher | St. Andrew's Kirk",
-      artist: "Jeremiah Christopher",
-      duration: "11:20",
-      publishedAt: "2026-07-04",
-      publishedLabel: "2 hours ago",
-      requiredActions: ["Link Composer", "Map Venue Nodes", "Generate SEO Metadata"],
-      description: "Recorded live during the Chennai Pipe Organ Solos Festival at the Egmore Kirk. High-fidelity matched condenser microphones capture the acoustic dome."
-    },
-    {
-      youtubeId: 'b7VvE0A93wM',
-      title: "Traditional Christmas Carols 3-Part Harmony Medley | Bishop Heber Chapel Congregation",
-      artist: "Bishop Heber Chapel Congregation",
-      duration: "08:45",
-      publishedAt: "2026-07-03",
-      publishedLabel: "1 day ago",
-      requiredActions: ["Add Choral Entities", "Segment Movements", "Generate SEO Metadata"],
-      description: "A gorgeous collection of choral harmonizations recorded live under ambient church lighting."
-    },
-    {
-      youtubeId: 'gMvS_P90wXM',
-      title: "G.F. Handel - Organ Concerto in F major 'The Cuckoo and the Nightingale' | Chennai Chorale Organ Solos",
-      artist: "Chennai Chorale Performers",
-      duration: "14:15",
-      publishedAt: "2026-06-28",
-      publishedLabel: "1 week ago",
-      requiredActions: ["Link Composer", "Map Venue Nodes", "Anchor Audio Master"],
-      description: "Captured live on the historical pipe organ built in 1883. High dynamic range mastering."
-    }
-  ]);
+  // Dynamically map live YouTube channel uploads into the ingestion queue
+  // Filters out videos that are already part of recordings in the Studio
+  const pendingUploads = useMemo(() => {
+    const existingIds = new Set([
+      ...recordings.map(r => r.youtubeId),
+      ...ingestedIds
+    ]);
 
-  const handleSyncFeed = () => {
+    return channelVideos
+      .filter(v => !existingIds.has(v.youtubeId))
+      .map((video, index) => ({
+        youtubeId: video.youtubeId,
+        title: video.title,
+        artist: video.artist,
+        duration: video.duration,
+        publishedAt: video.publishedAtRaw || video.publishedAt,
+        publishedLabel: video.publishedAt,
+        requiredActions: index % 2 === 0 
+          ? ["Link Composer", "Map Venue Nodes", "Generate SEO Metadata"]
+          : ["Add Choral Entities", "Segment Movements", "Anchor Audio Master"],
+        description: video.description || 'Live acoustic performance captured in Chennai venue with high-fidelity matched stereo microphones.'
+      }));
+  }, [channelVideos, recordings, ingestedIds]);
+
+  const handleSyncFeed = async () => {
     setIsSyncing(true);
-    setTimeout(() => {
+    try {
+      await refreshFeed();
+    } catch (err) {
+      console.warn('Sync failed', err);
+    } finally {
       setIsSyncing(false);
-    }, 1200);
+    }
   };
 
   const handleCreateDraft = (item: typeof pendingUploads[0]) => {
+    setIngestedIds(prev => [...prev, item.youtubeId]);
     onIngestNew({
       youtubeId: item.youtubeId,
       title: item.title,
@@ -88,7 +86,6 @@ export default function IngestionLayer({
       duration: item.duration,
       description: item.description
     });
-    setPendingUploads(prev => prev.filter(p => p.youtubeId !== item.youtubeId));
   };
 
   // Filter & Sort Logic

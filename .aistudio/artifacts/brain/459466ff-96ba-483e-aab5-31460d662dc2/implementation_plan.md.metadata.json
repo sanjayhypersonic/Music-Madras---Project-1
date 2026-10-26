@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan to strictly sort and select the latest uploaded video for the homepage spotlight, and replace all instances of 'St. Andrew\\'s Kirk Choir', 'Music Madras Choir', and 'Music Madras Vocal Ensemble' with generic terms like 'Vocal Ensemble' or 'Wedding Choir'.",
+  "updatedAt":  "2026-10-25T20:25:23.021877557Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

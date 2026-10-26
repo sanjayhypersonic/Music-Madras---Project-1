@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Bell, Music, Radio, Sliders, Calendar, Award, Home, Sun, Moon } from 'lucide-react';
 import { CHANNEL_INFO } from '../data';
 import SafeImage from './SafeImage';
-import { useYouTube } from '../context/YouTubeContext';
 
 interface HeaderProps {
   activeTab: string;
@@ -13,7 +12,6 @@ interface HeaderProps {
 }
 
 export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, setTheme }: HeaderProps) {
-  const { channelStats } = useYouTube();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [showButtons, setShowButtons] = useState(true);
 
@@ -139,8 +137,10 @@ export default function Header({ activeTab, setActiveTab, onOpenBooking, theme, 
               Music Madras
               <span className="inline-block w-2 h-2 rounded-full bg-[#0D9488] animate-pulse" title="Recording Sound Live"></span>
             </h1>
-            <p className="text-xs text-zinc-400 font-medium tracking-wide mt-0.5">
-              {CHANNEL_INFO.handle} • {channelStats.subscribers} Subscribers
+            <p className="text-xs text-zinc-400 font-medium tracking-wide mt-0.5 flex items-center gap-1.5">
+              <span>{CHANNEL_INFO.handle}</span>
+              <span className="text-zinc-600">·</span>
+              <span className="text-teal-400 font-medium text-[11px]">Live Acoustic Capture</span>
             </p>
           </div>
         </div>
