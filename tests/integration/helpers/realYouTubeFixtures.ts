@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "../../../modules/db/client";
+import { importYouTubeMirror } from "../../../modules/db/repositories/stagingSeedRepository";
 
 // Phase 6J-4 — loads the small set of REAL synchronized YouTube records exported
 // by scripts/exportYouTubeWorkflowFixtures.ts (tests/fixtures/realYouTubeVideos.json)
@@ -54,37 +55,13 @@ export function realVideo(youtubeVideoId: string): FixtureVideo {
   return video;
 }
 
-/** Inserts the fixtures (idempotent) and returns each video's internal id by YouTube id. */
+/**
+ * Inserts the fixtures (idempotent) and returns each video's internal id by YouTube id. Since the staging content loader, the one implementation of this import is
+ * modules/db/repositories/stagingSeedRepository.ts (importYouTubeMirror): it is the same insert-only upserts, now in one transaction.
+ */
 export async function loadRealYouTubeFixtures(): Promise<Map<string, string>> {
-  const ids = new Map<string, string>();
-  const playlistIds = new Map<string, string>();
-  for (const p of REAL_FIXTURES.playlists) {
-    const row = await prisma.youTubePlaylist.upsert({
-      where: { youtubePlaylistId: p.youtubePlaylistId },
-      update: {},
-      create: { ...p, publishedAt: p.publishedAt ? new Date(p.publishedAt) : null, observabilityState: "OBSERVED" },
-    });
-    playlistIds.set(p.youtubePlaylistId, row.id);
-  }
-  for (const v of REAL_FIXTURES.videos) {
-    const { playlistMemberships, ...fields } = v;
-    const row = await prisma.youTubeVideo.upsert({
-      where: { youtubeVideoId: v.youtubeVideoId },
-      update: {},
-      create: { ...fields, publishedAt: v.publishedAt ? new Date(v.publishedAt) : null },
-    });
-    ids.set(v.youtubeVideoId, row.id);
-    for (const m of playlistMemberships) {
-      await prisma.youTubePlaylistItem.upsert({
-        where: { playlistId_youtubeVideoId: { playlistId: playlistIds.get(m.youtubePlaylistId)!, youtubeVideoId: row.id } },
-        update: {},
-        create: { playlistId: playlistIds.get(m.youtubePlaylistId)!, youtubeVideoId: row.id, position: m.position, observabilityState: "OBSERVED" },
-      });
-    }
-  }
-  return ids;
+  return (await importYouTubeMirror(REAL_FIXTURES)).videoIds;
 }
-
 /** Removes ONLY the fixture rows (and their dependants) — never any other video. */
 export async function removeRealYouTubeFixtures(): Promise<void> {
   const youtubeIds = REAL_FIXTURES.videos.map((v) => v.youtubeVideoId);

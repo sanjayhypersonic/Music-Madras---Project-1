@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "recording": {
+    "youtubeVideoId": "zEQmnmwr5UE",
+    "title": "Dingiri Dingalae",
+    "titleEvidence": { "youtubeVideoId": "zEQmnmwr5UE", "field": "title", "quote": "Dingiri Dingalae" }
+  },
+  "composer": {
+    "slug": "traditional",
+    "name": "Traditional",
+    "evidence": { "youtubeVideoId": "zEQmnmwr5UE", "field": "description", "quote": "the traditional melody" }
+  },
+  "work": {
+    "slug": "dingiri-dingalae",
+    "title": "Dingiri Dingalae",
+    "evidence": { "youtubeVideoId": "zEQmnmwr5UE", "field": "description", "quote": "Dingiri Dingalae" }
+  },
+  "programme": {
+    "slug": "dingiri-dingalae-saso-and-the-chennai-chorale",
+    "title": "Dingiri Dingalae: South Asian Symphony Orchestra and The Chennai Chorale",
+    "evidence": { "youtubeVideoId": "zEQmnmwr5UE", "field": "description", "quote": "performed by the South Asian Symphony Orchestra (SASO) in collaboration with The Chennai Chorale" }
+  },
+  "venue": {
+    "slug": "asian-college-of-journalism",
+    "name": "Asian College of Journalism",
+    "city": "Chennai",
+    "country": "India",
+    "type": null,
+    "evidence": [
+      { "youtubeVideoId": "zEQmnmwr5UE", "field": "description", "quote": "Venue: Asian College of Journalism, Chennai" },
+      { "youtubeVideoId": "zEQmnmwr5UE", "field": "description", "quote": "in Chennai, India" }
+    ]
+  },
+  "omissions": [
+    { "fact": "Composer of Dingiri Dingalae", "reason": "The description calls it \"the traditional melody\" and names no composer. The data model requires a composer for every work, so the catalogue convention \"Traditional\" is used (stated, not a person). An editor can replace it." },
+    { "fact": "Venue type (and therefore the Venue record and the Performance)", "reason": "The model requires a venue type (church, cathedral, concert hall, studio, outdoor). The description names the Asian College of Journalism but does not say what kind of space was used, and a Performance cannot exist without a Venue. Fill in venue.type from a source to load both." },
+    { "fact": "Performance date", "reason": "No performance date is stated. The video's upload date is not the performance date." },
+    { "fact": "Choir: The Chennai Chorale (credited)", "reason": "A choir is linked to a Performance, and no Performance is created until the venue type is sourced. Not created as an unlinked record." },
+    { "fact": "Conductor: Alvin Arumugam (credited)", "reason": "Linked to a Performance, as above." },
+    { "fact": "Ensemble: South Asian Symphony Orchestra (SASO) (credited)", "reason": "The model has no orchestra or ensemble entity and no Performance to attach it to." },
+    { "fact": "Arranger: Augustine Paul (credited)", "reason": "The model has no arranger field or relationship." },
+    { "fact": "Language, lyrics, translation, description, SEO and educational text", "reason": "Not curated. The Recording is loaded with a title and its work only; an editor writes the rest." },
+    { "fact": "Sources, rights information and occasions", "reason": "The video states none." }
+  ]
+}
