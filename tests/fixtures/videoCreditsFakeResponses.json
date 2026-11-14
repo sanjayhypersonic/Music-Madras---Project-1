@@ -1,0 +1,68 @@
+{
+  "zEQmnmwr5UE": {
+    "recordingKind": { "value": "PERFORMANCE", "quote": "Recorded live at the Asian College of Journalism (ACJ) in Chennai, India", "field": "description" },
+    "credits": [
+      { "role": "WORK", "name": "Dingiri Dingalae", "workTitle": null, "quote": "Dingiri Dingalae", "field": "title" },
+      { "role": "ENSEMBLE", "name": "South Asian Symphony Orchestra (SASO)", "workTitle": null, "quote": "Ensemble: South Asian Symphony Orchestra (SASO)", "field": "description" },
+      { "role": "CHOIR", "name": "The Chennai Chorale", "workTitle": null, "quote": "Choir: The Chennai Chorale", "field": "description" },
+      { "role": "CONDUCTOR", "name": "Alvin Arumugam", "workTitle": null, "quote": "Conductor: Alvin Arumugam", "field": "description" },
+      { "role": "CONDUCTOR", "name": "Alvin Arumugam", "workTitle": null, "quote": "led by the baton of conductor Alvin Arumugam", "field": "description" },
+      { "role": "ARRANGER", "name": "Augustine Paul", "workTitle": "Dingiri Dingalae", "quote": "Arranger: Augustine Paul", "field": "description" },
+      { "role": "VENUE", "name": "Asian College of Journalism", "workTitle": null, "quote": "Venue: Asian College of Journalism, Chennai", "field": "description" },
+      { "role": "COMPOSER", "name": "Traditional", "workTitle": "Dingiri Dingalae", "quote": "the traditional melody", "field": "description" },
+      { "role": "PERFORMER", "name": "Augustine Paul", "workTitle": null, "quote": "Piano: Augustine Paul", "field": "description" }
+    ],
+    "performanceDate": { "value": null, "quote": null, "field": null },
+    "venueType": { "value": "CONCERT_HALL", "quote": "Venue: Asian College of Journalism, Chennai", "field": "description" },
+    "suggestedTitle": { "value": "Dingiri Dingalae", "quote": "Dingiri Dingalae", "field": "title" },
+    "gaps": [
+      { "missing": "composer", "reason": "The description calls the tune a traditional melody and names no composer." },
+      { "missing": "performance date", "reason": "No date of the performance is stated." }
+    ]
+  },
+  "m2THfAiraY8": {
+    "recordingKind": { "value": "PERFORMANCE", "quote": "The South Asian Symphony Orchestra (SASO) presented the following pieces", "field": "description" },
+    "credits": [
+      { "role": "ENSEMBLE", "name": "South Asian Symphony Orchestra (SASO)", "workTitle": null, "quote": "The South Asian Symphony Orchestra (SASO) presented the following pieces", "field": "description" },
+      { "role": "CHOIR", "name": "The Chennai Chorale", "workTitle": null, "quote": "in association with the Chennai Chorale", "field": "description" },
+      { "role": "WORK", "name": "Là chi darem la mano", "workTitle": null, "quote": "1. Mozart (Don Giovanni): Là chi darem la mano", "field": "description" },
+      { "role": "COMPOSER", "name": "Mozart", "workTitle": "Là chi darem la mano", "quote": "1. Mozart (Don Giovanni): Là chi darem la mano", "field": "description" },
+      { "role": "WORK", "name": "Lacrimosa", "workTitle": null, "quote": "2. Mozart (Requeim): Lacrimosa", "field": "description" },
+      { "role": "COMPOSER", "name": "Mozart", "workTitle": "Lacrimosa", "quote": "2. Mozart (Requeim): Lacrimosa", "field": "description" },
+      { "role": "WORK", "name": "Libiamo, ne' lieti calici", "workTitle": null, "quote": "4. Verdi (Traviata): Libiamo, ne' lieti calici", "field": "description" },
+      { "role": "COMPOSER", "name": "Verdi", "workTitle": "Libiamo, ne' lieti calici", "quote": "4. Verdi (Traviata): Libiamo, ne' lieti calici", "field": "description" },
+      { "role": "VENUE", "name": "Asian College of Journalism", "workTitle": null, "quote": "at the Asian College of Journalism, Chennai, India", "field": "description" }
+    ],
+    "performanceDate": { "value": null, "quote": null, "field": null },
+    "venueType": { "value": null, "quote": null, "field": null },
+    "suggestedTitle": { "value": "The best of Mozart and Verdi", "quote": "The best of Mozart and Verdi", "field": "title" },
+    "gaps": [
+      { "missing": "conductor", "reason": "The title names Alvin Arumugam but the text does not state his role." },
+      { "missing": "works 3", "reason": "This fake answer deliberately leaves out the third piece, to show a missed credit is a reviewer's catch, not the checks'." }
+    ]
+  },
+  "rfGy3l-BwQI": {
+    "recordingKind": { "value": "PERFORMANCE", "quote": "This performance features the BHC Choir, conducted by Jacob George", "field": "description" },
+    "credits": [
+      { "role": "WORK", "name": "Dancing Into the Promise!", "workTitle": null, "quote": "🎼 Work: Dancing Into the Promise!", "field": "description" },
+      { "role": "COMPOSER", "name": "John Carter", "workTitle": "Dancing Into the Promise!", "quote": "🎼 Composer: John Carter", "field": "description" },
+      { "role": "LYRICIST", "name": "Mary Kay Beall", "workTitle": "Dancing Into the Promise!", "quote": "🎼 Text: Mary Kay Beall", "field": "description" },
+      { "role": "CHOIR", "name": "BHC Choir", "workTitle": null, "quote": "🎼 Choir: BHC Choir", "field": "description" },
+      { "role": "CONDUCTOR", "name": "Jacob George", "workTitle": null, "quote": "🎼 Conductor: Jacob George", "field": "description" },
+      { "role": "VENUE", "name": "Bishop Heber Chapel", "workTitle": null, "quote": "🎼 Venue/Church: Bishop Heber Chapel", "field": "description" },
+      { "role": "PERFORMER", "name": "#JacobGeorge", "workTitle": null, "quote": "#JacobGeorge", "field": "description" }
+    ],
+    "performanceDate": { "value": "2025-12-12", "quote": "12 Dec 2025", "field": "title" },
+    "venueType": { "value": "CHURCH", "quote": "🎼 Venue/Church: Bishop Heber Chapel", "field": "description" },
+    "suggestedTitle": { "value": "Dancing Into the Promise!", "quote": "🎼 Work: Dancing Into the Promise!", "field": "description" },
+    "gaps": []
+  },
+  "pcksu7PtG8Y": {
+    "recordingKind": { "value": "PERFORMANCE", "quote": "The following Carol was performed by the Bishop Heber Chapel Choir on 12 December 2025.", "field": "description" },
+    "credits": [],
+    "performanceDate": { "value": null, "quote": null, "field": null },
+    "venueType": { "value": null, "quote": null, "field": null },
+    "suggestedTitle": { "value": null, "quote": null, "field": null },
+    "gaps": []
+  }
+}

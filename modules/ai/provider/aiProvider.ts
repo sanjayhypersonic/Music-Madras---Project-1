@@ -37,6 +37,12 @@ export type AIProviderErrorType =
   | "TIMEOUT"
   | "NETWORK"
   | "PROVIDER_ERROR"
+  /** The model declined the request (Anthropic stop_reason "refusal"). Retrying the same request is not expected to help. */
+  | "REFUSAL"
+  /** The response stopped before the output was complete (output-token limit or context window reached), so no partial output is trusted. */
+  | "OUTPUT_TRUNCATED"
+  /** The response completed but its text was not valid JSON for the requested schema. */
+  | "INVALID_OUTPUT"
   | "UNKNOWN";
 
 /** Normalized, provider-neutral error shape — never a raw provider SDK error, never a secret/credential. */

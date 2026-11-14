@@ -7,12 +7,17 @@ import type { AIGenerationRequest, AIGenerationResult, AIProvider, AIProviderCap
 // require external AI credentials"). Never imports Prisma, never imports a
 // canonical repository.
 
-export type FakeAIProviderMode = "SUCCESS" | "MALFORMED_OUTPUT" | "PROVIDER_ERROR" | "RETRYABLE_ERROR" | "NON_RETRYABLE_ERROR" | "TIMEOUT";
+export type FakeAIProviderMode = "SUCCESS" | "MALFORMED_OUTPUT" | "PROVIDER_ERROR" | "RETRYABLE_ERROR" | "NON_RETRYABLE_ERROR" | "TIMEOUT" | "REFUSAL" | "OUTPUT_TRUNCATED";
 
 export interface FakeAIProviderConfig {
   mode?: FakeAIProviderMode;
   /** Overrides the default success output — tests supply a shape matching their own fixture's real entity ids. */
   output?: unknown;
+  /**
+   * Credits extraction, milestone 1: a per-request answer, for a caller that sends many different requests through one provider (the
+   * video-credits runner). Takes precedence over `output` in SUCCESS mode; returning undefined falls back to `output`.
+   */
+  respond?: (request: AIGenerationRequest) => unknown;
   configured?: boolean;
 }
 
@@ -65,7 +70,7 @@ export class FakeAIProvider implements AIProvider {
           ok: true,
           provider: this.providerName,
           model,
-          output: this.config.output ?? DEFAULT_SUCCESS_OUTPUT,
+          output: this.config.respond?.(request) ?? this.config.output ?? DEFAULT_SUCCESS_OUTPUT,
           providerRequestId: "fake-request-id",
           usage: { inputTokens: 100, outputTokens: 50 },
           latencyMs: 5,
@@ -115,6 +120,24 @@ export class FakeAIProvider implements AIProvider {
           provider: this.providerName,
           model,
           error: { type: "TIMEOUT", message: "Simulated request timeout.", retryable: true },
+          promptVersion: request.promptVersion,
+          timestamp,
+        };
+      case "REFUSAL":
+        return {
+          ok: false,
+          provider: this.providerName,
+          model,
+          error: { type: "REFUSAL", message: "Simulated refusal: the model declined this request.", retryable: false },
+          promptVersion: request.promptVersion,
+          timestamp,
+        };
+      case "OUTPUT_TRUNCATED":
+        return {
+          ok: false,
+          provider: this.providerName,
+          model,
+          error: { type: "OUTPUT_TRUNCATED", message: "Simulated cut-off: the response reached its output limit.", retryable: false },
           promptVersion: request.promptVersion,
           timestamp,
         };

@@ -64,6 +64,16 @@ describe("describeGenerationFailureForEditor", () => {
     expect(describeGenerationFailureForEditor(result)).toBe("AI generation returned an invalid structured response.");
   });
 
+  it("maps a refusal to its own message, and a cut-off or non-JSON response to an incomplete-response message, never the raw provider text", () => {
+    const refusal: Failure = { ok: false, generationRequest: {} as never, reason: "REFUSAL: The model declined this request (category: cyber)." };
+    expect(describeGenerationFailureForEditor(refusal)).toBe("The AI provider declined to generate a suggestion for this Recording.");
+    for (const reason of ["OUTPUT_TRUNCATED: The response was cut off before it was complete (max_tokens); no partial output is used.", "INVALID_OUTPUT: The response text was not valid JSON."]) {
+      const message = describeGenerationFailureForEditor({ ok: false, generationRequest: {} as never, reason });
+      expect(message).toBe("AI generation returned an incomplete or invalid response. Please try again later.");
+      expect(message).not.toContain("max_tokens");
+    }
+  });
+
   it("falls back to a generic, safe message for any unrecognized reason string", () => {
     const result: Failure = { ok: false, generationRequest: {} as never, reason: "Failed to persist the suggestion: some database detail." };
     expect(describeGenerationFailureForEditor(result)).toBe("Editorial generation could not be completed.");

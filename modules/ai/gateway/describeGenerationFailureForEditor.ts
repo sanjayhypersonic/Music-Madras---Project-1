@@ -39,6 +39,12 @@ export function describeGenerationFailureForEditor(result: Extract<GenerateRecor
   if (result.reason.startsWith("CONFIGURATION")) {
     return "AI provider configuration is unavailable.";
   }
+  if (result.reason.startsWith("REFUSAL")) {
+    return "The AI provider declined to generate a suggestion for this Recording.";
+  }
+  if (result.reason.startsWith("OUTPUT_TRUNCATED") || result.reason.startsWith("INVALID_OUTPUT")) {
+    return "AI generation returned an incomplete or invalid response. Please try again later.";
+  }
   if (result.reason.startsWith("AUTHENTICATION") || result.reason.startsWith("RATE_LIMIT") || result.reason.startsWith("TIMEOUT") || result.reason.startsWith("NETWORK") || result.reason.startsWith("PROVIDER_ERROR") || result.reason.startsWith("INVALID_REQUEST")) {
     return "Editorial generation could not be completed. Please try again later.";
   }

@@ -4,12 +4,12 @@
 // load time, and nothing is inferred. Each fact carries an `evidence` quotation, and `verifyEvidence` requires that quotation to occur VERBATIM in the cited video's
 // title or description in the fixture (ignoring zero-width characters and runs of white space), so a fact whose source text changed or never said it is refused.
 // Facts the sources do not state are listed under `omissions` with the reason, and are NOT loaded.
+//
+// The quotation check itself lives in modules/mmke/provenance/verbatimEvidence.ts, shared with the video-credits extraction.
 
-export interface Evidence {
-  youtubeVideoId: string;
-  field: "title" | "description";
-  quote: string;
-}
+import { verifyEvidence as verifyQuotedEvidence, type Evidence, type VideoText } from "../mmke/provenance/verbatimEvidence";
+
+export type { Evidence };
 
 export interface ComposerSpec { slug: string; name: string; evidence: Evidence }
 export interface WorkSpec { slug: string; title: string; evidence: Evidence }
@@ -41,10 +41,7 @@ export interface StagingContentSpec {
   omissions: Omission[];
 }
 
-export interface FixtureVideoText {
-  youtubeVideoId: string;
-  title: string | null;
-  description: string | null;
+export interface FixtureVideoText extends VideoText {
   privacyStatus: string | null;
 }
 
@@ -117,9 +114,6 @@ export function parseStagingContentSpec(raw: unknown): ParseResult {
   };
 }
 
-/** Removes zero-width characters and collapses white space, so a quotation survives the invisible characters YouTube descriptions carry. */
-const normalise = (s: string) => s.replace(/[​‌‍⁠﻿]/g, "").replace(/\s+/g, " ").trim();
-
 export function allEvidence(spec: StagingContentSpec): Array<{ where: string; evidence: Evidence }> {
   return [
     { where: "composer", evidence: spec.composer.evidence },
@@ -130,18 +124,9 @@ export function allEvidence(spec: StagingContentSpec): Array<{ where: string; ev
   ];
 }
 
-/** Every quotation must occur verbatim in the cited video's title or description. Returns the problems (empty = every fact is traceable). */
+/** Every quotation must occur verbatim in the cited video's title or description (the shared check), and the Recording's video must be present. Returns the problems (empty = every fact is traceable). */
 export function verifyEvidence(spec: StagingContentSpec, videos: readonly FixtureVideoText[]): string[] {
-  const problems: string[] = [];
-  for (const { where, evidence } of allEvidence(spec)) {
-    const video = videos.find((v) => v.youtubeVideoId === evidence.youtubeVideoId);
-    if (!video) {
-      problems.push(`${where}: cites video ${evidence.youtubeVideoId}, which is not in the fixtures.`);
-      continue;
-    }
-    const haystack = normalise(evidence.field === "title" ? video.title ?? "" : video.description ?? "");
-    if (!haystack.includes(normalise(evidence.quote))) problems.push(`${where}: the quotation "${evidence.quote}" does not occur in the ${evidence.field} of ${evidence.youtubeVideoId}.`);
-  }
+  const problems = verifyQuotedEvidence(allEvidence(spec), videos);
   if (!videos.some((v) => v.youtubeVideoId === spec.recording.youtubeVideoId)) problems.push(`recording: video ${spec.recording.youtubeVideoId} is not in the fixtures.`);
   return problems;
 }
