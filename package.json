@@ -26,6 +26,8 @@
     "seed:founder": "tsx scripts/seedFounder.ts",
     "youtube:full-sync": "tsx scripts/runYouTubeFullSync.ts",
     "ai:video-credits": "tsx scripts/runVideoCreditsExtraction.ts",
+    "ai:video-credits-export": "tsx scripts/exportVideoCreditsSource.ts",
+    "ai:video-credits-check": "tsx scripts/checkVideoCreditsProposals.ts",
     "reconcile:exposure-approvals": "tsx scripts/reconcileExposureApprovals.ts",
     "backfill:revision-relationships": "tsx scripts/backfillRevisionRelationships.ts",
     "reproject:legacy-relationships": "tsx scripts/reprojectLegacyRelationships.ts",

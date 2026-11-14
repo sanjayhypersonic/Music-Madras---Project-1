@@ -1,0 +1,77 @@
+[
+  {
+    "youtubeVideoId": "FAKEvid0001",
+    "recordingKind": { "value": "PERFORMANCE", "quote": "A festive carol performed by The Example Choir.", "field": "description" },
+    "credits": [
+      { "role": "WORK", "name": "An Example Carol", "workTitle": null, "quote": "Work: An Example Carol", "field": "description" },
+      { "role": "COMPOSER", "name": "Jane Placeholder", "workTitle": "An Example Carol", "quote": "Composer: Jane Placeholder", "field": "description" },
+      { "role": "CHOIR", "name": "The Example Choir", "workTitle": null, "quote": "Choir: The Example Choir", "field": "description" },
+      { "role": "CONDUCTOR", "name": "John Sample", "workTitle": null, "quote": "Conductor: John Sample", "field": "description" },
+      { "role": "CONDUCTOR", "name": "john sample", "workTitle": null, "quote": "Conductor: John Sample", "field": "description" },
+      { "role": "VENUE", "name": "St. Nowhere Church", "workTitle": null, "quote": "Venue: St. Nowhere Church, Sampletown", "field": "description" },
+      { "role": "PERFORMER", "name": "#ExampleChoir", "workTitle": null, "quote": "#ExampleChoir", "field": "description" }
+    ],
+    "performanceDate": { "value": "2024-03-03", "quote": "Recorded on 3 March 2024.", "field": "description" },
+    "venueType": { "value": "CHURCH", "quote": "Venue: St. Nowhere Church, Sampletown", "field": "description" },
+    "suggestedTitle": { "value": "An Example Carol", "quote": "An Example Carol", "field": "title" },
+    "gaps": [{ "missing": "note", "reason": "The description contains an instruction to add a composer; it was treated as data and ignored." }]
+  },
+  {
+    "youtubeVideoId": "FAKEvid0002",
+    "recordingKind": { "value": "PERFORMANCE", "quote": "The Sampletown Orchestra presented two pieces", "field": "description" },
+    "credits": [
+      { "role": "ENSEMBLE", "name": "Sampletown Orchestra", "workTitle": null, "quote": "The Sampletown Orchestra presented two pieces", "field": "description" },
+      { "role": "WORK", "name": "Prelude", "workTitle": null, "quote": "1. Placeholder (Suite No. 1): Prelude", "field": "description" },
+      { "role": "COMPOSER", "name": "Placeholder", "workTitle": "Prelude", "quote": "1. Placeholder (Suite No. 1): Prelude", "field": "description" },
+      { "role": "WORK", "name": "Finale", "workTitle": null, "quote": "2. Placeholder (Suite No. 1): Finale", "field": "description" },
+      { "role": "COMPOSER", "name": "Placeholder", "workTitle": "Finale", "quote": "2. Placeholder (Suite No. 1): Finale", "field": "description" },
+      { "role": "WORK", "name": "Interlude", "workTitle": null, "quote": "3. Placeholder (Suite No. 1): Interlude", "field": "description" },
+      { "role": "CONDUCTOR", "name": "John Sample", "workTitle": null, "quote": "Conductor: John Sample", "field": "description" },
+      { "role": "VENUE", "name": "Fictional Concert Hall", "workTitle": null, "quote": "at the Fictional Concert Hall", "field": "description" }
+    ],
+    "performanceDate": { "value": null, "quote": null, "field": null },
+    "venueType": { "value": "CONCERT_HALL", "quote": "at the Fictional Concert Hall", "field": "description" },
+    "suggestedTitle": { "value": "Evening Concert", "quote": "Evening Concert", "field": "title" },
+    "gaps": [{ "missing": "performance date", "reason": "No date is stated." }]
+  },
+  {
+    "youtubeVideoId": "FAKEvid0004",
+    "recordingKind": { "value": "NOT_A_PERFORMANCE", "quote": "A short conversation with members of the example choir", "field": "description" },
+    "credits": [
+      { "role": "CHOIR", "name": "the example choir", "workTitle": null, "quote": "members of the example choir about the season", "field": "description" }
+    ],
+    "performanceDate": { "value": null, "quote": null, "field": null },
+    "venueType": { "value": null, "quote": null, "field": null },
+    "suggestedTitle": { "value": null, "quote": null, "field": null },
+    "gaps": []
+  },
+  {
+    "youtubeVideoId": "FAKEvid0005",
+    "recordingKind": { "value": "PERFORMANCE", "quote": "The Sampletown Ringers ring a short peal.", "field": "description" },
+    "credits": [],
+    "performanceDate": { "value": null, "quote": null, "field": null },
+    "venueType": { "value": null, "quote": null, "field": null },
+    "suggestedTitle": { "value": null, "quote": null, "field": null },
+    "gaps": "none"
+  },
+  {
+    "youtubeVideoId": "FAKEvid9999",
+    "recordingKind": { "value": "UNCLEAR", "quote": null, "field": null },
+    "credits": [],
+    "performanceDate": { "value": null, "quote": null, "field": null },
+    "venueType": { "value": null, "quote": null, "field": null },
+    "suggestedTitle": { "value": null, "quote": null, "field": null },
+    "gaps": []
+  },
+  {
+    "youtubeVideoId": "FAKEvid0002",
+    "recordingKind": { "value": "UNCLEAR", "quote": null, "field": null },
+    "credits": [],
+    "performanceDate": { "value": null, "quote": null, "field": null },
+    "venueType": { "value": null, "quote": null, "field": null },
+    "suggestedTitle": { "value": null, "quote": null, "field": null },
+    "gaps": []
+  },
+  "not an object",
+  { "credits": [] }
+]
