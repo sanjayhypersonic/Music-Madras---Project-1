@@ -5,6 +5,7 @@ import {
   buildVideoCreditsExportFile,
   defaultExportPath,
   describeExportTarget,
+  findSettingsAlreadyInEnvironment,
   parseVideoCreditsExportArgs,
   resolveVideoCreditsExportTarget,
   toExportedVideo,
@@ -24,29 +25,43 @@ const FAKE_PASSWORD = "fake-pw-not-real";
 const url = (database: string, extra = "") => `postgresql://fake_user:${FAKE_PASSWORD}@ep-fake-host-pooler.example.test/${database}${extra}`;
 
 describe("parseVideoCreditsExportArgs", () => {
-  it("requires --env-file and defaults to counts only", () => {
+  it("requires --settings-file and defaults to counts only", () => {
     expect(parseVideoCreditsExportArgs([]).ok).toBe(false);
-    expect(parseVideoCreditsExportArgs(["--env-file", "s.env"])).toEqual({ ok: true, args: { envFile: "s.env", limit: null, offset: 0, write: false, outFile: null } });
+    expect(parseVideoCreditsExportArgs(["--settings-file", "s.env"])).toEqual({ ok: true, args: { settingsFile: "s.env", limit: null, offset: 0, write: false, outFile: null } });
   });
 
   it("takes --limit, --offset, --write and --out", () => {
-    expect(parseVideoCreditsExportArgs(["--env-file", "s.env", "--limit", "25", "--offset", "50", "--write", "--out", "reports/x.json"])).toEqual({
+    expect(parseVideoCreditsExportArgs(["--settings-file", "s.env", "--limit", "25", "--offset", "50", "--write", "--out", "reports/x.json"])).toEqual({
       ok: true,
-      args: { envFile: "s.env", limit: 25, offset: 50, write: true, outFile: "reports/x.json" },
+      args: { settingsFile: "s.env", limit: 25, offset: 50, write: true, outFile: "reports/x.json" },
     });
   });
 
   it("refuses bad numbers, unknown flags, a flag without a value, and --out without --write", () => {
     for (const argv of [
-      ["--env-file", "s.env", "--limit", "0"],
-      ["--env-file", "s.env", "--limit", "2.5"],
-      ["--env-file", "s.env", "--offset", "-1"],
-      ["--env-file", "s.env", "--execute"],
-      ["--env-file"],
-      ["--env-file", "s.env", "--out", "reports/x.json"],
+      ["--settings-file", "s.env", "--limit", "0"],
+      ["--settings-file", "s.env", "--limit", "2.5"],
+      ["--settings-file", "s.env", "--offset", "-1"],
+      ["--settings-file", "s.env", "--execute"],
+      ["--settings-file"],
+      ["--settings-file", "s.env", "--out", "reports/x.json"],
     ]) {
       expect(parseVideoCreditsExportArgs(argv).ok, argv.join(" ")).toBe(false);
     }
+  });
+
+  it("refuses --env-file and points to --settings-file (Node's --env-file would load the whole file into the environment)", () => {
+    const r = parseVideoCreditsExportArgs(["--env-file", "s.env"]);
+    expect(r.ok === false && r.error).toContain("Use --settings-file");
+  });
+});
+
+describe("findSettingsAlreadyInEnvironment", () => {
+  it("names the settings from the file that are already in the environment with the same value, never their values", () => {
+    const file = { DATABASE_URL: "postgresql://fake/db", OTHER: "x", EMPTY: "" };
+    expect(findSettingsAlreadyInEnvironment(file, {})).toEqual([]);
+    expect(findSettingsAlreadyInEnvironment(file, { DATABASE_URL: "postgresql://something-else/db", EMPTY: "" })).toEqual([]);
+    expect(findSettingsAlreadyInEnvironment(file, { OTHER: "x", DATABASE_URL: "postgresql://fake/db" })).toEqual(["DATABASE_URL", "OTHER"]);
   });
 });
 
@@ -183,9 +198,14 @@ describe("static guard: the export can only read", () => {
     expect(source("modules/db/repositories/videoCreditsExportQuery.ts")).not.toMatch(/from "\.\.\/client"/);
   });
 
-  it("the script takes the database only from the --env-file file, binds the client after the guard, and never prints the URL", () => {
+  it("the script takes the database only from the --settings-file file, binds the client after the guard, and never prints the URL", () => {
     const code = source("scripts/exportVideoCreditsSource.ts");
-    expect(code).toMatch(/parse\(readFileSync\(envFile\)\)\.DATABASE_URL/);
+    expect(code).toMatch(/const settings = parse\(readFileSync\(settingsFile\)\);/);
+    expect(code).toMatch(/const databaseUrl = settings\.DATABASE_URL;/);
+    // The file is never loaded into the environment: no dotenv config/populate, no copying, and only these three environment writes.
+    expect(code).not.toMatch(/Object\.assign\(process\.env|dotenv\/config|\bconfig\(|populate\(/);
+    expect(code.match(/process\.env\.[A-Z_]+ = /g)).toEqual(["process.env.DOTENV_CONFIG_PATH = ", "process.env.DOTENV_CONFIG_QUIET = ", "process.env.DATABASE_URL = "]);
+    expect(code.indexOf("findSettingsAlreadyInEnvironment(settings")).toBeLessThan(code.indexOf("resolveVideoCreditsExportTarget("));
     expect(code.indexOf("resolveVideoCreditsExportTarget(")).toBeLessThan(code.indexOf('await import("../modules/db/repositories/videoCreditsExportRepository")'));
     expect(code).not.toMatch(/^import .*videoCreditsExportRepository/m);
     expect(code).not.toMatch(/console\.(log|error)\([^)]*(connectionString|databaseUrl|DATABASE_URL)/);

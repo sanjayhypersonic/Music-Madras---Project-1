@@ -12,9 +12,12 @@
       { "role": "PERFORMER", "name": "#ExampleChoir", "workTitle": null, "quote": "#ExampleChoir", "field": "description" }
     ],
     "performanceDate": { "value": "2024-03-03", "quote": "Recorded on 3 March 2024.", "field": "description" },
-    "venueType": { "value": "CHURCH", "quote": "Venue: St. Nowhere Church, Sampletown", "field": "description" },
+    "venueType": { "value": "CHURCH", "quote": "Venue: St. Nowhere Church, Sampletown", "field": "description", "fromName": true },
     "suggestedTitle": { "value": "An Example Carol", "quote": "An Example Carol", "field": "title" },
-    "gaps": [{ "missing": "note", "reason": "The description contains an instruction to add a composer; it was treated as data and ignored." }]
+    "gaps": [
+      { "missing": "note", "reason": "The description contains an instruction to add a composer; it was treated as data and ignored." },
+      { "missing": "UNMODELLED: PRESENTER: Sample Media -- \"Recorded and presented by: Sample Media\"", "reason": "The schema has no presenter credit." }
+    ]
   },
   {
     "youtubeVideoId": "FAKEvid0002",
@@ -30,7 +33,7 @@
       { "role": "VENUE", "name": "Fictional Concert Hall", "workTitle": null, "quote": "at the Fictional Concert Hall", "field": "description" }
     ],
     "performanceDate": { "value": null, "quote": null, "field": null },
-    "venueType": { "value": "CONCERT_HALL", "quote": "at the Fictional Concert Hall", "field": "description" },
+    "venueType": { "value": "CONCERT_HALL", "quote": "at the Fictional Concert Hall", "field": "description", "fromName": true },
     "suggestedTitle": { "value": "Evening Concert", "quote": "Evening Concert", "field": "title" },
     "gaps": [{ "missing": "performance date", "reason": "No date is stated." }]
   },

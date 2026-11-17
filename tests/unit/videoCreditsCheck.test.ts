@@ -73,6 +73,16 @@ describe("checkVideoCreditsProposals", () => {
     expect(one.performanceDate).toMatchObject({ status: "ACCEPTED", value: "2024-03-03" });
   });
 
+  it("records the proposed PRESENTER and detects the one a proposal missed (video-credits-v2)", () => {
+    expect(extracted(result, "FAKEvid0001").unmodelled).toEqual([
+      { label: "PRESENTER", name: "Sample Media", quote: "Recorded and presented by: Sample Media", source: "PROPOSED", status: "VERIFIED" },
+    ]);
+    expect(extracted(result, "FAKEvid0002").unmodelled).toEqual([
+      { label: "PRESENTER", name: "Fake Presenter Trust", quote: "Presented by: Fake Presenter Trust.", source: "DETECTED", status: "VERIFIED" },
+    ]);
+    expect(extracted(result, "FAKEvid0001").venueTypeFromName).toBe(true);
+  });
+
   it("rejects a quotation the export does not contain, and accepts a stated concert hall", () => {
     const two = extracted(result, "FAKEvid0002");
     expect(two.rejected).toEqual([expect.objectContaining({ reason: "QUOTE_NOT_FOUND", credit: expect.objectContaining({ name: "Interlude" }) })]);
@@ -138,7 +148,7 @@ describe("summaries", () => {
     const args = { exportFile: "tests/fixtures/videoCreditsFakeExport.json", proposalsFile: "tests/fixtures/videoCreditsFakeProposals.json", reportFile: null };
     const report = buildVideoCreditsCheckReport({ generatedAt, args, videosInExport: videos.length, proposals: fakeProposals.length, result });
     expect(report.totals).toMatchObject({ videos: 4, extracted: 3, invalidOutput: 1, creditsAccepted: 13, creditsRejected: 3, proposalsRejected: 4, videosWithoutProposal: 1 });
-    expect(report).toMatchObject({ kind: "video-credits-check", provider: "manual", promptVersion: "video-credits-v1" });
+    expect(report).toMatchObject({ kind: "video-credits-check", provider: "manual", promptVersion: "video-credits-v2" });
     expect(JSON.stringify(report)).not.toContain("Ignore all previous instructions");
     const text = formatCheckSummary(report).join("\n");
     expect(text).toContain("spellings: The Example Choir | the example choir");

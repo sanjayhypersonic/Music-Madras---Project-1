@@ -1,12 +1,17 @@
 // Credits extraction, route 2: export the videos whose credits will be proposed, from the STAGING database, READ-ONLY.
 //
-//   npm run ai:video-credits-export -- --env-file <settings file>                                  counts only, writes nothing
-//   npm run ai:video-credits-export -- --env-file <settings file> --limit 25 --offset 0 --write    also writes reports/video-credits/export-….json
+//   npm run ai:video-credits-export -- --settings-file <settings file>                                  counts only, writes nothing
+//   npm run ai:video-credits-export -- --settings-file <settings file> --limit 25 --offset 0 --write    also writes reports/video-credits/export-….json
 //   (--out <path inside the repository> overrides the file name; it needs --write)
 //
+// Not --env-file: that is Node's own option name. Through tsx, a MISSING --env-file makes Node itself exit ("…: not found", code 9) before the script
+// runs, and placed before the script name Node loads EVERY line of the file into the environment. The script refuses --env-file and names
+// --settings-file instead (pinned by tests/unit/videoCreditsExportScript.test.ts).
+//
 // Safety (modules/jobs/videoCreditsExport.ts and modules/db/repositories/videoCreditsExportQuery.ts):
-//   - the database comes ONLY from DATABASE_URL in the --env-file settings file; the shell's DATABASE_URL / DIRECT_URL and the repository's .env
-//     files are ignored, and the file's other settings are never read into the environment;
+//   - the script reads the --settings-file file itself and takes only DATABASE_URL from it; no line of the file is put into the environment. If any
+//     setting from the file is ALREADY in the environment with the same value (the file was loaded by something else), it refuses;
+//   - the shell's DATABASE_URL / DIRECT_URL and the repository's .env files are ignored;
 //   - the database name must contain "staging" and neither "prod" nor "test"; NODE_ENV must not be production;
 //   - one transaction, first statement SET TRANSACTION READ ONLY, then only a count and a select;
 //   - only the host and the database name are printed; an error prints its kind, never its message (it could carry a host or credential);
@@ -22,6 +27,7 @@ import {
   buildVideoCreditsExportFile,
   defaultExportPath,
   describeExportTarget,
+  findSettingsAlreadyInEnvironment,
   parseVideoCreditsExportArgs,
   resolveVideoCreditsExportTarget,
 } from "../modules/jobs/videoCreditsExport";
@@ -39,10 +45,17 @@ async function main(): Promise<number> {
   if (!parsed.ok) return refuse(parsed.error);
   const { args } = parsed;
 
-  const envFile = path.resolve(args.envFile);
-  if (!existsSync(envFile)) return refuse("the --env-file settings file does not exist.");
-  // Only DATABASE_URL is taken from the file; nothing from it is printed or copied into the environment.
-  const databaseUrl = parse(readFileSync(envFile)).DATABASE_URL;
+  const settingsFile = path.resolve(args.settingsFile);
+  if (!existsSync(settingsFile)) return refuse("the --settings-file file does not exist.");
+  // The file is parsed into a local object only. Only DATABASE_URL is used; nothing from it is printed or copied into the environment.
+  const settings = parse(readFileSync(settingsFile));
+  const leaked = findSettingsAlreadyInEnvironment(settings, process.env);
+  if (leaked.length > 0) {
+    return refuse(
+      `${leaked.length} setting(s) from the settings file are already in the environment (${leaked.join(", ")}): the file was loaded by something else, such as Node's --env-file. Run again with only --settings-file.`
+    );
+  }
+  const databaseUrl = settings.DATABASE_URL;
   const resolved = resolveVideoCreditsExportTarget({ databaseUrl, nodeEnv: process.env.NODE_ENV });
   if (!resolved.ok) return refuse(resolved.reason);
   const { target } = resolved;

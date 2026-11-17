@@ -1,7 +1,7 @@
 // Credits extraction, route 2: the PURE parts of scripts/checkVideoCreditsProposals.ts. No fs, no network, no database.
 //
 // A proposals file is written by a person or a Claude Code session that read an export file (docs/video-credits-manual-workflow.md). It is a JSON
-// array with one object per video: the video-credits-v1 output schema plus `youtubeVideoId`. Each proposal is checked with exactly the validators
+// array with one object per video: the video-credits-v2 output schema (v1 answers are still accepted) plus `youtubeVideoId`. Each proposal is checked with exactly the validators
 // the API route uses (modules/ai/structuredOutput/validateVideoCreditsOutput.ts) against the title and description IN THE EXPORT, so a quotation
 // must occur in the text the session was given. Proposals for videos that are not in the export are rejected, as are a second proposal for the
 // same video and anything that is not an object with a video id.
@@ -9,7 +9,8 @@
 import { normaliseEvidenceText } from "../mmke/provenance/verbatimEvidence";
 import { videoCreditsFingerprint, type VideoCreditsOutcome } from "../ai/gateway/extractVideoCredits";
 import { validateVideoCreditsOutput, type VideoCredit } from "../ai/structuredOutput/validateVideoCreditsOutput";
-import { VIDEO_CREDIT_ROLES, VIDEO_CREDITS_PROMPT_V1, type VideoCreditRole } from "../ai/prompts/videoCredits/videoCreditsPromptV1";
+import { VIDEO_CREDIT_ROLES, type VideoCreditRole } from "../ai/prompts/videoCredits/videoCreditsPromptV1";
+import { VIDEO_CREDITS_PROMPT_V2 } from "../ai/prompts/videoCredits/videoCreditsPromptV2";
 import { totalVideoCredits, type VideoCreditsTotals } from "./videoCreditsRunner";
 import type { ExportedVideo } from "./videoCreditsExport";
 import path from "path";
@@ -118,7 +119,7 @@ export function checkVideoCreditsProposals(videos: readonly ExportedVideo[], pro
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { youtubeVideoId: _id, ...output } = proposal;
     const checked = validateVideoCreditsOutput(output, video);
-    const base = { youtubeVideoId: id, title: video.title, provider: MANUAL_PROVIDER, model: VIDEO_CREDITS_PROMPT_V1 };
+    const base = { youtubeVideoId: id, title: video.title, provider: MANUAL_PROVIDER, model: VIDEO_CREDITS_PROMPT_V2 };
     outcomes.push(
       checked.ok
         ? { ...base, status: "EXTRACTED", contextFingerprint: videoCreditsFingerprint(video), result: checked }
@@ -213,7 +214,7 @@ export function buildVideoCreditsCheckReport(input: {
   return {
     kind: "video-credits-check",
     generatedAt: input.generatedAt.toISOString(),
-    promptVersion: VIDEO_CREDITS_PROMPT_V1,
+    promptVersion: VIDEO_CREDITS_PROMPT_V2,
     provider: MANUAL_PROVIDER,
     input: { exportFile: input.args.exportFile, proposalsFile: input.args.proposalsFile, videosInExport: input.videosInExport, proposals: input.proposals },
     totals: { ...totalVideoCredits(result.outcomes), proposalsRejected: result.proposalRejections.length, videosWithoutProposal: result.videosWithoutProposal.length },

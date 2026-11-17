@@ -3,7 +3,7 @@
 //   npm run ai:video-credits -- --videos tests/fixtures/realYouTubeVideos.json [--fake-responses <file>] [--model claude-opus-5-5] [--limit N] [--report <file>]
 //
 // What it does: reads a LOCAL JSON export of videos, prints the token and cost estimate for the chosen model, runs every eligible video (public,
-// observed, with a description) through the video-credits-v1 checks using the deterministic FAKE provider (canned answers from --fake-responses,
+// observed, with a description) through the video-credits-v2 checks using the deterministic FAKE provider (canned answers from --fake-responses,
 // keyed by YouTube id; a video without one gets an empty answer), prints what was accepted and rejected, and writes one local JSON report.
 //
 // What it never does in this milestone: read or write any database, create catalogue records, call the real Anthropic API (--execute is refused),
@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { FakeAIProvider } from "../modules/ai/providers/fake/fakeAIProvider";
 import { extractVideoCredits, type VideoCreditsOutcome, type VideoCreditsSource } from "../modules/ai/gateway/extractVideoCredits";
-import { VIDEO_CREDITS_PROMPT_V1 } from "../modules/ai/prompts/videoCredits/videoCreditsPromptV1";
+import { VIDEO_CREDITS_PROMPT_V2 } from "../modules/ai/prompts/videoCredits/videoCreditsPromptV2";
 import {
   VIDEO_CREDITS_EXIT_CODES,
   buildVideoCreditsReport,
@@ -74,7 +74,7 @@ async function main(): Promise<number> {
   const videos = args.limit === null ? exported.videos : exported.videos.slice(0, args.limit);
   const responses = responsesPath ? (JSON.parse(readFileSync(responsesPath, "utf8")) as Record<string, unknown>) : {};
 
-  console.log(`Video credits extraction (${VIDEO_CREDITS_PROMPT_V1}) — DRY RUN with the FAKE provider: no database, no Anthropic API call, only a local report.`);
+  console.log(`Video credits extraction (${VIDEO_CREDITS_PROMPT_V2}) — DRY RUN with the FAKE provider: no database, no Anthropic API call, only a local report.`);
   console.log(`  Videos file: ${args.videosFile} (${videos.length} video${videos.length === 1 ? "" : "s"}${args.limit !== null ? `, limited to ${args.limit}` : ""})`);
   console.log(`  Fake answers: ${args.fakeResponsesFile ?? "(none: every video gets an empty answer)"}`);
   console.log("");

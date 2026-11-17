@@ -3,7 +3,8 @@
 //
 // The export reads the STAGING database (never production, never a test database) and writes a local JSON file of the videos a person, or a
 // Claude Code session, will read to propose credits. Rules:
-//   - the database comes ONLY from DATABASE_URL in the settings file named by --env-file; nothing else in the environment or the repository's .env
+//   - the database comes ONLY from DATABASE_URL in the settings file named by --settings-file, which the script reads itself; no other line of
+//     that file reaches the environment, and nothing else in the environment or the repository's .env
 //     files is used;
 //   - the database name must contain "staging" and must contain neither "prod" nor "test" (plain substrings, case-insensitive);
 //   - only the host and the database name are ever printed, never a user name, password or query string;
@@ -22,14 +23,14 @@ export const VIDEO_CREDITS_EXPORT_EXIT_CODES = { SUCCEEDED: 0, FAILED: 2, REFUSE
 // Arguments
 
 export interface VideoCreditsExportArgs {
-  envFile: string;
+  settingsFile: string;
   limit: number | null;
   offset: number;
   write: boolean;
   outFile: string | null;
 }
 
-const VALUE_FLAGS = new Set(["--env-file", "--limit", "--offset", "--out"]);
+const VALUE_FLAGS = new Set(["--settings-file", "--limit", "--offset", "--out"]);
 
 export function parseVideoCreditsExportArgs(argv: readonly string[]): { ok: true; args: VideoCreditsExportArgs } | { ok: false; error: string } {
   const values = new Map<string, string>();
@@ -40,14 +41,17 @@ export function parseVideoCreditsExportArgs(argv: readonly string[]): { ok: true
       write = true;
       continue;
     }
+    if (flag === "--env-file") {
+      return { ok: false, error: "--env-file is Node's own option name (Node uses it to load every line of a file into the environment, and stops with \"not found\" if the file is missing). Use --settings-file <file>: the script reads it itself and takes only DATABASE_URL." };
+    }
     if (!VALUE_FLAGS.has(flag)) return { ok: false, error: `Unknown argument "${flag}".` };
     const value = argv[i + 1];
     if (value === undefined || value.startsWith("--")) return { ok: false, error: `${flag} needs a value.` };
     values.set(flag, value);
     i++;
   }
-  const envFile = values.get("--env-file");
-  if (!envFile) return { ok: false, error: "--env-file <file> is required: the settings file whose DATABASE_URL names the STAGING database. Nothing else is read." };
+  const settingsFile = values.get("--settings-file");
+  if (!settingsFile) return { ok: false, error: "--settings-file <file> is required: the settings file whose DATABASE_URL names the STAGING database. Only that line is used." };
   let limit: number | null = null;
   if (values.has("--limit")) {
     limit = Number(values.get("--limit"));
@@ -60,11 +64,22 @@ export function parseVideoCreditsExportArgs(argv: readonly string[]): { ok: true
   }
   const outFile = values.get("--out") ?? null;
   if (outFile !== null && !write) return { ok: false, error: "--out only makes sense with --write." };
-  return { ok: true, args: { envFile, limit, offset, write, outFile } };
+  return { ok: true, args: { settingsFile, limit, offset, write, outFile } };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 // The database guard
+
+/**
+ * The NAMES of settings from the settings file that are already in the process environment with the same value. Non-empty means the file was
+ * loaded into the environment by something other than this script (for example Node's own --env-file placed before the script name), so its other settings may already have leaked into the process; the export refuses rather than continue. Values are compared, never
+ * returned.
+ */
+export function findSettingsAlreadyInEnvironment(fileSettings: Readonly<Record<string, string>>, env: Readonly<Record<string, string | undefined>>): string[] {
+  return Object.keys(fileSettings)
+    .filter((key) => fileSettings[key] !== "" && env[key] === fileSettings[key])
+    .sort();
+}
 
 export interface ExportTarget {
   host: string;

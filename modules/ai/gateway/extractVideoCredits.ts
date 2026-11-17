@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import type { AIGenerationRequest, AIProvider } from "../provider/aiProvider";
-import { VIDEO_CREDITS_OUTPUT_SCHEMA_V1, VIDEO_CREDITS_PROMPT_V1, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V1 } from "../prompts/videoCredits/videoCreditsPromptV1";
+import { VIDEO_CREDITS_OUTPUT_SCHEMA_V2, VIDEO_CREDITS_PROMPT_V2, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V2 } from "../prompts/videoCredits/videoCreditsPromptV2";
 import { validateVideoCreditsOutput, type CheckedVideoCredits } from "../structuredOutput/validateVideoCreditsOutput";
 import type { VideoText } from "../../mmke/provenance/verbatimEvidence";
 
@@ -44,10 +44,10 @@ export function videoCreditsFingerprint(video: VideoText): string {
 
 export function buildVideoCreditsRequest(video: VideoCreditsSource, model?: string): AIGenerationRequest {
   return {
-    systemInstructions: VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V1,
+    systemInstructions: VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V2,
     contextPayload: buildVideoCreditsContext(video),
-    outputSchema: VIDEO_CREDITS_OUTPUT_SCHEMA_V1,
-    promptVersion: VIDEO_CREDITS_PROMPT_V1,
+    outputSchema: VIDEO_CREDITS_OUTPUT_SCHEMA_V2,
+    promptVersion: VIDEO_CREDITS_PROMPT_V2,
     targetEntityType: "YOUTUBE_VIDEO",
     targetEntityId: video.youtubeVideoId,
     suggestionType: "CANONICAL_RELATIONSHIP_CANDIDATE",

@@ -106,7 +106,7 @@ describe("totals and report", () => {
     const generatedAt = new Date("2026-11-14T10:00:00.000Z");
     const args = { videosFile: "tests/fixtures/realYouTubeVideos.json", fakeResponsesFile: null, reportFile: null, model: "claude-opus-5-5", limit: null };
     const report = buildVideoCreditsReport({ generatedAt, args, estimate: estimateVideoCreditsCost(fixtures.videos, args.model), outcomes });
-    expect(report).toMatchObject({ kind: "video-credits-dry-run", provider: "fake", promptVersion: "video-credits-v1", generatedAt: "2026-11-14T10:00:00.000Z" });
+    expect(report).toMatchObject({ kind: "video-credits-dry-run", provider: "fake", promptVersion: "video-credits-v2", generatedAt: "2026-11-14T10:00:00.000Z" });
     expect(JSON.stringify(report)).not.toContain("Ulagam pora pokka paaru"); // lyrics from a description are not copied into the report
     expect(defaultReportPath(generatedAt)).toBe(path.join("reports", "video-credits", "video-credits-2026-11-14T10-00-00-000Z.json"));
   });
@@ -119,6 +119,7 @@ describe("static guard: milestone 1 cannot reach a database, environment files o
     "modules/ai/gateway/extractVideoCredits.ts",
     "modules/ai/structuredOutput/validateVideoCreditsOutput.ts",
     "modules/ai/prompts/videoCredits/videoCreditsPromptV1.ts",
+    "modules/ai/prompts/videoCredits/videoCreditsPromptV2.ts",
     "modules/mmke/provenance/verbatimEvidence.ts",
     "modules/ai/providers/fake/fakeAIProvider.ts",
   ];

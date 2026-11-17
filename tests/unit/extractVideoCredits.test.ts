@@ -10,7 +10,7 @@ import {
 } from "../../modules/ai/gateway/extractVideoCredits";
 import { FakeAIProvider } from "../../modules/ai/providers/fake/fakeAIProvider";
 import type { AIProvider } from "../../modules/ai/provider/aiProvider";
-import { VIDEO_CREDITS_PROMPT_V1, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V1 } from "../../modules/ai/prompts/videoCredits/videoCreditsPromptV1";
+import { VIDEO_CREDITS_PROMPT_V2, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V2 } from "../../modules/ai/prompts/videoCredits/videoCreditsPromptV2";
 
 // Credits extraction, milestone 1: one video through the gateway with the deterministic fake provider. No network, no database.
 
@@ -47,11 +47,11 @@ describe("which videos are sent", () => {
 describe("the request", () => {
   it("keeps the instructions apart from the video's text, which travels only as context data", () => {
     const request = buildVideoCreditsRequest(dingiri, "claude-opus-5-5");
-    expect(request.systemInstructions).toBe(VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V1);
+    expect(request.systemInstructions).toBe(VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V2);
     expect(request.systemInstructions).not.toContain("Dingiri");
     expect(request.contextPayload).toEqual({ video: { youtubeVideoId: "zEQmnmwr5UE", title: dingiri.title, description: dingiri.description, publishedAt: dingiri.publishedAt } });
     expect(request).toMatchObject({
-      promptVersion: VIDEO_CREDITS_PROMPT_V1,
+      promptVersion: VIDEO_CREDITS_PROMPT_V2,
       targetEntityType: "YOUTUBE_VIDEO",
       targetEntityId: "zEQmnmwr5UE",
       suggestionType: "CANONICAL_RELATIONSHIP_CANDIDATE",

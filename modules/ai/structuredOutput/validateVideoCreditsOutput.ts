@@ -1,11 +1,16 @@
-// Credits extraction, milestone 1: the deterministic checks applied to a model's video-credits-v1 output. PURE (no fs, no network, no database).
+// Credits extraction: the deterministic checks applied to a model's video-credits-v2 output (and to v1 answers, which lack venueType.fromName and
+// suggestedTitle.alternateTitle and read as false / none). PURE (no fs, no network, no database).
 //
 // Two layers, as for the recording-editorial output: first the SHAPE (anything malformed rejects the whole output), then each proposal on its own:
 //   - its quotation must occur verbatim in the field it cites (the shared check in modules/mmke/provenance/verbatimEvidence.ts);
 //   - the name (or value) must occur inside that quotation, exactly as written (case-sensitive; only invisible characters and white space are ignored);
 //   - a work title, when given, must occur in the video's title or description, and only composer, arranger and lyricist credits may carry one;
-//   - a venue type is accepted only when the quotation itself names that kind of place ("church", "chapel", "cathedral", ...);
-//   - a performance date must be YYYY-MM-DD, YYYY-MM or YYYY and its year must appear in the quotation.
+//   - a venue type needs a word for that kind of place ("church", "chapel", "cathedral", ...) in the quotation: OUTSIDE every accepted venue name,
+//     or, when flagged fromName (v2), inside an accepted venue's own name that the quotation contains;
+//   - a performance date must be YYYY-MM-DD, YYYY-MM or YYYY and its year must appear in the quotation;
+//   - when an accepted work title is in a non-Latin script, the suggested title must keep that script; its transliteration is the alternate (v2);
+//   - UNMODELLED gap entries are parsed and their quotations checked; "Presented by" lines are recorded as PRESENTER, and any the proposal
+//     missed are added as DETECTED (v2).
 // A proposal that fails is kept in the result as REJECTED with its reason, never silently dropped, so a reviewer (and the report) can see it.
 // Passing these checks proves the text SAYS it, not that the attribution is right: a person still reviews every accepted proposal.
 
@@ -23,6 +28,8 @@ export const MAX_QUOTE_LENGTH = 300;
 export const MAX_NAME_LENGTH = 200;
 export const MAX_CREDITS = 200;
 export const MAX_GAPS = 30;
+/** Long enough for an UNMODELLED entry: label, name and a quotation of up to MAX_QUOTE_LENGTH characters. */
+export const MAX_GAP_MISSING_LENGTH = 400;
 
 /** Only these roles may name the work a credit belongs to. */
 const ROLES_WITH_WORK: readonly VideoCreditRole[] = ["COMPOSER", "ARRANGER", "LYRICIST"];
@@ -53,7 +60,31 @@ export type CreditRejectionReason =
   | "WORK_TITLE_NOT_IN_TEXT"
   | "DUPLICATE";
 
-export type ValueRejectionReason = "MISSING_QUOTE" | "QUOTE_NOT_FOUND" | "QUOTE_TOO_LONG" | "VALUE_NOT_IN_QUOTE" | "INVALID_DATE" | "VENUE_TYPE_NOT_STATED";
+export type ValueRejectionReason =
+  | "MISSING_QUOTE"
+  | "QUOTE_NOT_FOUND"
+  | "QUOTE_TOO_LONG"
+  | "VALUE_NOT_IN_QUOTE"
+  | "INVALID_DATE"
+  | "VENUE_TYPE_NOT_STATED"
+  /** video-credits-v2: the type word occurs only inside the venue's name, but fromName was not set. */
+  | "VENUE_TYPE_ONLY_IN_NAME"
+  /** video-credits-v2: fromName was set, but no accepted VENUE credit whose name contains the type word appears in the quotation. */
+  | "VENUE_NAME_LACKS_TYPE"
+  /** video-credits-v2: a work's title is in a non-Latin script, but the suggested title is not. */
+  | "ORIGINAL_SCRIPT_REQUIRED";
+
+/** A fact the schema has no field for, recorded in gaps as `UNMODELLED: <LABEL>: <name> -- "<exact quote>"` (video-credits-v2). */
+export interface UnmodelledFact {
+  label: string;
+  name: string;
+  quote: string;
+  /** PROPOSED: written by the model or session. DETECTED: a "Presented by" line the checker found that the proposal did not record. */
+  source: "PROPOSED" | "DETECTED";
+  status: "VERIFIED" | "QUOTE_NOT_FOUND" | "NAME_NOT_IN_QUOTE" | "NOT_A_PRESENTER_LINE";
+}
+
+export const PRESENTER_LABEL = "PRESENTER";
 
 /** One quoted single value (date, venue type, title, recording kind) after the checks. */
 export type CheckedValue<T> =
@@ -74,8 +105,14 @@ export interface CheckedVideoCredits {
   rejected: Array<{ credit: VideoCredit; reason: CreditRejectionReason }>;
   performanceDate: CheckedValue<string>;
   venueType: CheckedValue<VideoVenueType>;
+  /** video-credits-v2: whether the venue type was claimed from the venue's own name (false for v1 answers). */
+  venueTypeFromName: boolean;
   suggestedTitle: CheckedValue<string>;
+  /** video-credits-v2: the transliteration of a non-Latin suggested title (ABSENT for v1 answers). */
+  suggestedTitleAlternate: CheckedValue<string>;
   gaps: VideoCreditsGap[];
+  /** UNMODELLED entries parsed from gaps and checked, plus "Presented by" lines found in the text that the proposal did not record. */
+  unmodelled: UnmodelledFact[];
 }
 
 export type VideoCreditsCheckResult = CheckedVideoCredits | { ok: false; problems: string[] };
@@ -109,9 +146,13 @@ interface ParsedOutput {
   credits: VideoCredit[];
   performanceDate: RawQuoted & { value: string | null };
   venueType: RawQuoted & { value: VideoVenueType | null };
+  venueTypeFromName: boolean;
   suggestedTitle: RawQuoted & { value: string | null };
+  suggestedTitleAlternate: RawQuoted & { value: string | null };
   gaps: VideoCreditsGap[];
 }
+
+const NO_VALUE: RawQuoted & { value: null } = { value: null, quote: null, field: null };
 
 function parseShape(output: unknown): { ok: true; parsed: ParsedOutput } | { ok: false; problems: string[] } {
   const problems: string[] = [];
@@ -125,9 +166,16 @@ function parseShape(output: unknown): { ok: true; parsed: ParsedOutput } | { ok:
 
   const venueType = quotedShape(output.venueType, "venueType", problems);
   if (venueType && venueType.value !== null && !VIDEO_VENUE_TYPES.includes(venueType.value as VideoVenueType)) problems.push(`venueType.value: must be null or one of ${VIDEO_VENUE_TYPES.join(", ")}.`);
+  // v2 adds venueType.fromName; a v1 answer has none, which reads as false.
+  const rawFromName = isObject(output.venueType) ? output.venueType.fromName : undefined;
+  if (rawFromName !== undefined && typeof rawFromName !== "boolean") problems.push("venueType.fromName: must be true or false.");
 
   const suggestedTitle = quotedShape(output.suggestedTitle, "suggestedTitle", problems);
   if (suggestedTitle && !isNullableString(suggestedTitle.value)) problems.push("suggestedTitle.value: must be a string or null.");
+  // v2 adds suggestedTitle.alternateTitle; a v1 answer has none, which reads as no alternate title.
+  const rawAlternate = isObject(output.suggestedTitle) ? output.suggestedTitle.alternateTitle : undefined;
+  const alternate = rawAlternate === undefined || rawAlternate === null ? NO_VALUE : quotedShape(rawAlternate, "suggestedTitle.alternateTitle", problems);
+  if (alternate && !isNullableString(alternate.value)) problems.push("suggestedTitle.alternateTitle.value: must be a string or null.");
 
   const credits: VideoCredit[] = [];
   if (!Array.isArray(output.credits)) problems.push("credits: must be a list.");
@@ -153,10 +201,10 @@ function parseShape(output: unknown): { ok: true; parsed: ParsedOutput } | { ok:
   else
     output.gaps.slice(0, MAX_GAPS).forEach((g, i) => {
       if (!isObject(g) || typeof g.missing !== "string" || typeof g.reason !== "string") problems.push(`gaps[${i}]: needs missing and reason.`);
-      else gaps.push({ missing: normaliseEvidenceText(g.missing).slice(0, 200), reason: normaliseEvidenceText(g.reason).slice(0, 300) });
+      else gaps.push({ missing: normaliseEvidenceText(g.missing).slice(0, MAX_GAP_MISSING_LENGTH), reason: normaliseEvidenceText(g.reason).slice(0, 300) });
     });
 
-  if (problems.length > 0 || !recordingKind || !performanceDate || !venueType || !suggestedTitle) return { ok: false, problems };
+  if (problems.length > 0 || !recordingKind || !performanceDate || !venueType || !suggestedTitle || !alternate) return { ok: false, problems };
   return {
     ok: true,
     parsed: {
@@ -164,7 +212,9 @@ function parseShape(output: unknown): { ok: true; parsed: ParsedOutput } | { ok:
       credits,
       performanceDate: performanceDate as ParsedOutput["performanceDate"],
       venueType: venueType as ParsedOutput["venueType"],
+      venueTypeFromName: rawFromName === true,
       suggestedTitle: suggestedTitle as ParsedOutput["suggestedTitle"],
+      suggestedTitleAlternate: alternate as ParsedOutput["suggestedTitleAlternate"],
       gaps,
     },
   };
@@ -233,7 +283,7 @@ export function quoteStatesVenueType(quote: string, type: VideoVenueType): boole
 }
 
 /**
- * Checks a video-credits-v1 output against the video it was produced from. Never throws; a malformed output returns { ok: false, problems }.
+ * Checks a video-credits-v2 (or v1) output against the video it was produced from. Never throws; a malformed output returns { ok: false, problems }.
  */
 export function validateVideoCreditsOutput(output: unknown, video: VideoText): VideoCreditsCheckResult {
   const shape = parseShape(output);
@@ -272,8 +322,92 @@ export function validateVideoCreditsOutput(output: unknown, video: VideoText): V
       if (!isValidPartialDate(value)) return "INVALID_DATE";
       return normaliseEvidenceText(quote).includes(value.slice(0, 4)) ? null : "VALUE_NOT_IN_QUOTE";
     }),
-    venueType: checkValue<VideoVenueType>(parsed.venueType, video, (value, quote) => (quoteStatesVenueType(quote, value) ? null : "VENUE_TYPE_NOT_STATED")),
-    suggestedTitle: checkValue<string>(parsed.suggestedTitle, video, (value, quote) => (contains(quote, value) ? null : "VALUE_NOT_IN_QUOTE")),
+    venueType: checkValue<VideoVenueType>(parsed.venueType, video, (value, quote) => venueTypeProblem(value, quote, parsed.venueTypeFromName, venueNames(accepted))),
+    venueTypeFromName: parsed.venueTypeFromName,
+    suggestedTitle: requireOriginalScript(
+      checkValue<string>(parsed.suggestedTitle, video, (value, quote) => (contains(quote, value) ? null : "VALUE_NOT_IN_QUOTE")),
+      accepted
+    ),
+    suggestedTitleAlternate: checkValue<string>(parsed.suggestedTitleAlternate, video, (value, quote) => (contains(quote, value) ? null : "VALUE_NOT_IN_QUOTE")),
     gaps: parsed.gaps,
+    unmodelled: checkUnmodelled(parsed.gaps, video),
   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// video-credits-v2 rules
+
+const venueNames = (accepted: readonly VideoCredit[]) => accepted.filter((c) => c.role === "VENUE").map((c) => normaliseEvidenceText(c.name));
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The quotation with every accepted venue name taken out, so a type word can be checked OUTSIDE the names. */
+export function withoutVenueNames(quote: string, names: readonly string[]): string {
+  return names.reduce((text, name) => (name.length > 0 ? text.replace(new RegExp(escapeRegExp(name), "giu"), " ") : text), normaliseEvidenceText(quote));
+}
+
+/**
+ * fromName false: the type word must occur in the quotation OUTSIDE every accepted venue name ("Church: TELC Arulnathar Lutheran Church" passes,
+ * "Venue: Bishop Heber Chapel" does not). fromName true: the quotation must contain an accepted venue name that itself contains the type word.
+ */
+export function venueTypeProblem(value: VideoVenueType, quote: string, fromName: boolean, names: readonly string[]): ValueRejectionReason | null {
+  if (fromName) {
+    const fits = names.some((name) => contains(quote, name) && quoteStatesVenueType(name, value));
+    return fits ? null : "VENUE_NAME_LACKS_TYPE";
+  }
+  if (!quoteStatesVenueType(quote, value)) return "VENUE_TYPE_NOT_STATED";
+  return quoteStatesVenueType(withoutVenueNames(quote, names), value) ? null : "VENUE_TYPE_ONLY_IN_NAME";
+}
+
+/** True when the text has a letter outside the Latin script (Tamil, Devanagari, Cyrillic, …). Digits, punctuation and marks do not count. */
+export const hasNonLatinLetters = (text: string): boolean => [...text].some((ch) => /\p{L}/u.test(ch) && !/\p{Script=Latin}/u.test(ch));
+
+/** When an accepted WORK title is in a non-Latin script, an accepted suggested title must keep that script (its transliteration is the alternate). */
+function requireOriginalScript(suggested: CheckedValue<string>, accepted: readonly VideoCredit[]): CheckedValue<string> {
+  if (suggested.status !== "ACCEPTED") return suggested;
+  const nonLatinWork = accepted.some((c) => c.role === "WORK" && hasNonLatinLetters(c.name));
+  if (!nonLatinWork || hasNonLatinLetters(suggested.value)) return suggested;
+  return { status: "REJECTED", value: suggested.value, quote: suggested.quote, field: suggested.field, reason: "ORIGINAL_SCRIPT_REQUIRED" };
+}
+
+const UNMODELLED_ENTRY = /^UNMODELLED:\s*([^:]+?)\s*:\s*(.+?)\s+--\s+"(.*)"$/u;
+const PRESENTER_LINE = /(Recorded and presented by|Presented by)\s*:\s*(\S.*?)\s*$/iu;
+
+/** Parses one gap's `missing` text; null when it is not an UNMODELLED entry. */
+export function parseUnmodelledEntry(missing: string): { label: string; name: string; quote: string } | null {
+  const m = UNMODELLED_ENTRY.exec(normaliseEvidenceText(missing));
+  return m ? { label: m[1].trim().toUpperCase() === PRESENTER_LABEL ? PRESENTER_LABEL : m[1].trim(), name: m[2].trim(), quote: m[3] } : null;
+}
+
+/** Every "Recorded and presented by: …" or "Presented by: …" line in the description, as name + quote (the line from the label on). */
+export function findPresenterLines(description: string | null): Array<{ name: string; quote: string }> {
+  const found: Array<{ name: string; quote: string }> = [];
+  for (const line of (description ?? "").split(/\r?\n/)) {
+    const m = PRESENTER_LINE.exec(normaliseEvidenceText(line));
+    if (m) found.push({ name: m[2].replace(/[.;,]+$/u, "").trim(), quote: m[0].trim() });
+  }
+  return found;
+}
+
+const caseFold = (s: string) => normaliseEvidenceText(s).toLocaleLowerCase("en");
+
+function checkUnmodelled(gaps: readonly VideoCreditsGap[], video: VideoText): UnmodelledFact[] {
+  const facts: UnmodelledFact[] = [];
+  for (const gap of gaps) {
+    const entry = parseUnmodelledEntry(gap.missing);
+    if (!entry) continue;
+    let status: UnmodelledFact["status"] = "VERIFIED";
+    if (!quoteOccursIn(fieldText(video, "description"), entry.quote) && !quoteOccursIn(fieldText(video, "title"), entry.quote)) status = "QUOTE_NOT_FOUND";
+    else if (!contains(entry.quote, entry.name)) status = "NAME_NOT_IN_QUOTE";
+    else if (entry.label === PRESENTER_LABEL && !PRESENTER_LINE.test(normaliseEvidenceText(entry.quote))) status = "NOT_A_PRESENTER_LINE";
+    facts.push({ ...entry, source: "PROPOSED", status });
+  }
+  // "Presented by" lines the proposal did not record are added, so every presenter the text states reaches the review.
+  const recorded = new Set(facts.filter((f) => f.label === PRESENTER_LABEL).map((f) => caseFold(f.name)));
+  for (const line of findPresenterLines(video.description)) {
+    if (recorded.has(caseFold(line.name))) continue;
+    recorded.add(caseFold(line.name));
+    facts.push({ label: PRESENTER_LABEL, name: line.name, quote: line.quote, source: "DETECTED", status: "VERIFIED" });
+  }
+  return facts;
 }

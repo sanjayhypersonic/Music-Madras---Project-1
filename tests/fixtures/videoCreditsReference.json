@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "description": "Editor-verified reference records (2026-11-17) for scoring credit proposals. basis: source-stated = the video's own title or description states it; editor-supplied = known to the editor, not in the YouTube text. 'contradictions' are proposals that must never be made for that video. Names are the editor's spelling; matching ignores letter case, punctuation and parenthetical aliases.",
+  "videos": [
+    {
+      "youtubeVideoId": "Vl8Xe2COp2c",
+      "facts": [
+        { "kind": "RECORDING_TITLE", "name": "Come Now, Child of Promise", "basis": "source-stated" },
+        { "kind": "WORK", "name": "Come Now, Child of Promise", "basis": "source-stated" },
+        { "kind": "PUBLISHED_TITLE", "name": "Long-Awaited One", "workTitle": "Come Now, Child of Promise", "basis": "source-stated" },
+        { "kind": "COMPOSER", "name": "Nicole Elsey", "workTitle": "Come Now, Child of Promise", "basis": "source-stated", "note": "Words and music." },
+        { "kind": "LYRICIST", "name": "Nicole Elsey", "workTitle": "Come Now, Child of Promise", "basis": "source-stated", "note": "Words and music." },
+        { "kind": "ARRANGER", "name": "Douglas Nolan", "workTitle": "Come Now, Child of Promise", "basis": "source-stated" },
+        { "kind": "CHOIR", "name": "Bishop Heber Chapel Choir", "basis": "source-stated" },
+        { "kind": "INSTITUTION", "name": "Madras Christian College", "basis": "source-stated" },
+        { "kind": "CONDUCTOR", "name": "Jacob George", "basis": "source-stated" },
+        { "kind": "VENUE", "name": "Bishop Heber Chapel", "basis": "source-stated" },
+        { "kind": "PERFORMANCE_DATE", "name": "2025-12-12", "basis": "source-stated" },
+        { "kind": "PRESENTER", "name": "Music Madras", "basis": "source-stated", "note": "Recorded and presented by." }
+      ],
+      "contradictions": [
+        { "kind": "ARRANGER", "name": "Douglas Elsey", "note": "The video title's 'Douglas Elsey' is a title error; no credit." }
+      ],
+      "flags": []
+    },
+    {
+      "youtubeVideoId": "zRjM7rP7hpM",
+      "facts": [
+        { "kind": "RECORDING_TITLE", "name": "Blagoslovi Dushe Moya Gospoda", "basis": "source-stated" },
+        { "kind": "WORK", "name": "Blagoslovi Dushe Moya Gospoda", "basis": "source-stated" },
+        { "kind": "SUBTITLE", "name": "Magnificat", "workTitle": "Blagoslovi Dushe Moya Gospoda", "basis": "source-stated", "note": "A subtitle of the same work, never a second work." },
+        { "kind": "COMPOSER", "name": "Daniel Evans", "workTitle": "Blagoslovi Dushe Moya Gospoda", "basis": "source-stated" },
+        { "kind": "CONDUCTOR", "name": "Daniel Evans", "basis": "source-stated" },
+        { "kind": "CHOIR", "name": "Bishop Heber Chapel Choir", "basis": "source-stated" },
+        { "kind": "INSTITUTION", "name": "Madras Christian College", "basis": "source-stated" },
+        { "kind": "VENUE", "name": "Bishop Heber Chapel", "basis": "source-stated" },
+        { "kind": "PERFORMANCE_DATE", "name": "2025-12-12", "basis": "source-stated" },
+        { "kind": "PRESENTER", "name": "Music Madras", "basis": "source-stated", "note": "Recorded and presented by." }
+      ],
+      "contradictions": [
+        { "kind": "WORK", "name": "Magnificat", "note": "'Magnificat' is the subtitle of the one work, never a second work." }
+      ],
+      "flags": []
+    },
+    {
+      "youtubeVideoId": "S4aemnTWODM",
+      "facts": [
+        { "kind": "RECORDING_TITLE", "name": "Moving Up to Gloryland", "basis": "source-stated" },
+        { "kind": "WORK", "name": "Moving Up to Gloryland", "basis": "source-stated" },
+        { "kind": "CHOIR", "name": "ECI Hope Cathedral Men's Choir", "basis": "source-stated", "note": "The text writes 'Mens'; the editor's spelling is 'Men's'." },
+        { "kind": "ORIGINAL_PERFORMER", "name": "Gaither Vocal Band", "workTitle": "Moving Up to Gloryland", "basis": "source-stated", "note": "Original performance association: this is a cover. Never a composer." },
+        { "kind": "CONDUCTOR", "name": "Jim Billy", "basis": "editor-supplied", "note": "The choir was led by Jim Billy; not in the YouTube text." },
+        { "kind": "VENUE", "name": "TELC Arulnathar Lutheran Church", "city": "Chennai", "basis": "source-stated" },
+        { "kind": "PERFORMANCE_DATE", "name": "2025-12-07", "basis": "source-stated" }
+      ],
+      "contradictions": [
+        { "kind": "COMPOSER", "name": "Gaither Vocal Band", "note": "The original performers of a cover, never its composer." }
+      ],
+      "flags": [
+        { "kind": "COMPOSER", "workTitle": "Moving Up to Gloryland", "note": "Composer unassigned: flag for research." }
+      ]
+    },
+    {
+      "youtubeVideoId": "jiNrP52imwg",
+      "facts": [
+        { "kind": "RECORDING_TITLE", "name": "Christmas Carol Medley", "basis": "source-stated", "note": "One Recording containing three works." },
+        { "kind": "WORK", "name": "Ding Dong! Merrily on High", "basis": "source-stated" },
+        { "kind": "LYRICIST", "name": "G. R. Woodward", "workTitle": "Ding Dong! Merrily on High", "basis": "source-stated" },
+        { "kind": "ARRANGER", "name": "Mack Wilberg", "workTitle": "Ding Dong! Merrily on High", "basis": "source-stated" },
+        { "kind": "WORK", "name": "In the Beginning, God Created the Heavens and the Earth", "basis": "source-stated" },
+        { "kind": "COMPOSER", "name": "Steven Lalsangliana Ralte", "workTitle": "In the Beginning, God Created the Heavens and the Earth", "basis": "source-stated", "note": "Words and music." },
+        { "kind": "LYRICIST", "name": "Steven Lalsangliana Ralte", "workTitle": "In the Beginning, God Created the Heavens and the Earth", "basis": "source-stated", "note": "Words and music." },
+        { "kind": "WORK", "name": "Love Came Gently, Soft as a Baby", "basis": "source-stated" },
+        { "kind": "COMPOSER", "name": "Marty Funderburk", "workTitle": "Love Came Gently, Soft as a Baby", "basis": "source-stated", "note": "Words and music." },
+        { "kind": "LYRICIST", "name": "Marty Funderburk", "workTitle": "Love Came Gently, Soft as a Baby", "basis": "source-stated", "note": "Words and music." },
+        { "kind": "ARRANGER", "name": "Bruce Greer", "workTitle": "Love Came Gently, Soft as a Baby", "basis": "source-stated" },
+        { "kind": "CHOIR", "name": "Bishop Heber Chapel Choir", "basis": "source-stated" },
+        { "kind": "INSTITUTION", "name": "Madras Christian College", "basis": "source-stated" },
+        { "kind": "CONDUCTOR", "name": "Jacob George", "basis": "source-stated" },
+        { "kind": "VENUE", "name": "Bishop Heber Chapel", "basis": "source-stated" },
+        { "kind": "PERFORMANCE_DATE", "name": "2025-12-12", "basis": "source-stated" }
+      ],
+      "contradictions": [
+        { "kind": "COMPOSER", "name": null, "workTitle": "Ding Dong! Merrily on High", "note": "No composer is stated for Ding Dong! Merrily on High; any composer credit for it is wrong." }
+      ],
+      "flags": []
+    },
+    {
+      "youtubeVideoId": "rxGfBGWLnTI",
+      "facts": [
+        { "kind": "RECORDING_TITLE", "name": "பாலன் பிறந்த ராவில்", "basis": "source-stated", "note": "The Tamil title is the title; never replace it with the transliteration." },
+        { "kind": "WORK", "name": "பாலன் பிறந்த ராவில்", "basis": "source-stated" },
+        { "kind": "ORIGINAL_LANGUAGE_TITLE", "name": "பாலன் பிறந்த ராவில்", "language": "ta", "basis": "source-stated" },
+        { "kind": "TRANSLITERATION", "name": "Paalan Pirandha Raavil", "basis": "source-stated" },
+        { "kind": "COMPOSER", "name": "Finley Abraham", "workTitle": "பாலன் பிறந்த ராவில்", "basis": "source-stated" },
+        { "kind": "CONDUCTOR", "name": "Finley Abraham", "basis": "source-stated" },
+        { "kind": "CHOIR", "name": "Bishop Heber Chapel Choir", "basis": "source-stated" },
+        { "kind": "INSTITUTION", "name": "Madras Christian College", "basis": "source-stated" },
+        { "kind": "VENUE", "name": "Bishop Heber Chapel", "basis": "source-stated" },
+        { "kind": "PERFORMANCE_DATE", "name": "2025-12-12", "basis": "source-stated" },
+        { "kind": "PRESENTER", "name": "Music Madras", "basis": "source-stated", "note": "Presented by." }
+      ],
+      "contradictions": [
+        { "kind": "RECORDING_TITLE", "name": "Paalan Pirandha Raavil", "note": "The transliteration must never replace the Tamil title." },
+        { "kind": "WORK", "name": "Paalan Pirandha Raavil", "note": "The transliteration must never replace the Tamil title." }
+      ],
+      "flags": []
+    }
+  ]
+}

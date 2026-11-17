@@ -8,7 +8,7 @@
 //   - the only write is the local report file.
 
 import path from "path";
-import { VIDEO_CREDITS_OUTPUT_SCHEMA_V1, VIDEO_CREDITS_PROMPT_V1, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V1 } from "../ai/prompts/videoCredits/videoCreditsPromptV1";
+import { VIDEO_CREDITS_OUTPUT_SCHEMA_V2, VIDEO_CREDITS_PROMPT_V2, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V2 } from "../ai/prompts/videoCredits/videoCreditsPromptV2";
 import { buildVideoCreditsContext, videoSkipReason, type VideoCreditsOutcome, type VideoCreditsSource } from "../ai/gateway/extractVideoCredits";
 
 export const VIDEO_CREDITS_EXIT_CODES = { SUCCEEDED: 0, FAILED: 2, REFUSED: 4 } as const;
@@ -95,7 +95,7 @@ export interface VideoCreditsEstimate {
 
 export function estimateVideoCreditsCost(videos: readonly VideoCreditsSource[], model: string): VideoCreditsEstimate {
   const price = MODEL_PRICES[model];
-  const fixed = estimateTokens(VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V1) + estimateTokens(JSON.stringify(VIDEO_CREDITS_OUTPUT_SCHEMA_V1));
+  const fixed = estimateTokens(VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V2) + estimateTokens(JSON.stringify(VIDEO_CREDITS_OUTPUT_SCHEMA_V2));
   const sent = videos.filter((v) => videoSkipReason(v) === null);
   const inputTokens = sent.reduce((sum, v) => sum + fixed + estimateTokens(JSON.stringify({ context: buildVideoCreditsContext(v) })), 0);
   const scenario = (perVideo: number) => {
@@ -111,7 +111,7 @@ const count = (n: number) => n.toLocaleString("en-US");
 
 export function formatEstimate(estimate: VideoCreditsEstimate): string[] {
   const lines = [
-    `Estimate for ${estimate.model} (${VIDEO_CREDITS_PROMPT_V1}; local estimate at ${CHARS_PER_TOKEN} characters per token, no API call):`,
+    `Estimate for ${estimate.model} (${VIDEO_CREDITS_PROMPT_V2}; local estimate at ${CHARS_PER_TOKEN} characters per token, no API call):`,
     `  Videos that would be sent:  ${estimate.videosToSend}`,
     `  Input tokens:               ${count(estimate.inputTokens)} (instructions and schema ${count(estimate.fixedInputTokensPerVideo)} per video, plus each video's text)`,
     `  Typical (${count(OUTPUT_TOKENS_PER_VIDEO.typical)} output/video): ${count(estimate.typical.outputTokens)} output tokens, ${dollars(estimate.typical.cost)} standard, ${dollars(estimate.typical.batchCost)} Batch API`,
@@ -146,7 +146,7 @@ export function totalVideoCredits(outcomes: readonly VideoCreditsOutcome[]): Vid
       totals.creditsAccepted += o.result.accepted.length;
       totals.creditsRejected += o.result.rejected.length;
       for (const r of o.result.rejected) bump(totals.rejectionReasons, `credit:${r.reason}`);
-      for (const [name, value] of [["performanceDate", o.result.performanceDate], ["venueType", o.result.venueType], ["suggestedTitle", o.result.suggestedTitle], ["recordingKind", o.result.recordingKind]] as const) {
+      for (const [name, value] of [["performanceDate", o.result.performanceDate], ["venueType", o.result.venueType], ["suggestedTitle", o.result.suggestedTitle], ["alternateTitle", o.result.suggestedTitleAlternate], ["recordingKind", o.result.recordingKind]] as const) {
         if (value.status === "REJECTED") bump(totals.rejectionReasons, `${name}:${value.reason}`);
       }
     }
@@ -173,11 +173,12 @@ export function formatOutcome(o: VideoCreditsOutcome): string[] {
       const lines = [`${head}\n    EXTRACTED: ${r.accepted.length} credit(s) accepted, ${r.rejected.length} rejected`];
       for (const c of r.accepted) lines.push(`      + ${c.role.padEnd(10)} ${shown(c.name, 45)}${c.workTitle ? ` [${shown(c.workTitle, 30)}]` : ""}  <- ${c.field}: "${shown(c.quote, 50)}"`);
       for (const { credit, reason } of r.rejected) lines.push(`      - ${credit.role.padEnd(10)} ${shown(credit.name, 45)}  REJECTED ${reason}`);
-      for (const [name, value] of [["recordingKind", r.recordingKind], ["performanceDate", r.performanceDate], ["venueType", r.venueType], ["suggestedTitle", r.suggestedTitle]] as const) {
-        if (value.status === "ACCEPTED") lines.push(`      ${name}: ${value.value} (quoted)`);
+      for (const [name, value] of [["recordingKind", r.recordingKind], ["performanceDate", r.performanceDate], ["venueType", r.venueType], ["suggestedTitle", r.suggestedTitle], ["alternateTitle", r.suggestedTitleAlternate]] as const) {
+        if (value.status === "ACCEPTED") lines.push(`      ${name}: ${value.value} (quoted${name === "venueType" && r.venueTypeFromName ? ", from the venue name" : ""})`);
         else if (value.status === "REJECTED") lines.push(`      ${name}: ${value.value} REJECTED ${value.reason}`);
       }
-      for (const g of r.gaps.slice(0, 5)) lines.push(`      gap: ${shown(g.missing, 40)} (${shown(g.reason, 60)})`);
+      for (const u of r.unmodelled) lines.push(`      unmodelled ${u.label}: ${shown(u.name, 45)} [${u.source === "DETECTED" ? "detected, " : ""}${u.status}]`);
+      for (const g of r.gaps.filter((x) => !x.missing.startsWith("UNMODELLED:")).slice(0, 5)) lines.push(`      gap: ${shown(g.missing, 40)} (${shown(g.reason, 60)})`);
       return lines;
     }
   }
@@ -214,7 +215,7 @@ export function buildVideoCreditsReport(input: {
   return {
     kind: "video-credits-dry-run",
     generatedAt: input.generatedAt.toISOString(),
-    promptVersion: VIDEO_CREDITS_PROMPT_V1,
+    promptVersion: VIDEO_CREDITS_PROMPT_V2,
     provider: "fake",
     estimateModel: input.args.model,
     input: { videosFile: input.args.videosFile, fakeResponsesFile: input.args.fakeResponsesFile, limit: input.args.limit },
