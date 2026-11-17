@@ -76,7 +76,7 @@ function main(): number {
       const { youtubeVideoId: _id, ...output } = p as Record<string, unknown>;
       const checked = validateVideoCreditsOutput(output, byId.get(id)!);
       if (checked.ok) accepted += checked.accepted.length;
-      if (!chosen.has(id)) chosen.set(id, { item: { proposalsFile: name, video: byId.get(id)!, proposal: p }, offset: batchOffset(exportName), index });
+      if (!chosen.has(id)) chosen.set(id, { item: { proposalsFile: name, video: byId.get(id)!, proposal: p, titleOnly: byId.get(id)!.titleOnly === true }, offset: batchOffset(exportName), index });
     });
 
     const check = checks

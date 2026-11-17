@@ -1,6 +1,6 @@
 # Content editorial standard (credits, titles, descriptions)
 
-Status: Phase B0 (editorial learning), 2026-11-17. This standard describes how Music Madras names, credits and describes a recording, so that people, the credit checker (`npm run ai:video-credits-check`) and any later AI assistance follow the same rules. It was written from the editor's decisions on five videos (recorded in `tests/fixtures/videoCreditsReference.json`) and from reading their rewritten YouTube descriptions. It does not change the catalogue, and nothing here is generated automatically yet.
+Status: Phase B0 (editorial learning), 2026-11-17. This standard describes how Music Madras names, credits and describes a recording, so that people, the credit checker (`npm run ai:video-credits-check`) and any later AI assistance follow the same rules. It was written from the editor's decisions on five videos (recorded in `tests/fixtures/videoCreditsReference.json`) and from reading their rewritten YouTube descriptions. It does not change the catalogue. Since Phase B2, `npm run ai:video-credits-describe` drafts descriptions from approved facts with a fixed template in the structure of section 7; the drafts go to an editor and never replace YouTube text (`docs/video-credits-review-and-approval.md` section 7).
 
 ## 1. Titles
 
@@ -51,7 +51,9 @@ The same fact often appears twice: in a sentence ("Performed by the Bishop Heber
 - The original-script title is the title of record. The transliteration is kept beside it, never instead of it (*பாலன் பிறந்த ராவில்* / *Paalan Pirandha Raavil*).
 - Spellings of transliterations vary ("Magizhvom" / "Makilvom", "Onrum" / "Ondrum"). Choose one for the record and keep the others as alternate titles; do not silently merge.
 - A title already in Latin letters (*Blagoslovi Dushe Moya Gospoda*) is kept as written; a translation of its meaning ("Bless the Lord, O my soul") is a note, not a title.
-- Public pages currently load fonts with Latin glyphs only, and slugs keep only Latin letters, so a Tamil-only title produces an empty slug (section 8).
+- Public pages load Noto Sans Tamil and Noto Serif Tamil after the Latin fonts (2026-11-17), so Tamil titles render in a matching face.
+- Slugs keep only Latin letters. Records made by `npm run ai:video-credits-create` get their slug from the transliteration when the title is non-Latin, so *பாலன் பிறந்த ராவில்* becomes `paalan-pirandha-raavil` (rule in `modules/mmke/slug/canonicalSlug.ts`; project register R-31). Studio's create forms still slug a Tamil-only name to an empty string.
+- Archive search finds a work, and a published Recording of it, by any part of an alternate title, ignoring letter case ("pirandha", "dingiri dingale").
 
 ## 6. Medleys
 

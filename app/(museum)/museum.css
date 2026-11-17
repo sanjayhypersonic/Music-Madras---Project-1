@@ -10,7 +10,8 @@
  * rules here. Dark is the default; light is a full, deliberate override set by
  * :root[data-theme="light"] in tokens.css — not a dimmed copy of dark.
  *
- * Fonts: --mm-font-serif / --mm-font-sans are provided by next/font (see
+ * Fonts: --mm-font-serif / --mm-font-sans (and the Tamil fallbacks --mm-font-tamil-serif /
+ * --mm-font-tamil-sans, listed after them) are provided by next/font (see
  * app/fonts.ts) on the .museum-root element; they are used directly.
  */
 
@@ -21,7 +22,7 @@
 .museum-root {
   background: var(--mm-background);
   color: var(--mm-text-primary);
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   line-height: 1.6;
   min-height: 100vh;
   transition: background-color var(--mm-transition), color var(--mm-transition);
@@ -32,7 +33,7 @@
 .museum-root h3,
 .museum-root h4 {
   color: var(--mm-heading);
-  font-family: var(--mm-font-serif);
+  font-family: var(--mm-font-serif), var(--mm-font-tamil-serif);
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
@@ -134,7 +135,7 @@
 .museum-nav a {
   display: inline-block;
   padding: 0.3rem 0; /* a comfortable (>= 24px) target without changing the visual rhythm */
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--mm-text-muted);
@@ -156,7 +157,7 @@
 }
 
 .museum-eyebrow {
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -217,7 +218,7 @@
 }
 
 .museum-curator-note {
-  font-family: var(--mm-font-serif);
+  font-family: var(--mm-font-serif), var(--mm-font-tamil-serif);
   font-style: italic;
   font-size: 1.1rem;
   color: var(--mm-text-primary);
@@ -360,7 +361,7 @@
 .museum-category-card__status {
   display: inline-block;
   margin-top: 0.85rem;
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.07em;
@@ -401,7 +402,7 @@
 .museum-recording-card__title {
   display: block;
   padding: 1rem 1.1rem 1.25rem;
-  font-family: var(--mm-font-serif);
+  font-family: var(--mm-font-serif), var(--mm-font-tamil-serif);
   font-size: 1rem;
   line-height: 1.4;
 }
@@ -449,7 +450,7 @@
   flex-wrap: wrap;
   padding: 0;
   margin: 0;
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   font-size: 0.8rem;
 }
 
@@ -501,7 +502,7 @@
 .museum-related-list li {
   padding: 0.85rem 0;
   border-bottom: 1px solid var(--mm-border);
-  font-family: var(--mm-font-serif);
+  font-family: var(--mm-font-serif), var(--mm-font-tamil-serif);
 }
 
 .museum-related-list li:first-child {
@@ -509,7 +510,7 @@
 }
 
 .museum-root .museum-performance-participants {
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   color: var(--mm-text-muted);
   font-size: 0.9rem;
 }
@@ -518,7 +519,7 @@
   max-width: 72rem;
   margin: 3rem auto 0;
   padding: 0 1.5rem;
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -609,7 +610,7 @@ main:focus {
   border: 1px solid var(--mm-border);
   background: var(--mm-surface);
   color: var(--mm-text-primary);
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   font-size: 0.95rem;
 }
 
@@ -635,7 +636,7 @@ main:focus {
   padding: 0.45rem 1rem;
   border: 1px solid var(--mm-border);
   border-radius: var(--mm-radius-pill);
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--mm-text-muted);
@@ -663,7 +664,7 @@ main:focus {
   align-items: center;
   gap: 1rem;
   margin-top: 2rem;
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
   font-size: 0.9rem;
 }
 
@@ -733,7 +734,7 @@ main:focus {
     display: block;
     padding: 0.85rem 0.25rem;
     border-bottom: 1px solid var(--mm-border);
-    font-family: var(--mm-font-sans);
+    font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
     font-size: 1rem;
     font-weight: 600;
     color: var(--mm-text-primary);
@@ -795,7 +796,7 @@ main:focus {
 /* Secondary (outline) button used by the not-found / error states, and button-element support. */
 button.museum-button {
   cursor: pointer;
-  font-family: var(--mm-font-sans);
+  font-family: var(--mm-font-sans), var(--mm-font-tamil-sans);
 }
 
 .museum-root a.museum-button.museum-button--secondary,

@@ -75,6 +75,8 @@ export function parseExportFile(raw: unknown): { ok: true; videos: ExportedVideo
       description: (v.description as string | null | undefined) ?? null,
       publishedAt: typeof v.publishedAt === "string" ? v.publishedAt : null,
       playlistTitles: Array.isArray(v.playlistTitles) ? v.playlistTitles.filter((t): t is string => typeof t === "string") : [],
+      // --include-title-only: an empty description, so only quotes from the title can pass the validators (playlist titles are never evidence).
+      ...(v.titleOnly === true ? { titleOnly: true as const } : {}),
     });
   });
   return problems.length > 0 ? { ok: false, problems } : { ok: true, videos };

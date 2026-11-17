@@ -1,6 +1,6 @@
 # Video credits: review and approval
 
-Status: Phase B1, 2026-11-17. This document says how the editorial review sheet is used, and records the one exception under which approved credits may later become staging DRAFT records. **The sheet is for review only. It approves nothing, creates nothing and publishes nothing.**
+Status: Phase B1, 2026-11-17; Phase B2 (sections 6 and 7) the same day. This document says how the editorial review sheet is used, records the one exception under which approved credits may become staging DRAFT records, and describes the tool that does it (section 6) and the description drafts (section 7). **The sheet is for review only. It approves nothing, creates nothing and publishes nothing.**
 
 Related: `docs/video-credits-manual-workflow.md` (how proposals are made and checked) and `docs/content-editorial-standard.md` (titles, roles, provenance tiers and the editor's decisions).
 
@@ -98,4 +98,65 @@ The architecture says accepting an AI suggestion never creates a canonical recor
   - every created record cites its basis.
 - **Auditable and repeatable:** the tool reads a reviewed sheet, prints a report of everything created, matched or skipped, and creates nothing twice when re-run.
 
-Until that tool exists, approved credits stay in the reviewed CSV files.
+The tool now exists (section 6). It has been run only as a dry run on fake data; `--execute` has not been run against any database (project register R-31).
+
+## 6. Creating staging DRAFT records: `npm run ai:video-credits-create`
+
+```bash
+npm run ai:video-credits-create
+```
+
+```bash
+npm run ai:video-credits-create -- --only <videoId>,<videoId>
+```
+
+The dry run (the default) reads `review-credits.csv` and `review-names.csv` in `reports/video-credits/` (another folder inside the repository with `--dir`), and `review-videos.csv` when it is there. It prints a plan per video and writes `credits-create-dry-run-<time>.json` beside them. It connects to **no** database, so matching against existing records is reported only on `--execute`.
+
+How the sheets are read (`modules/jobs/videoCreditsApproved.ts`):
+- A row counts only with `accept`, or `edit` with an `editedName`. Blank, `defer` and `reject` are ignored. Any other word is refused and listed.
+- A RED row needs a note. A credit the checker rejected cannot be accepted as it stands: `edit` it if you know it, and it becomes editor-supplied (basis 4).
+- Every person, group, work and venue must be decided in `review-names.csv` (`accept` or `merge`). Its `canonicalName` is the catalogue spelling. A name seen in several spellings needs a `canonicalName`. An `editedName` that contradicts the `canonicalName` is refused.
+- An edit that changes a name (not only its spelling), a venue type or a date makes the fact editor-supplied (basis 4). Editor-supplied rows keep basis 4.
+- **Venue type.** On a venue-type row, write `edit` with `CHURCH`, `CATHEDRAL`, `CONCERT_HALL`, `STUDIO` or `OUTDOOR`, and a note. This works for a RED row with no type, and records the type as "editor-chosen". Accepting a type inferred from the venue's name keeps it "inferred from name (editor-accepted)": it never becomes a stated type.
+- **Medley.** A medley needs its Recording title approved: write `accept` on the video in `review-videos.csv`. The slug is built from that title and never changes.
+- **Transliteration.** It is approved when the row with the original-script work title is accepted, or when the video is accepted.
+
+What is planned (`modules/jobs/videoCreditsCreate.ts`; the schema mapping is in project register R-31):
+- **Held out.** A video is held out entirely, and listed, when:
+  - any approved work lacks exactly one approved composer (a composer is never invented);
+  - no work is approved;
+  - it has several works and no approved Recording title.
+- **The Recording.** One DRAFT Recording per video, with its works in sheet order (a medley is one Recording). Each work keeps its own composer. An original-script title stays the title; the transliteration and an editor's Latin spelling become alternate titles.
+- **Venue and Performance.** A Venue is planned only with exactly one approved venue and one approved type. Without a Venue there is no Performance, and its choir, conductor and performers go to the sidecar. A Performance needs a Programme (schema), so one Programme per Recording is created, titled with the Recording title.
+- **Dates.** A date is stored only when complete (`YYYY-MM-DD`). A partial date goes to the sidecar.
+- **Sidecar.** Facts with no schema home go to the report's `sidecar` list with their basis and quote, never into a field that would distort them: lyricist, arranger, ensemble, presenter, institution, translator, subtitle, published title, original performer.
+
+`--execute` (built, not yet run):
+
+```bash
+STAGING_DATABASE_URL=<direct url of the STAGING database> npm run ai:video-credits-create -- --confirm-host <host:port/database> --execute
+```
+
+- **Target guard.** Same as the staging content loader: STAGING_DATABASE_URL only, a direct Neon host, "staging" in the database name, `--confirm-host` typed exactly, not a configured real database, NODE_ENV not production, all migrations applied.
+- **Author.** Records are created by the non-login import actor.
+- **Videos.** A video must be stored as public and OBSERVED.
+- **Existing records.** Catalogue records are matched by exact normalised name and created only when absent. An existing record is never modified; a differing venue type or a missing alternate title is reported. Slugs follow the new-record rule (`modules/mmke/slug/canonicalSlug.ts`).
+- **Editor-changed Recordings.** A linked Recording is touched only while it is DRAFT and its draft was last changed by the import actor. Once an editor has saved anything, it is left alone.
+- **Empty slots only.** Only empty draft slots are filled: title, works, performance. Participants are added only to a Performance created in the same run, through the copy-on-write participant service.
+- **Never.** It never publishes, never creates a video page or exposure approval, and never writes anything YouTube-controlled. A re-run creates nothing twice. Each step is printed as it happens and saved in `credits-create-execute-<time>.json`.
+
+## 7. Description drafts: `npm run ai:video-credits-describe`
+
+```bash
+npm run ai:video-credits-describe
+```
+
+The command is local only: no database, no network, no API. It reads the same reviewed sheets and writes `review-descriptions.csv` (UTF-8 with BOM). Each video gets one DRAFT description, built by a fixed template (`modules/jobs/videoCreditsDescribe.ts`) in the order of `docs/content-editorial-standard.md` section 7:
+1. opening line;
+2. performance sentence with creators and conductor;
+3. context (published title, subtitle), when approved;
+4. archive sentence, and the presenter when approved;
+5. "Performance Details" block;
+6. invitation (`--no-invitation` leaves it out).
+
+It uses approved facts only and keeps original-script titles. It makes no characterisation of the music and no historical or theological claim, and it adds no hashtags. Held-out videos still get a draft, with the reason in `notes`. The editor fills `decision`, `editedDescription` and `editorNotes`. Nothing replaces the YouTube text automatically.

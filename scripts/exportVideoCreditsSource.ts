@@ -3,6 +3,8 @@
 //   npm run ai:video-credits-export -- --settings-file <settings file>                                  counts only, writes nothing
 //   npm run ai:video-credits-export -- --settings-file <settings file> --limit 25 --offset 0 --write    also writes reports/video-credits/export-….json
 //   (--out <path inside the repository> overrides the file name; it needs --write)
+//   --include-title-only (default off) also exports public, observed videos with an EMPTY description, marked "titleOnly": true; credits for them
+//   are proposed from the title only (basis 1), never from playlistTitles (docs/video-credits-manual-workflow.md)
 //
 // Not --env-file: that is Node's own option name. Through tsx, a MISSING --env-file makes Node itself exit ("…: not found", code 9) before the script
 // runs, and placed before the script name Node loads EVERY line of the file into the environment. The script refuses --env-file and names
@@ -68,7 +70,7 @@ async function main(): Promise<number> {
   }
 
   console.log(`Video credits export — READ-ONLY from ${describeExportTarget(target)} (staging)`);
-  console.log(`  Batch: offset ${args.offset}, ${args.limit === null ? "no limit" : `limit ${args.limit}`}; ${args.write ? "will write the export file" : "counts only, nothing will be written (add --write)"}`);
+  console.log(`  Batch: offset ${args.offset}, ${args.limit === null ? "no limit" : `limit ${args.limit}`}; ${args.write ? "will write the export file" : "counts only, nothing will be written (add --write)"}${args.includeTitleOnly ? "; title-only videos included" : ""}`);
 
   // Bind the application's database client to the checked target, built from its parsed fields, and stop the repository's .env from adding to or
   // overriding anything. The client is imported only after this.
@@ -83,10 +85,11 @@ async function main(): Promise<number> {
 
   const { exportVideoCreditsSource, disconnectVideoCreditsExport } = await import("../modules/db/repositories/videoCreditsExportRepository");
   try {
-    const { totalMatching, rows } = await exportVideoCreditsSource({ limit: args.limit, offset: args.offset });
+    const { totalMatching, rows } = await exportVideoCreditsSource({ limit: args.limit, offset: args.offset, includeTitleOnly: args.includeTitleOnly });
     const { file, droppedBlankDescriptions } = buildVideoCreditsExportFile({ generatedAt, target, args, totalMatching, rows });
-    console.log(`  Videos matching (public, observed, with a description): ${totalMatching}`);
-    console.log(`  In this batch: ${file.videos.length}${droppedBlankDescriptions > 0 ? ` (${droppedBlankDescriptions} with a blank description left out)` : ""}`);
+    console.log(`  Videos matching (public, observed${args.includeTitleOnly ? "" : ", with a description"}): ${totalMatching}`);
+    const titleOnlyCount = file.videos.filter((v) => v.titleOnly).length;
+    console.log(`  In this batch: ${file.videos.length}${titleOnlyCount > 0 ? ` (${titleOnlyCount} title-only)` : ""}${droppedBlankDescriptions > 0 ? ` (${droppedBlankDescriptions} with a blank description${args.includeTitleOnly ? " and no title" : ""} left out)` : ""}`);
     if (!args.write) {
       console.log("Nothing was written. Add --write to write the export file.");
       return VIDEO_CREDITS_EXPORT_EXIT_CODES.SUCCEEDED;

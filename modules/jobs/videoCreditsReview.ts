@@ -51,6 +51,8 @@ export interface ReviewInputVideo {
   video: VideoText;
   /** The raw proposal object, including youtubeVideoId. */
   proposal: unknown;
+  /** Exported with --include-title-only and an empty description: every fact can only come from the title (basis 1). */
+  titleOnly?: boolean;
 }
 
 export interface CreditRow {
@@ -383,6 +385,15 @@ export function buildReviewSheet(input: { videos: readonly ReviewInputVideo[]; r
           r.questions.push(`${cls}: ${g.reason}`);
         }
       } else question(g.missing.replace(/^(CONFLICT|PLACEHOLDER):\s*/i, ""), `${cls}: ${g.reason}`, "RED");
+    }
+
+    // Title-only videos (--include-title-only): only the title was read, so every fact is at most AMBER and says so. Playlist titles are never read.
+    if (item.titleOnly) {
+      for (const r of thisVideo) {
+        if (r.tier === "GREEN") r.tier = "AMBER";
+        r.questions.push("Title-only video (empty description): read from the YouTube title only, which is weak evidence.");
+      }
+      open.push("title-only video: no description");
     }
 
     // Reference videos: the editor's decisions.

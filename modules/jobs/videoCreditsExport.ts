@@ -28,6 +28,8 @@ export interface VideoCreditsExportArgs {
   offset: number;
   write: boolean;
   outFile: string | null;
+  /** Also export public, observed videos whose description is EMPTY, marked titleOnly (credits are then read from the title only). Default off. */
+  includeTitleOnly: boolean;
 }
 
 const VALUE_FLAGS = new Set(["--settings-file", "--limit", "--offset", "--out"]);
@@ -35,10 +37,15 @@ const VALUE_FLAGS = new Set(["--settings-file", "--limit", "--offset", "--out"])
 export function parseVideoCreditsExportArgs(argv: readonly string[]): { ok: true; args: VideoCreditsExportArgs } | { ok: false; error: string } {
   const values = new Map<string, string>();
   let write = false;
+  let includeTitleOnly = false;
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     if (flag === "--write") {
       write = true;
+      continue;
+    }
+    if (flag === "--include-title-only") {
+      includeTitleOnly = true;
       continue;
     }
     if (flag === "--env-file") {
@@ -64,7 +71,7 @@ export function parseVideoCreditsExportArgs(argv: readonly string[]): { ok: true
   }
   const outFile = values.get("--out") ?? null;
   if (outFile !== null && !write) return { ok: false, error: "--out only makes sense with --write." };
-  return { ok: true, args: { settingsFile, limit, offset, write, outFile } };
+  return { ok: true, args: { settingsFile, limit, offset, write, outFile, includeTitleOnly } };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -138,6 +145,8 @@ export interface ExportedVideo {
   description: string | null;
   publishedAt: string | null;
   playlistTitles: string[];
+  /** Present (true) only for a video exported by --include-title-only with an empty description: propose from the TITLE only (basis 1), never from playlistTitles. */
+  titleOnly?: true;
 }
 
 export interface VideoCreditsExportFile {
@@ -149,11 +158,16 @@ export interface VideoCreditsExportFile {
   offset: number;
   limit: number | null;
   totalMatching: number;
+  /** True when the batch was exported with --include-title-only. */
+  includesTitleOnly?: boolean;
   videos: ExportedVideo[];
 }
 
 export const EXPORT_FILTER_DESCRIPTION =
   "privacyStatus = public, observabilityState = OBSERVED (seen in the latest sync), description not empty; ordered by publishedAt then youtubeVideoId; playlist titles from OBSERVED public playlists only";
+
+export const EXPORT_FILTER_DESCRIPTION_WITH_TITLE_ONLY =
+  "privacyStatus = public, observabilityState = OBSERVED (seen in the latest sync); a video with an empty description is included as titleOnly when its title is not empty; ordered by publishedAt then youtubeVideoId; playlist titles from OBSERVED public playlists only (context, never evidence)";
 
 export const isUsableDescription = (description: string | null): boolean => (description ?? "").trim().length > 0;
 
@@ -165,11 +179,14 @@ export function toExportedVideo(row: VideoCreditsExportRow): ExportedVideo {
 export function buildVideoCreditsExportFile(input: {
   generatedAt: Date;
   target: Pick<ExportTarget, "host" | "database">;
-  args: Pick<VideoCreditsExportArgs, "offset" | "limit">;
+  args: Pick<VideoCreditsExportArgs, "offset" | "limit"> & { includeTitleOnly?: boolean };
   totalMatching: number;
   rows: VideoCreditsExportRow[];
 }): { file: VideoCreditsExportFile; droppedBlankDescriptions: number } {
-  const usable = input.rows.filter((r) => isUsableDescription(r.description));
+  const titleOnly = input.args.includeTitleOnly === true;
+  // Title-only (opt-in): a blank description is exported as null and marked, provided there is a title to read.
+  const usable = input.rows.filter((r) => isUsableDescription(r.description) || (titleOnly && (r.title ?? "").trim().length > 0));
+  const toVideo = (r: VideoCreditsExportRow): ExportedVideo => (isUsableDescription(r.description) ? toExportedVideo(r) : { ...toExportedVideo({ ...r, description: null }), titleOnly: true });
   return {
     droppedBlankDescriptions: input.rows.length - usable.length,
     file: {
@@ -177,11 +194,12 @@ export function buildVideoCreditsExportFile(input: {
       version: 1,
       generatedAt: input.generatedAt.toISOString(),
       source: { host: input.target.host, database: input.target.database },
-      filter: EXPORT_FILTER_DESCRIPTION,
+      filter: titleOnly ? EXPORT_FILTER_DESCRIPTION_WITH_TITLE_ONLY : EXPORT_FILTER_DESCRIPTION,
       offset: input.args.offset,
       limit: input.args.limit,
       totalMatching: input.totalMatching,
-      videos: usable.map(toExportedVideo),
+      ...(titleOnly ? { includesTitleOnly: true } : {}),
+      videos: usable.map(toVideo),
     },
   };
 }

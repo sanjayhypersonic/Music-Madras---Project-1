@@ -5,7 +5,7 @@ import { readVideoCreditsExportBatch, type VideoCreditsExportRow } from "./video
 // first statement makes the transaction read-only. Imported only by scripts/exportVideoCreditsSource.ts, after that script has bound the database
 // client to the checked staging target.
 
-export async function exportVideoCreditsSource(options: { limit: number | null; offset: number }): Promise<{ totalMatching: number; rows: VideoCreditsExportRow[] }> {
+export async function exportVideoCreditsSource(options: { limit: number | null; offset: number; includeTitleOnly?: boolean }): Promise<{ totalMatching: number; rows: VideoCreditsExportRow[] }> {
   return prisma.$transaction((tx) => readVideoCreditsExportBatch(tx, options), { timeout: 60_000, maxWait: 10_000 });
 }
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { sansFont, serifFont } from "../../app/fonts";
+import { sansFont, serifFont, tamilSansFont, tamilSerifFont } from "../../app/fonts";
 import { THEME_INIT_SCRIPT } from "../shared/themeScript";
 import { MuseumHeader } from "./MuseumHeader";
 import { MuseumFooter } from "./MuseumFooter";
@@ -27,7 +27,7 @@ export async function MuseumShell({ children, chrome = "dynamic" }: { children: 
   const { tagline, availableContent } = chrome === "static" ? STATIC_CHROME : await getMuseumChrome();
   const links = visibleNavLinks(MUSEUM_NAV_LINKS, availableContent);
   return (
-    <div className={`museum-root ${serifFont.variable} ${sansFont.variable}`}>
+    <div className={`museum-root ${serifFont.variable} ${sansFont.variable} ${tamilSerifFont.variable} ${tamilSansFont.variable}`}>
       <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       <a href="#main-content" className="museum-skip-link">
         Skip to content

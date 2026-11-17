@@ -1,6 +1,7 @@
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { slugify } from "../../mmke/slug/slugify";
+import { resolveCanonicalSlug, type CanonicalSlugInput } from "../../mmke/slug/canonicalSlug";
 import { createDraftRecording } from "./recordingRepository";
 import type { RecordingWithRevisions } from "./recordingRepository";
 import { attachMediaToRevision } from "./mediaResourceRepository";
@@ -114,6 +115,11 @@ export async function listRecordingLinksForYouTubeVideos(youtubeVideoIds: string
 export async function createRecordingFromYouTubeVideo(input: {
   youtubeVideoId: string;
   actorId: string;
+  /**
+   * Optional (credits pipeline, R-31): the approved canonical title the slug is built from (modules/mmke/slug/canonicalSlug.ts: transliteration
+   * for a non-Latin title, at most 60 characters, year then a number when taken). Omitted by Studio's intake, which keeps its existing slug.
+   */
+  slugSource?: Omit<CanonicalSlugInput, "fallback">;
 }): Promise<CreateRecordingFromYouTubeVideoResult> {
   return prisma.$transaction(
     async (tx) => {
@@ -141,9 +147,15 @@ export async function createRecordingFromYouTubeVideo(input: {
       // (REQUIRED for publication) then makes an editor choose the canonical title explicitly,
       // while the YouTube title stays available, unchanged, through the linked YouTubeVideo
       // (RecordingContext media; the Source step shows it as a reference).
-      // Only the URL slug is seeded from it (a slug is immutable once set).
-      const slugBase = slugify(video.title?.trim() ?? "").slice(0, 80).replace(/-+$/g, "") || "youtube-video";
-      const slug = `${slugBase}-${video.id.slice(0, 8)}`;
+      // Only the URL slug is seeded from it (a slug is immutable once set), and only when no approved canonical title is given.
+      let slug: string;
+      if (input.slugSource) {
+        // Never from the YouTube title: from the approved canonical title, checked against existing Recording slugs inside this transaction.
+        slug = await resolveCanonicalSlug({ ...input.slugSource, fallback: "recording" }, async (candidate) => (await tx.recording.findUnique({ where: { slug: candidate }, select: { id: true } })) !== null);
+      } else {
+        const slugBase = slugify(video.title?.trim() ?? "").slice(0, 80).replace(/-+$/g, "") || "youtube-video";
+        slug = `${slugBase}-${video.id.slice(0, 8)}`;
+      }
 
       const recording = await createDraftRecording({ slug, actorId: input.actorId }, tx);
       const draftRevisionId = recording.currentDraftRevision!.id;

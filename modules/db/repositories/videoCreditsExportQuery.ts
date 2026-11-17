@@ -25,6 +25,12 @@ export const VIDEO_CREDITS_EXPORT_WHERE = {
   NOT: [{ description: "" }],
 } satisfies Prisma.YouTubeVideoWhereInput;
 
+/** --include-title-only: public and still listed, whatever the description (an empty one is exported as titleOnly by the export file builder). */
+export const VIDEO_CREDITS_EXPORT_WHERE_WITH_TITLE_ONLY = {
+  privacyStatus: "public",
+  observabilityState: "OBSERVED",
+} satisfies Prisma.YouTubeVideoWhereInput;
+
 /** Stable order, so --limit / --offset batches do not overlap while the data is unchanged. */
 export const VIDEO_CREDITS_EXPORT_ORDER = [{ publishedAt: "asc" }, { youtubeVideoId: "asc" }] satisfies Prisma.YouTubeVideoOrderByWithRelationInput[];
 
@@ -45,12 +51,13 @@ export type VideoCreditsExportClient = Pick<Prisma.TransactionClient, "$executeR
 
 export async function readVideoCreditsExportBatch(
   tx: VideoCreditsExportClient,
-  options: { limit: number | null; offset: number }
+  options: { limit: number | null; offset: number; includeTitleOnly?: boolean }
 ): Promise<{ totalMatching: number; rows: VideoCreditsExportRow[] }> {
   await tx.$executeRawUnsafe(READ_ONLY_STATEMENT);
-  const totalMatching = await tx.youTubeVideo.count({ where: VIDEO_CREDITS_EXPORT_WHERE });
+  const where = options.includeTitleOnly ? VIDEO_CREDITS_EXPORT_WHERE_WITH_TITLE_ONLY : VIDEO_CREDITS_EXPORT_WHERE;
+  const totalMatching = await tx.youTubeVideo.count({ where });
   const found = await tx.youTubeVideo.findMany({
-    where: VIDEO_CREDITS_EXPORT_WHERE,
+    where,
     orderBy: VIDEO_CREDITS_EXPORT_ORDER,
     skip: options.offset,
     ...(options.limit === null ? {} : { take: options.limit }),

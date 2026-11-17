@@ -27,13 +27,13 @@ const url = (database: string, extra = "") => `postgresql://fake_user:${FAKE_PAS
 describe("parseVideoCreditsExportArgs", () => {
   it("requires --settings-file and defaults to counts only", () => {
     expect(parseVideoCreditsExportArgs([]).ok).toBe(false);
-    expect(parseVideoCreditsExportArgs(["--settings-file", "s.env"])).toEqual({ ok: true, args: { settingsFile: "s.env", limit: null, offset: 0, write: false, outFile: null } });
+    expect(parseVideoCreditsExportArgs(["--settings-file", "s.env"])).toEqual({ ok: true, args: { settingsFile: "s.env", limit: null, offset: 0, write: false, outFile: null, includeTitleOnly: false } });
   });
 
   it("takes --limit, --offset, --write and --out", () => {
     expect(parseVideoCreditsExportArgs(["--settings-file", "s.env", "--limit", "25", "--offset", "50", "--write", "--out", "reports/x.json"])).toEqual({
       ok: true,
-      args: { settingsFile: "s.env", limit: 25, offset: 50, write: true, outFile: "reports/x.json" },
+      args: { settingsFile: "s.env", limit: 25, offset: 50, write: true, outFile: "reports/x.json", includeTitleOnly: false },
     });
   });
 
@@ -174,6 +174,20 @@ describe("the export file", () => {
     expect(file.videos).toEqual([{ youtubeVideoId: "FAKEvid0001", title: "T1", description: "D1", publishedAt: "2024-03-10T10:00:00.000Z", playlistTitles: ["Fake A", "Fake B"] }]);
     expect(file).toMatchObject({ kind: "video-credits-export", version: 1, source: { host: "ep-fake.example.test", database: "fake_staging" }, offset: 0, limit: 25, totalMatching: 2 });
     expect(JSON.stringify(file)).not.toMatch(/password|postgresql:\/\//i);
+  });
+
+  it("with --include-title-only, keeps a blank-description video as titleOnly with a null description", () => {
+    expect(parseVideoCreditsExportArgs(["--settings-file", "s.env", "--include-title-only"])).toMatchObject({ ok: true, args: { includeTitleOnly: true } });
+    const { file, droppedBlankDescriptions } = buildVideoCreditsExportFile({
+      generatedAt: new Date("2026-11-17T09:00:00.000Z"),
+      target: { host: "ep-fake.example.test", database: "fake_staging" },
+      args: { offset: 0, limit: 25, includeTitleOnly: true },
+      totalMatching: 2,
+      rows,
+    });
+    expect(droppedBlankDescriptions).toBe(0);
+    expect(file.includesTitleOnly).toBe(true);
+    expect(file.videos.map((v) => [v.youtubeVideoId, v.description, v.titleOnly ?? false])).toEqual([["FAKEvid0001", "D1", false], ["FAKEvid0002", null, true]]);
   });
 
   it("maps a missing date to null", () => {

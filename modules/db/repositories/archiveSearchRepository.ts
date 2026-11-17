@@ -1,6 +1,6 @@
 import { prisma } from "../client";
 import { isRecordingPubliclyVisible } from "../../mmke/catalogue/isRecordingPublished";
-import { likeNeedle, normaliseSearchText } from "../../mmke/search/searchText";
+import { likeNeedle } from "../../mmke/search/searchText";
 import { rankCandidates, type RankCandidate } from "../../mmke/search/searchRanking";
 import { findPublicVideoPagesByYouTubeVideoIds } from "./youtubeVideoPageRepository";
 import { PUBLIC_COLLECTION_WHERE } from "./collectionRepository";
@@ -131,12 +131,33 @@ export async function searchComposers(
   return { items, total, page: currentPage, pageSize };
 }
 
+/** A technical bound on how many works an alternate-title match can contribute to one query (far above the catalogue's size). */
+export const ALTERNATE_TITLE_MATCH_CAP = 1000;
+
+/**
+ * Ids of the (non-archived) works one of whose alternate titles CONTAINS the query, case-insensitively (credits pipeline, 2026-11-17: a
+ * transliteration such as "Paalan Pirandha Raavil" or a spelling such as "Dingiri Dingale" finds the work). Prisma has no substring filter for
+ * array elements, so this is one parameterised query with the same bounded, wildcard-escaped needle as every other search (likeNeedle); the
+ * caller still applies its own public-eligibility rules to the ids. Bounded by ALTERNATE_TITLE_MATCH_CAP.
+ */
+async function workIdsMatchingAlternateTitle(query: string | undefined): Promise<string[]> {
+  const needle = likeNeedle(query);
+  if (!needle) return [];
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT id FROM musical_works
+    WHERE "archivedAt" IS NULL
+      AND EXISTS (SELECT 1 FROM unnest("alternateTitles") AS alt(title) WHERE alt.title ILIKE '%' || ${needle} || '%')
+    LIMIT ${ALTERNATE_TITLE_MATCH_CAP}`;
+  return rows.map((r) => r.id);
+}
+
 export async function searchWorks(
   query: string | undefined,
   page = 1,
   pageSize = ARCHIVE_PAGE_SIZE
 ): Promise<ArchiveSearchPage<ArchiveSearchResultWork>> {
   const currentPage = clampPage(page);
+  const alternateTitleIds = query ? await workIdsMatchingAlternateTitle(query) : [];
   const where = {
     AND: [
       eligibleWorkWhere,
@@ -145,7 +166,7 @@ export async function searchWorks(
             {
               OR: [
                 { title: { contains: likeNeedle(query), mode: "insensitive" as const } },
-                { alternateTitles: { has: normaliseSearchText(query) ?? "" } }, // the visitor's text, normalised like every other search use (no control characters reach the database)
+                { id: { in: alternateTitleIds } }, // an alternate title containing the query, case-insensitively (eligibility still applies above)
               ],
             },
           ]
@@ -233,6 +254,8 @@ export async function searchRecordings(
   pageSize = ARCHIVE_PAGE_SIZE
 ): Promise<ArchiveSearchPage<ArchiveSearchResultRecording>> {
   const currentPage = clampPage(page);
+  // A Recording has no alternate titles of its own: it is found through the alternate titles of the works on its PUBLISHED revision.
+  const alternateTitleWorkIds = query ? await workIdsMatchingAlternateTitle(query) : [];
   const where = {
     status: "PUBLISHED" as const,
     ...RECORDING_NOT_HELD_WHERE, // a Recording-level hold withholds it from search, and from the total (R-20)
@@ -242,6 +265,7 @@ export async function searchRecordings(
             OR: [
               { title: { contains: likeNeedle(query), mode: "insensitive" as const } },
               { description: { contains: likeNeedle(query), mode: "insensitive" as const } },
+              ...(alternateTitleWorkIds.length > 0 ? [{ works: { some: { musicalWorkId: { in: alternateTitleWorkIds } } } }] : []),
             ],
           },
         }

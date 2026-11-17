@@ -30,6 +30,8 @@
     "ai:video-credits-check": "tsx scripts/checkVideoCreditsProposals.ts",
     "ai:video-credits-score": "tsx scripts/scoreVideoCredits.ts",
     "ai:video-credits-review": "tsx scripts/buildVideoCreditsReview.ts",
+    "ai:video-credits-create": "tsx scripts/createVideoCredits.ts",
+    "ai:video-credits-describe": "tsx scripts/describeVideoCredits.ts",
     "reconcile:exposure-approvals": "tsx scripts/reconcileExposureApprovals.ts",
     "backfill:revision-relationships": "tsx scripts/backfillRevisionRelationships.ts",
     "reproject:legacy-relationships": "tsx scripts/reprojectLegacyRelationships.ts",
