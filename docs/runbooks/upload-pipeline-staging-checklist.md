@@ -116,6 +116,7 @@ These matter only for the **deployed** site: the `/api/cron/pipeline` route and 
    | `PIPELINE_DRY_RUN` | leave **unset** for now (dry run) |
    | `MAX_USD_PER_RUN` | `2` |
    | `PIPELINE_MAX_VIDEOS_PER_RUN` | `1` |
+   | `PIPELINE_APPROVE_PUBLIC_VIDEO_PAGE` | leave **unset** (on): approval also publishes a public video's page; `false` turns that off |
 
 4. **Redeploy.** **Deployments** (top tabs) → the latest Preview deployment → **⋯** → **Redeploy**. Variables apply only to new deployments.
 5. **Check readiness.** Open `https://<preview-url>/api/ready`. It must answer `200 {"status":"ready"}`; "not ready" means Part A was not applied to the database this deployment uses.
@@ -160,7 +161,7 @@ The videos: `Vl8Xe2COp2c`, `zRjM7rP7hpM`, `S4aemnTWODM`, `jiNrP52imwg`, `rxGfBGW
    - **S4aemnTWODM** (no stated composer) is drafted, but its bundle is flagged `held` and approval will be refused.
    - **jiNrP52imwg**, the medley, behaves the same way: *Ding Dong! Merrily on High* states no composer.
    - **rxGfBGWLnTI** keeps its Tamil title.
-5. **Review the bundles.** Open Studio → **Pipeline** on the Preview deployment from Part D (signed in as a Founder or Administrator). Open each bundle; check the drafts, the claims and every flag. Decide each CONFLICT claim. Approve only what you have checked line by line. Approval publishes on staging.
+5. **Review the bundles.** Open Studio → **Pipeline** on the Preview deployment from Part D (signed in as a Founder or Administrator). Open each bundle; check the drafts, the claims and every flag. Decide each CONFLICT claim. Read the **"What goes live when you approve"** panel above the button: recording page, entity pages, and video page (yes / already live / no, with the reason). Approve only what you have checked line by line. Approval publishes on staging: the recording and, for a public video, its video page, together.
 6. **Clear the shell:**
    ```powershell
    Remove-Item Env:STAGING_DATABASE_URL, Env:PIPELINE_ENABLED, Env:MAX_USD_PER_RUN, Env:AI_PROVIDER, Env:ANTHROPIC_API_KEY

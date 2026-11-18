@@ -22,6 +22,8 @@ export interface PipelineConfig {
   /** How long a run holds the pipeline. */
   leaseSeconds: number;
   model: string | undefined;
+  /** Approving a bundle also publishes the video page of a PUBLIC video (modules/pipeline/videoPage.ts). On unless exactly "false". */
+  approvePublicVideoPage: boolean;
 }
 
 export const PIPELINE_DEFAULTS = {
@@ -52,5 +54,6 @@ export function readPipelineConfig(env: Readonly<Record<string, string | undefin
     runSync: env.PIPELINE_RUN_SYNC !== "false",
     leaseSeconds: PIPELINE_DEFAULTS.leaseSeconds,
     model: env.PIPELINE_AI_MODEL?.trim() || undefined,
+    approvePublicVideoPage: env.PIPELINE_APPROVE_PUBLIC_VIDEO_PAGE !== "false",
   };
 }

@@ -10,7 +10,11 @@
 //      matching, the slug rule, DRAFT Recording, empty slots only; then arrangers, lyricists, ensembles and person pages are linked;
 //   4. the Recording's draft gets the SEO fields and summary (empty slots only), new entity pages get their approved copy;
 //   5. the Recording is published through the EXISTING publish flow (publishRecordingDraft: completeness, locks, holds, audit). A refusal
-//      (for example NOT_READY) leaves the bundle APPROVED with the reason; video exposure approvals are NOT touched (their own workflow).
+//      (for example NOT_READY) leaves the bundle APPROVED with the reason and nothing public;
+//   6. the VIDEO PAGE (modules/pipeline/videoPage.ts): when the video is PUBLIC and OBSERVED with no video hold, no Recording hold and no planner
+//      hold (and PIPELINE_APPROVE_PUBLIC_VIDEO_PAGE is on), its page is published through the existing page-publication service INSIDE the
+//      Recording's publish transaction, with the approving editor as actor and the reason "approved with pipeline bundle": both go live or
+//      neither does. Unlisted and private videos are left exactly as they are (an unlisted page keeps its own decision in the unlisted review).
 // Bulk approve: only bundles with NO flags. Reject: the bundle and its claims are rejected; nothing is created.
 
 import type { CheckedVideoCredits } from "../ai/structuredOutput/validateVideoCreditsOutput";
@@ -21,6 +25,7 @@ import { draftBundle, type BundleDraft, type PipelineVideoRow } from "./run";
 import type { DraftClaim, PageDraft } from "./drafts";
 import type { Resolution } from "./resolve";
 import { findBannedPhrases } from "../mmke/guardrails/generation";
+import { PIPELINE_VIDEO_PAGE_REASON, planVideoPage, type VideoPageFacts, type VideoPagePlan } from "./videoPage";
 
 export interface BundleForApproval {
   id: string;
@@ -54,14 +59,19 @@ export interface ApprovalDeps {
   fillRecordingSeo(input: { recordingId: string; actorId: string; seoTitle: string; metaDescription: string; summary: string }): Promise<string>;
   publishEntityCopies(input: { actorId: string; pages: PageDraft[]; claimDbIds: string[] }): Promise<string[]>;
   decideClaims(input: { pipelineVideoId: string; accepted: string[]; rejected: string[]; actorId: string; at: Date }): Promise<void>;
-  publish(input: { recordingId: string; actorId: string }): Promise<{ ok: true } | { ok: false; reason: string; missingCategories?: string[] }>;
+  /** The video page's current state, for the video-page rule. */
+  loadVideoPageFacts(youtubeVideoRowId: string): Promise<Omit<VideoPageFacts, "plannerHeld">>;
+  /**
+   * Publishes the Recording (publishRecordingDraft) and, when `videoPage` is given, the video page in the SAME transaction (rolled back together).
+   */
+  publish(input: { recordingId: string; actorId: string; videoPage: { youtubeVideoRowId: string; createPage: boolean; reason: string } | null }): Promise<{ ok: true } | { ok: false; reason: string; missingCategories?: string[]; detail?: string }>;
   markDecision(id: string, patch: { status: "APPROVED" | "PUBLISHED" | "REJECTED"; decidedById: string; decidedAt: Date; decisionNote: string | null; recordingId?: string | null; draft?: BundleDraft }): Promise<void>;
   audit(entry: { actorId: string; action: string; entityId: string; afterSnapshot: Record<string, unknown> }): Promise<void>;
   listPublishedCopySummaries(): Promise<Array<{ id: string; summary: string; name: string }>>;
 }
 
 export type ApprovalResult =
-  | { ok: true; status: "PUBLISHED" | "APPROVED"; recordingId: string | null; notes: string[] }
+  | { ok: true; status: "PUBLISHED" | "APPROVED"; recordingId: string | null; notes: string[]; videoPage: { outcome: "PUBLISHED" | "ALREADY_LIVE" | "LEFT" | "NOT_PUBLISHED"; reason: string } }
   | { ok: false; reason: "NOT_FOUND" | "NOT_AWAITING" | "CONFLICTS_UNDECIDED" | "HELD" | "FLAGGED_FOR_BULK" | "EDIT_REFUSED"; detail: string[] };
 
 export const canBulkApprove = (b: { status: string; flags: readonly string[] }) => b.status === "AWAITING_APPROVAL" && b.flags.length === 0;
@@ -79,7 +89,12 @@ export function applyClaimDecisions(claims: BundleForApproval["claims"], decisio
   return { claims: decided, undecidedConflicts };
 }
 
-export async function approveBundle(input: { id: string; actorId: string; edits?: ApprovalEdits; bulk?: boolean; now: Date }, deps: ApprovalDeps): Promise<ApprovalResult> {
+/** What approving this bundle would put live (shown on the bundle page before the Approve button). */
+export function videoPagePlanFor(bundle: Pick<BundleForApproval, "draft">, facts: Omit<VideoPageFacts, "plannerHeld">, enabled: boolean): VideoPagePlan {
+  return planVideoPage({ ...facts, plannerHeld: bundle.draft.heldReasons.length > 0 }, { enabled });
+}
+
+export async function approveBundle(input: { id: string; actorId: string; edits?: ApprovalEdits; bulk?: boolean; now: Date; approvePublicVideoPage?: boolean }, deps: ApprovalDeps): Promise<ApprovalResult> {
   const bundle = await deps.loadBundle(input.id);
   if (!bundle) return { ok: false, reason: "NOT_FOUND", detail: [] };
   if (bundle.status !== "AWAITING_APPROVAL" && bundle.status !== "APPROVED") return { ok: false, reason: "NOT_AWAITING", detail: [`the bundle is ${bundle.status}`] };
@@ -111,19 +126,35 @@ export async function approveBundle(input: { id: string; actorId: string; edits?
   const recording = await deps.findRecordingForVideo(bundle.youtubeVideoRowId);
   if (!recording) {
     await deps.markDecision(bundle.id, { status: "APPROVED", decidedById: input.actorId, decidedAt: input.now, decisionNote: "approved, but no Recording could be created (see notes)", draft });
-    return { ok: true, status: "APPROVED", recordingId: null, notes };
+    return { ok: true, status: "APPROVED", recordingId: null, notes, videoPage: { outcome: "NOT_PUBLISHED", reason: "no Recording was created, so nothing was published" } };
   }
   notes.push(...(await deps.linkContributorsAndPeople({ recordingId: recording.recordingId, actorId: input.actorId, checked: bundle.extraction.checked, resolution: bundle.resolution })));
   notes.push(await deps.fillRecordingSeo({ recordingId: recording.recordingId, actorId: input.actorId, seoTitle: video.seoTitle, metaDescription: video.metaDescription, summary: video.summary.join(" ") }));
   notes.push(...(await deps.publishEntityCopies({ actorId: input.actorId, pages: draft.entities, claimDbIds: claims.filter((c) => c.status === "ACCEPTED").map((c) => c.dbId) })));
 
-  const published = await deps.publish({ recordingId: recording.recordingId, actorId: input.actorId });
+  // The video-page rule is decided now, on the current state; the publication re-checks it inside the transaction.
+  const pagePlan = videoPagePlanFor(bundle, await deps.loadVideoPageFacts(bundle.youtubeVideoRowId), input.approvePublicVideoPage !== false);
+  const published = await deps.publish({
+    recordingId: recording.recordingId,
+    actorId: input.actorId,
+    videoPage: pagePlan.action === "PUBLISH" ? { youtubeVideoRowId: bundle.youtubeVideoRowId, createPage: pagePlan.createPage, reason: PIPELINE_VIDEO_PAGE_REASON } : null,
+  });
   const status = published.ok ? "PUBLISHED" : "APPROVED";
-  const note = published.ok ? null : `approved; publication refused: ${published.reason}${published.missingCategories?.length ? ` (missing: ${published.missingCategories.join(", ")})` : ""}`;
+  const videoPage: Extract<ApprovalResult, { ok: true }>["videoPage"] = !published.ok
+    ? { outcome: "NOT_PUBLISHED", reason: "nothing was published (see the publication note)" }
+    : pagePlan.action === "PUBLISH"
+      ? { outcome: "PUBLISHED", reason: pagePlan.reason }
+      : pagePlan.action === "ALREADY_LIVE"
+        ? { outcome: "ALREADY_LIVE", reason: pagePlan.reason }
+        : { outcome: "LEFT", reason: pagePlan.reason };
+  const note = published.ok
+    ? null
+    : `approved; nothing was published: ${published.reason}${published.detail ? ` (${published.detail})` : ""}${published.missingCategories?.length ? ` (missing: ${published.missingCategories.join(", ")})` : ""}`;
   if (note) notes.push(note);
+  notes.push(`video page: ${videoPage.outcome.toLowerCase().replace("_", " ")}: ${videoPage.reason}`);
   await deps.markDecision(bundle.id, { status, decidedById: input.actorId, decidedAt: input.now, decisionNote: edits.note?.trim() || note, recordingId: recording.recordingId, draft });
-  await deps.audit({ actorId: input.actorId, action: input.bulk ? "PIPELINE_BUNDLE_BULK_APPROVED" : "PIPELINE_BUNDLE_APPROVED", entityId: bundle.id, afterSnapshot: { status, recordingId: recording.recordingId, acceptedClaims: claims.filter((c) => c.status === "ACCEPTED").length, rejectedClaims: claims.filter((c) => c.status === "REJECTED").length, edited: Object.keys(edits).filter((k) => k !== "claimDecisions") } });
-  return { ok: true, status, recordingId: recording.recordingId, notes };
+  await deps.audit({ actorId: input.actorId, action: input.bulk ? "PIPELINE_BUNDLE_BULK_APPROVED" : "PIPELINE_BUNDLE_APPROVED", entityId: bundle.id, afterSnapshot: { status, recordingId: recording.recordingId, videoPage: videoPage.outcome, acceptedClaims: claims.filter((c) => c.status === "ACCEPTED").length, rejectedClaims: claims.filter((c) => c.status === "REJECTED").length, edited: Object.keys(edits).filter((k) => k !== "claimDecisions") } });
+  return { ok: true, status, recordingId: recording.recordingId, notes, videoPage };
 }
 
 export async function rejectBundle(input: { id: string; actorId: string; note: string; now: Date }, deps: Pick<ApprovalDeps, "loadBundle" | "decideClaims" | "markDecision" | "audit">): Promise<{ ok: boolean; reason?: string }> {

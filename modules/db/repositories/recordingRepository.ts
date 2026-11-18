@@ -843,12 +843,26 @@ async function promoteDraftPerformanceClone(
 
 export type PublishRecordingResult =
   | { ok: true; recording: RecordingWithRevisions }
-  | { ok: false; reason: PublishRefusalReason; /** Names of the REQUIRED completeness categories still missing (reason NOT_READY). */ missingCategories: string[] };
+  | {
+      ok: false;
+      reason: PublishRefusalReason;
+      /** Names of the REQUIRED completeness categories still missing (reason NOT_READY). */ missingCategories: string[];
+      /** COMPANION_REFUSED only: why the companion step refused (a short, value-free sentence). */
+      detail?: string;
+    };
 
 class PublishRefused extends Error {
   constructor(readonly reason: PublishRefusalReason, readonly missingCategories: string[] = []) {
     super(`Publication refused: ${reason}`);
     this.name = "PublishRefused";
+  }
+}
+
+/** R-34: thrown by an `alsoInTransaction` step to refuse; the whole publication rolls back and the result is COMPANION_REFUSED with this detail. */
+export class PublishCompanionRefusedError extends Error {
+  constructor(readonly detail: string) {
+    super(`Companion step refused: ${detail}`);
+    this.name = "PublishCompanionRefusedError";
   }
 }
 
@@ -860,6 +874,12 @@ export interface PublishRecordingInput {
   /** Default true: the REQUIRED completeness categories are re-checked INSIDE the publishing transaction. */
   enforceCompleteness?: boolean;
   lockTimeoutMs?: number;
+  /**
+   * R-34 (optional; no existing caller passes it): a step that must go live TOGETHER with this publication — the upload pipeline's video-page
+   * publication. It runs inside the same transaction, after the Recording is promoted and audited and before commit; if it throws, everything rolls
+   * back (PublishCompanionRefusedError -> COMPANION_REFUSED, anything else -> FAILED), so the two are never half-published.
+   */
+  alsoInTransaction?: (tx: Prisma.TransactionClient) => Promise<void>;
 }
 
 /**
@@ -958,6 +978,8 @@ export async function publishRecordingDraft(input: PublishRecordingInput): Promi
           tx
         );
 
+        if (input.alsoInTransaction) await input.alsoInTransaction(tx);
+
         return tx.recording.findUniqueOrThrow({
           where: { id: recordingId },
           include: { currentDraftRevision: true, currentPublishedRevision: true },
@@ -968,6 +990,7 @@ export async function publishRecordingDraft(input: PublishRecordingInput): Promi
     return { ok: true, recording };
   } catch (err) {
     if (err instanceof PublishRefused) return { ok: false, reason: err.reason, missingCategories: err.missingCategories };
+    if (err instanceof PublishCompanionRefusedError) return { ok: false, reason: "COMPANION_REFUSED", missingCategories: [], detail: err.detail };
     if (err instanceof RecordingBusyError) return { ok: false, reason: "BUSY", missingCategories: [] };
     // Unexpected: the transaction rolled back (the published revision is untouched). Log the class only — never the message or values.
     console.error(`[publish] unexpected failure while publishing recording ${recordingId}: ${err instanceof Error ? err.name : "unknown error"}`);

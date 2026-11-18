@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentStudioSession } from "../../../../../../modules/auth/authService";
 import { can } from "../../../../../../modules/auth/policy";
-import { loadBundleForApproval } from "../../../../../../modules/db/repositories/pipelineRepository";
-import { canBulkApprove } from "../../../../../../modules/pipeline/approve";
+import { loadBundleForApproval, loadVideoPageFacts } from "../../../../../../modules/db/repositories/pipelineRepository";
+import { canBulkApprove, videoPagePlanFor } from "../../../../../../modules/pipeline/approve";
+import { readPipelineConfig } from "../../../../../../modules/pipeline/config";
 import type { PageDraft } from "../../../../../../modules/pipeline/drafts";
 import { decodeMessage } from "../../../../../../modules/studio/decodeMessage";
 import { approveBundleAction, rejectBundleAction } from "../actions";
@@ -62,6 +63,8 @@ export default async function PipelineBundlePage({ params, searchParams }: { par
   const bundle = await loadBundleForApproval(id);
   if (!bundle) notFound();
   const open = bundle.status === "AWAITING_APPROVAL" || bundle.status === "APPROVED";
+  const held = bundle.draft.heldReasons.length > 0;
+  const pagePlan = videoPagePlanFor(bundle, await loadVideoPageFacts(bundle.youtubeVideoRowId), readPipelineConfig(process.env).approvePublicVideoPage);
   const video = bundle.draft.video;
 
   return (
@@ -202,6 +205,27 @@ export default async function PipelineBundlePage({ params, searchParams }: { par
               </tbody>
             </table>
           </div>
+        )}
+
+        {open && (
+          <section className="studio-panel" aria-label="What goes live">
+            <h2>What goes live when you approve</h2>
+            <ul>
+              <li>
+                <strong>Recording page:</strong>{" "}
+                {held ? `no — the planner held this bundle out (${bundle.draft.heldReasons[0]}); approval will be refused.` : "yes, if it passes the usual publish checks (completeness); otherwise nothing goes live and the reason is shown."}
+              </li>
+              <li>
+                <strong>Entity pages:</strong>{" "}
+                {bundle.draft.entities.length ? `${bundle.draft.entities.length} new (${bundle.draft.entities.map((e) => e.name).join(", ")})` : "no new pages"}
+                {bundle.draft.mapped.length ? `; ${bundle.draft.mapped.length} existing page(s) will list this recording` : ""}. They become public with the recording.
+              </li>
+              <li>
+                <strong>Video page:</strong> {pagePlan.action === "PUBLISH" ? "yes" : pagePlan.action === "ALREADY_LIVE" ? "already live" : "no"} — {pagePlan.reason}
+              </li>
+            </ul>
+            <p className="studio-muted">The recording and the video page go live in one transaction: both or neither.</p>
+          </section>
         )}
 
         {open && (

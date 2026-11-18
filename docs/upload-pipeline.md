@@ -121,6 +121,7 @@ The migration is purely additive; the project's own classifier rates it additive
   - the existing entities, which will only be linked (marked when matched through an alias);
   - the exceptions;
   - a claims table: statement, excerpt, source link, tier, relation to the video, and accept/reject per claim (a conflict must be decided);
+  - **"What goes live when you approve"**, directly above the button: the recording page (yes, subject to the publish checks; no if held out), the entity pages (the new ones by name, and how many existing pages will list the recording), and the video page (yes / already live / no, with the reason from the rule in section 5a);
   - "Approve and publish", and "Reject" with a reason.
 
 ## 5. Safety
@@ -133,9 +134,34 @@ The migration is purely additive; the project's own classifier rates it additive
 - **No secrets in logs.** Only error kinds and counts are stored or returned. The route never returns content.
 - **Never publishes by itself.**
   - Approval calls `publishRecordingDraft`, so completeness, locks, Recording holds and audit apply unchanged.
-  - **Video exposure approvals are not touched**: their own workflow decides whether the YouTube video page is public.
+  - **A public video's page goes live with the Recording; nothing else changes** (section 5a). Unlisted and private videos are never exposed by approval.
   - An existing record is never modified, except to add a missing `personId` link.
   - SEO fields are filled only where empty.
+
+## 5a. One-click approval of the video page (`PIPELINE_APPROVE_PUBLIC_VIDEO_PAGE`, default on)
+
+**The existing mechanism** (`modules/mmke/catalogue/videoExposure.ts`):
+- **Public video:** its page `/videos/[slug]` is exposed when the page is PUBLISHED and not archived, the video is OBSERVED, and no hold is recorded. No exposure approval is involved. The exposure-approval service (`approveExposure`, the unlisted-video review) refuses public videos ("public needs none"), so it is not used here.
+- **Unlisted video:** needs recorded, scoped approvals through that review.
+- **Private video:** never exposed.
+
+**The rule (`modules/pipeline/videoPage.ts`).** Approving a bundle also publishes its video page **only when all** of these hold:
+- the switch is on;
+- the video is **public** and **OBSERVED**;
+- no hold on the video (rights, copyright, privacy, other);
+- no hold on its Recording;
+- the planner did not hold the bundle out;
+- the page is not archived.
+
+If the page is already published, nothing changes. In every other case the video page is left exactly as it is, and the reason is shown on the bundle page and in the approval note. **An unlisted video's page stays pending**: it needs its own decision in the unlisted-video review. A private video never gets one.
+
+**How it is applied.**
+- The page is created if missing and published through the **existing** page-publication service (`createDraftVideoPage` and `publishVideoPage`, now also callable inside a caller's transaction as `createDraftVideoPageIn` and `publishVideoPageIn`, with unchanged rules and audit entries).
+- This runs **inside the Recording's publish transaction** (`publishRecordingDraft`'s new optional `alsoInTransaction` step). Inside that transaction the rule is re-checked on the locked, current rows. If anything changed (a hold placed, the video gone unlisted, the page archived), the step refuses and **both roll back**: the result is `COMPANION_REFUSED`, nothing is public, and the bundle stays APPROVED with the reason.
+- The approving editor is the actor of `VIDEO_PAGE_PUBLISHED`. A `PIPELINE_VIDEO_PAGE_APPROVED` audit entry records the reason "approved with pipeline bundle".
+- Holds, the unlisted-review sweep and rights holds keep working exactly as before, because a hold denies every surface at read time whatever is published.
+
+Set `PIPELINE_APPROVE_PUBLIC_VIDEO_PAGE=false` to go back to publishing video pages by hand in Studio → YouTube Videos.
 
 ## 6. Reconciling the staging loader's records (item 8)
 

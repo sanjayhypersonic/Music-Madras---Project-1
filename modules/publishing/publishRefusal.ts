@@ -4,7 +4,8 @@ import { describeEditableDraftRefusal, type EditableDraftRefusal } from "./edita
 // no framework. The reasons come from recordingRepository.publishRecordingDraft, which re-validates
 // inside its transaction; none of the messages can contain a database error or a value.
 
-export type PublishRefusalReason = EditableDraftRefusal | "NOT_READY" | "STATE_CHANGED" | "PERFORMANCE_CHANGED" | "BUSY" | "FAILED";
+/** COMPANION_REFUSED (R-34): a step the caller asked to run in the SAME transaction (the pipeline's video-page publication) refused, so both rolled back. */
+export type PublishRefusalReason = EditableDraftRefusal | "NOT_READY" | "STATE_CHANGED" | "PERFORMANCE_CHANGED" | "BUSY" | "FAILED" | "COMPANION_REFUSED";
 
 export function describePublishRefusal(reason: PublishRefusalReason, missingCategories: readonly string[] = []): string {
   switch (reason) {
@@ -23,5 +24,7 @@ export function describePublishRefusal(reason: PublishRefusalReason, missingCate
       return "Someone else is changing this recording right now, so nothing was published. Wait a moment and try again.";
     case "FAILED":
       return "The recording could not be published. Nothing was changed. Reload the page and try again.";
+    case "COMPANION_REFUSED":
+      return "The recording was not published, because the video page that was to go live with it could not be published. Nothing was changed.";
   }
 }

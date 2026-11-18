@@ -7,7 +7,7 @@ import { exposedVideoPageWhere } from "../../mmke/catalogue/videoExposureQuery";
 import { approveExposure, revokeExposure } from "./videoExposureRepository";
 import { revokeForArchiveIn } from "./videoLifecycleRepository";
 import { canPublishVideoPage, canUnpublishVideoPage } from "../../publishing/videoPageTransitions";
-import type { YouTubeVideo, YouTubeVideoPage } from "@prisma/client";
+import type { Prisma, YouTubeVideo, YouTubeVideoPage } from "@prisma/client";
 
 // YouTubeVideoPage persistence (Phase 6G-1B, pre-flight §4). This is the
 // Music Madras-owned catalogue/publication wrapper around a synchronized
@@ -24,7 +24,12 @@ export interface CreateDraftVideoPageInput {
 }
 
 export async function createDraftVideoPage(input: CreateDraftVideoPageInput): Promise<YouTubeVideoPage> {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => createDraftVideoPageIn(tx, input));
+}
+
+/** The same creation, inside the caller's transaction (R-34: the upload pipeline creates and publishes a page atomically with a Recording). */
+export async function createDraftVideoPageIn(tx: Prisma.TransactionClient, input: CreateDraftVideoPageInput): Promise<YouTubeVideoPage> {
+  {
     const video = await tx.youTubeVideo.findUnique({ where: { id: input.youtubeVideoId } });
     if (!video) {
       throw new Error(`YouTubeVideo ${input.youtubeVideoId} does not exist.`);
@@ -60,7 +65,7 @@ export async function createDraftVideoPage(input: CreateDraftVideoPageInput): Pr
     );
 
     return page;
-  });
+  }
 }
 
 export function findById(id: string): Promise<YouTubeVideoPage | null> {
@@ -208,7 +213,12 @@ export async function updateEditorialFields(id: string, input: UpdateVideoPageEd
 }
 
 export async function publishVideoPage(id: string, actorId: string): Promise<YouTubeVideoPage> {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => publishVideoPageIn(tx, id, actorId));
+}
+
+/** The same publication, inside the caller's transaction (R-34). Rules and audit entry unchanged. */
+export async function publishVideoPageIn(tx: Prisma.TransactionClient, id: string, actorId: string): Promise<YouTubeVideoPage> {
+  {
     const page = await tx.youTubeVideoPage.findUnique({ where: { id } });
     if (!page) {
       throw new Error(`YouTubeVideoPage ${id} does not exist.`);
@@ -243,7 +253,7 @@ export async function publishVideoPage(id: string, actorId: string): Promise<You
     );
 
     return updated;
-  });
+  }
 }
 
 export async function unpublishVideoPage(id: string, actorId: string): Promise<YouTubeVideoPage> {

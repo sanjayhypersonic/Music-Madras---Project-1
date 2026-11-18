@@ -12,7 +12,9 @@ import type { DraftClaim } from "../../pipeline/drafts";
 import type { VideoRunFacts } from "../../pipeline/select";
 import { executeCreditsPlans } from "../../jobs/videoCreditsCreateExecute";
 import { findRecordingLinkedToYouTubeVideo } from "./recordingIntakeRepository";
-import { editDraftPerformanceParticipants, publishRecordingDraft, updateDraftRevisionContent } from "./recordingRepository";
+import { PublishCompanionRefusedError, editDraftPerformanceParticipants, publishRecordingDraft, updateDraftRevisionContent } from "./recordingRepository";
+import { createDraftVideoPageIn, publishVideoPageIn } from "./youtubeVideoPageRepository";
+import type { VideoPageFacts } from "../../pipeline/videoPage";
 import { addWorkContributor, ensureEnsemble, ensurePerson, linkPersonIfUnset } from "./peopleRepository";
 
 // R-34: the database side of the upload-to-draft pipeline (docs/upload-pipeline.md). The pipeline's own tables (PipelineRun, PipelineVideo,
@@ -335,9 +337,14 @@ export function buildApprovalDeps(): ApprovalDeps {
         prisma.pipelineClaim.updateMany({ where: { pipelineVideoId, id: { in: rejected } }, data: { status: "REJECTED", decidedById: actorId, decidedAt: at } }),
       ]);
     },
-    async publish({ recordingId, actorId }) {
-      const result = await publishRecordingDraft({ recordingId, actorId });
-      return result.ok ? { ok: true } : { ok: false, reason: result.reason, missingCategories: result.missingCategories };
+    loadVideoPageFacts,
+    async publish({ recordingId, actorId, videoPage }) {
+      const result = await publishRecordingDraft({
+        recordingId,
+        actorId,
+        alsoInTransaction: videoPage ? (tx) => publishPipelineVideoPageIn(tx, { recordingId, youtubeVideoRowId: videoPage.youtubeVideoRowId, actorId, reason: videoPage.reason }) : undefined,
+      });
+      return result.ok ? { ok: true } : { ok: false, reason: result.reason, missingCategories: result.missingCategories, detail: result.detail };
     },
     async markDecision(id, patch) {
       await prisma.pipelineVideo.update({ where: { id }, data: { status: patch.status, decidedById: patch.decidedById, decidedAt: patch.decidedAt, decisionNote: patch.decisionNote, ...(patch.recordingId !== undefined ? { recordingId: patch.recordingId } : {}), ...(patch.draft ? { draft: patch.draft as unknown as Prisma.InputJsonValue } : {}) } });
@@ -442,4 +449,55 @@ export async function loadVideoRunFacts(input: { youtubeVideoIds?: readonly stri
       recordingStatus: recordings.some((r) => r.status === "PUBLISHED") ? "PUBLISHED" : recordings[0]?.status ?? null,
     };
   });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// The video page that goes live with an approved bundle (modules/pipeline/videoPage.ts). Read for the rule; published inside the Recording's
+// publish transaction through the existing page-publication service.
+
+export async function loadVideoPageFacts(youtubeVideoRowId: string): Promise<Omit<VideoPageFacts, "plannerHeld">> {
+  const v = await prisma.youTubeVideo.findUnique({
+    where: { id: youtubeVideoRowId },
+    select: {
+      privacyStatus: true,
+      observabilityState: true,
+      videoPage: { select: { status: true, archivedAt: true } },
+      exposureReview: { select: { holdReason: true } },
+      mediaResources: { where: { recordingRevisionId: { not: null } }, select: { recordingRevision: { select: { recording: { select: { holdReason: true } } } } } },
+    },
+  });
+  if (!v) return { privacyStatus: null, observabilityState: null, videoHold: null, recordingHold: null, page: null };
+  const recordingHold = v.mediaResources.map((m) => m.recordingRevision?.recording.holdReason ?? null).find((h) => h !== null) ?? null;
+  return { privacyStatus: v.privacyStatus, observabilityState: v.observabilityState, videoHold: v.exposureReview?.holdReason ?? null, recordingHold, page: v.videoPage };
+}
+
+/**
+ * Runs INSIDE publishRecordingDraft's transaction. Re-checks the rule on the locked, current state (public, observed, no video hold, no hold on
+ * the Recording being published, page not archived), creates the page when there is none and publishes it with the existing service functions,
+ * and records the reason. Any refusal throws PublishCompanionRefusedError, which rolls the Recording's publication back too.
+ */
+export async function publishPipelineVideoPageIn(tx: Prisma.TransactionClient, input: { recordingId: string; youtubeVideoRowId: string; actorId: string; reason: string }): Promise<void> {
+  const refuse = (detail: string): never => {
+    throw new PublishCompanionRefusedError(detail);
+  };
+  await tx.$queryRaw`SELECT id FROM youtube_videos WHERE id = ${input.youtubeVideoRowId} FOR UPDATE`;
+  const video = await tx.youTubeVideo.findUnique({ where: { id: input.youtubeVideoRowId }, select: { privacyStatus: true, observabilityState: true } });
+  if (!video) refuse("the video is no longer in the catalogue");
+  if (video!.privacyStatus !== "public") refuse(`the video is now ${video!.privacyStatus ?? "of unknown privacy"} on YouTube`);
+  if (video!.observabilityState !== "OBSERVED") refuse("the video was not observed in the latest sync");
+  const hold = await tx.videoExposureReview.findUnique({ where: { youtubeVideoId: input.youtubeVideoRowId }, select: { holdReason: true } });
+  if (hold?.holdReason) refuse(`a ${hold.holdReason.toLowerCase()} hold was placed on the video`);
+  const recording = await tx.recording.findUnique({ where: { id: input.recordingId }, select: { holdReason: true } });
+  if (recording?.holdReason) refuse(`a ${recording.holdReason.toLowerCase()} hold was placed on the Recording`);
+  let page = await tx.youTubeVideoPage.findUnique({ where: { youtubeVideoId: input.youtubeVideoRowId } });
+  if (page?.archivedAt) refuse("the video page is archived");
+  if (page?.status === "PUBLISHED") return;
+  try {
+    if (!page) page = await createDraftVideoPageIn(tx, { youtubeVideoId: input.youtubeVideoRowId, actorId: input.actorId });
+    await publishVideoPageIn(tx, page.id, input.actorId);
+  } catch (err) {
+    if (err instanceof PublishCompanionRefusedError) throw err;
+    refuse("the video page could not be published from its current state");
+  }
+  await writeAuditLog({ actorId: input.actorId, action: "PIPELINE_VIDEO_PAGE_APPROVED", entityType: "YouTubeVideoPage", entityId: page!.id, afterSnapshot: { reason: input.reason, recordingId: input.recordingId } }, tx);
 }

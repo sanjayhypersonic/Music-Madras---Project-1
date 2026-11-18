@@ -226,7 +226,8 @@ describe("approval", () => {
     fillRecordingSeo: async (i) => (log.push(`seo:${i.seoTitle}`), "filled"),
     publishEntityCopies: async (i) => (log.push(`copies:${i.pages.length}`), []),
     decideClaims: async (i) => void log.push(`claims:+${i.accepted.length}/-${i.rejected.length}`),
-    publish: async () => (log.push("publish"), { ok: true }),
+    loadVideoPageFacts: async () => ({ privacyStatus: "public", observabilityState: "OBSERVED", videoHold: null, recordingHold: null, page: null }),
+    publish: async (i) => (log.push(i.videoPage ? "publish+videoPage" : "publish"), { ok: true }),
     markDecision: async (_id, p) => void log.push(`mark:${p.status}`),
     audit: async (e) => void log.push(`audit:${e.action}`),
     listPublishedCopySummaries: async () => [],
@@ -247,7 +248,7 @@ describe("approval", () => {
     const log: string[] = [];
     const result = await approveBundle({ id: b.id, actorId: "owner", edits: { claimDecisions: { [conflict.dbId]: "reject" }, seoTitle: "Come Now, Fake Child | Music Madras" }, now: NOW }, deps(b, log));
     expect(result).toMatchObject({ ok: true, status: "PUBLISHED", recordingId: "rec-1" });
-    expect(log).toEqual([`claims:+${b.claims.length - 1}/-1`, "execute:Come Now, Fake Child", "link", "seo:Come Now, Fake Child | Music Madras", `copies:${b.draft.entities.length}`, "publish", "mark:PUBLISHED", "audit:PIPELINE_BUNDLE_APPROVED"]);
+    expect(log).toEqual([`claims:+${b.claims.length - 1}/-1`, "execute:Come Now, Fake Child", "link", "seo:Come Now, Fake Child | Music Madras", `copies:${b.draft.entities.length}`, "publish+videoPage", "mark:PUBLISHED", "audit:PIPELINE_BUNDLE_APPROVED"]);
   });
 
   it("rejects: nothing is created", async () => {
