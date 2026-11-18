@@ -106,7 +106,13 @@ export interface ExecuteReport {
   steps: ExecuteStep[];
 }
 
-export async function executeCreditsPlans(plans: readonly VideoCreatePlan[], overrides: Partial<ExecuteDeps> = {}, onStep?: (step: ExecuteStep) => void): Promise<ExecuteReport> {
+export async function executeCreditsPlans(
+  plans: readonly VideoCreatePlan[],
+  overrides: Partial<ExecuteDeps> = {},
+  onStep?: (step: ExecuteStep) => void,
+  /** R-34: the Studio Pipeline inbox runs this AS THE APPROVING EDITOR (their id is the author of every record); default: the import actor. */
+  options: { actorId?: string } = {}
+): Promise<ExecuteReport> {
   const d: ExecuteDeps = { ...defaultExecuteDeps, ...overrides };
   const ready = plans.filter((p) => p.heldReasons.length === 0 && p.recording);
   const steps: ExecuteStep[] = [];
@@ -115,7 +121,7 @@ export async function executeCreditsPlans(plans: readonly VideoCreatePlan[], ove
     onStep?.(step);
   };
   const states = await d.findMirroredVideoStates(ready.map((p) => p.youtubeVideoId));
-  const actor = await d.ensureImportActor();
+  const actor = options.actorId ? { id: options.actorId, created: false } : await d.ensureImportActor();
   const actorId = actor.id;
   const slug = (entity: SluggedEntity, title: string, fallback: string, extra: { transliteration?: string | null; year?: string | null } = {}) =>
     resolveCanonicalSlug({ title, fallback, ...extra }, (candidate) => d.isSlugTaken(entity, candidate));

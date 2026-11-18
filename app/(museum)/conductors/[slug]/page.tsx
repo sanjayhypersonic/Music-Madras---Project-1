@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getConductorEntityPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
 import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBreadcrumbs";
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
+import { EntityPageCopyBlock } from "../../../../components/museum/entity/EntityPageCopyBlock";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
@@ -68,6 +69,7 @@ export default async function ConductorPage({ params }: { params: Promise<{ slug
       />
 
       <EntityHeader eyebrow="Conductor" name={conductor.name} subtitle={null} description={conductor.description} />
+      <EntityPageCopyBlock kind="CONDUCTOR" entityId={conductor.id} schemaType="Person" name={conductor.name} emitJsonLd={false} />
 
       <EntitySection id="programmes" heading="Programmes">
         {conductor.relatedProgrammes.length > 0 ? (

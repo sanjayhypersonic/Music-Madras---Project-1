@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getChoirEntityPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
 import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBreadcrumbs";
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
+import { EntityPageCopyBlock } from "../../../../components/museum/entity/EntityPageCopyBlock";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
@@ -67,6 +68,7 @@ export default async function ChoirPage({ params }: { params: Promise<{ slug: st
       />
 
       <EntityHeader eyebrow="Choir" name={choir.name} subtitle={subtitle} description={choir.description} />
+      <EntityPageCopyBlock kind="CHOIR" entityId={choir.id} schemaType="MusicGroup" name={choir.name} emitJsonLd={false} />
 
       <EntitySection id="programmes" heading="Programmes">
         {choir.relatedProgrammes.length > 0 ? (

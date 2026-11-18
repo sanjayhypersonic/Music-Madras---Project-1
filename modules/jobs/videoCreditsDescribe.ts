@@ -48,7 +48,7 @@ export interface DescriptionDraft {
   notes: string[];
 }
 
-export function draftDescription(v: VideoFacts, options: { invitation?: boolean; heldReasons?: string[] } = {}): DescriptionDraft {
+export function draftDescription(v: VideoFacts, options: { invitation?: boolean; heldReasons?: string[]; extraContext?: string[] } = {}): DescriptionDraft {
   const of = (kind: ApprovedFact["kind"]) => v.facts.filter((f) => f.kind === kind);
   const notes: string[] = [];
   const translit = v.transliterationApproved ? v.transliteration : "";
@@ -117,6 +117,8 @@ export function draftDescription(v: VideoFacts, options: { invitation?: boolean;
   // 3. Context (approved facts only).
   const context = [...published.map((p) => `Published as "${p}".`), ...subtitles.map((s) => `Also titled "${s}".`)];
   if (context.length) paragraphs.push(context.join(" "));
+  // Context the editor approved from outside the video (accepted research claims, with their citation markers): ai:video-describe-draft.
+  for (const p of options.extraContext ?? []) if (p.trim()) paragraphs.push(p.trim());
 
   // 4. Archive.
   paragraphs.push(presenters.length ? `${ARCHIVE_SENTENCE} It was recorded and presented by ${list(presenters)}.` : ARCHIVE_SENTENCE);

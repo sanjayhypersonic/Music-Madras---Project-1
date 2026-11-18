@@ -171,6 +171,7 @@ describe("YouTubeDataApiAdapter", () => {
                 channelId: "UCabc",
                 channelTitle: "Music Madras",
                 thumbnails: { default: { url: "https://example.com/thumb.jpg" } },
+                tags: ["carol", 42, "choir"],
               },
               contentDetails: { duration: "PT4M13S" },
               status: { privacyStatus: "public", uploadStatus: "processed", embeddable: true },
@@ -199,6 +200,7 @@ describe("YouTubeDataApiAdapter", () => {
       likeCount: "56",
       commentCount: "7",
       etag: '"e1"',
+      tags: ["carol", "choir"], // R-34: snippet.tags, strings only
     });
   });
 

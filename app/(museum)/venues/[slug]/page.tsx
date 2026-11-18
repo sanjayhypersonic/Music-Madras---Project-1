@@ -8,6 +8,7 @@ import { getVenueEntityPageData } from "../../../../modules/db/repositories/enti
 import type { EntityPageData } from "../../../../modules/mmke/entityPage/entityPageContract";
 import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBreadcrumbs";
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
+import { EntityPageCopyBlock } from "../../../../components/museum/entity/EntityPageCopyBlock";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
@@ -80,6 +81,7 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
       />
 
       <EntityHeader eyebrow="Venue" name={venue.name} subtitle={subtitle} description={venue.description} />
+      <EntityPageCopyBlock kind="VENUE" entityId={venue.id} schemaType="Place" name={venue.name} emitJsonLd={false} />
 
       {venue.venueDetails?.organisation && (
         <EntitySection id="organisation" heading="Operated By">

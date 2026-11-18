@@ -255,6 +255,15 @@ model StudioUser {
   // event (never automatic — see SourceApprovalState above).
   sourcesApproved Source[] @relation("SourceApprovedBy")
 
+  // Upload-to-draft pipeline (R-34): people and ensembles, and the owner's pipeline decisions.
+  personsCreated        Person[]         @relation("PersonCreatedBy")
+  personsUpdated        Person[]         @relation("PersonUpdatedBy")
+  ensemblesCreated      Ensemble[]       @relation("EnsembleCreatedBy")
+  ensemblesUpdated      Ensemble[]       @relation("EnsembleUpdatedBy")
+  pipelineVideosDecided PipelineVideo[]  @relation("PipelineVideoDecidedBy")
+  pipelineClaimsDecided PipelineClaim[]  @relation("PipelineClaimDecidedBy")
+  entityPageCopyDecided EntityPageCopy[] @relation("EntityPageCopyApprovedBy")
+
   @@map("studio_users")
 }
 
@@ -374,6 +383,9 @@ model Composer {
   updatedBy StudioUser @relation("ComposerUpdatedBy", fields: [updatedById], references: [id])
 
   works          MusicalWork[]
+  // R-34: the human this composer is (see Conductor.personId).
+  personId       String?
+  person         Person?         @relation(fields: [personId], references: [id], onDelete: SetNull)
   mediaResources MediaResource[]
 
   @@index([archivedAt])
@@ -404,6 +416,8 @@ model MusicalWork {
   updatedBy StudioUser @relation("MusicalWorkUpdatedBy", fields: [updatedById], references: [id])
 
   programmeItems         ProgrammeItem[]
+  // R-34: arrangers, lyricists and translators of this work (the composer stays MusicalWork.composerId).
+  contributors           MusicalWorkContributor[]
   recordingRevisionLinks RecordingRevisionWork[]
   sheetMusicRequests     SheetMusicRequest[]
   learningGuideLinks     LearningGuideWork[]
@@ -493,6 +507,8 @@ model Performance {
   performers  PerformancePerformer[]
   choirs      PerformanceChoir[]
   conductors  PerformanceConductor[]
+  // R-34: orchestras and instrumental ensembles (Choir stays the vocal-ensemble model).
+  ensembles   PerformanceEnsemble[]
 
   @@index([programmeId])
   @@index([venueId])
@@ -529,6 +545,9 @@ model Artist {
   updatedBy StudioUser @relation("ArtistUpdatedBy", fields: [updatedById], references: [id])
 
   performances PerformancePerformer[]
+  // R-34: the human this performer is (see Conductor.personId).
+  personId     String?
+  person       Person?                @relation(fields: [personId], references: [id], onDelete: SetNull)
 
   @@map("artists")
 }
@@ -570,6 +589,9 @@ model Conductor {
   updatedBy StudioUser @relation("ConductorUpdatedBy", fields: [updatedById], references: [id])
 
   performances PerformanceConductor[]
+  // R-34: the human this conductor credit belongs to (one public person page across roles). Optional; nothing requires it.
+  personId     String?
+  person       Person?                @relation(fields: [personId], references: [id], onDelete: SetNull)
 
   @@map("conductors")
 }
@@ -1153,6 +1175,9 @@ model YouTubeVideo {
   currentLikeCount    Int?
   currentCommentCount Int?
   statisticsUpdatedAt DateTime?
+  // R-34: the uploader's tags (snippet.tags) and the #hashtags in its title and description, stored by the sync for the pipeline. Untrusted text.
+  tags                String[]           @default([])
+  hashtags            String[]           @default([])
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
@@ -1161,6 +1186,8 @@ model YouTubeVideo {
   analyticsObservations YouTubeAnalyticsObservation[]
   videoPage             YouTubeVideoPage?
   exposureReview        VideoExposureReview?
+  // Upload-to-draft pipeline (R-34): this video's place in the pipeline, if it was ever queued.
+  pipelineItem          PipelineVideo?
 
   @@map("youtube_videos")
 }
@@ -2597,4 +2624,272 @@ model PlaylistDraftProposal {
 
   @@index([playlistPageId, status])
   @@map("playlist_draft_proposals")
+}
+
+// ---------------------------------------------------------------------------
+// Upload-to-draft pipeline (R-34, docs/upload-pipeline.md). Purely additive: new tables, and nullable columns on existing ones.
+//
+//   Person, Ensemble, MusicalWorkContributor, PerformanceEnsemble: the smallest additions that give arrangers, lyricists, translators and
+//     orchestras a home, and one public page per human across roles. Composer, Conductor and Artist gain an OPTIONAL personId; nothing is
+//     backfilled and nothing requires it.
+//   EntityAlias: standing editorial decisions that two spellings are one entity (seeded from review-names.csv merges and canonical names).
+//   PipelineRun, PipelineVideo, PipelineClaim: the pipeline's own bookkeeping. Proposals, never canonical records. The JSON columns hold
+//     proposals (extraction, resolution, research, drafts), like ContentSuggestion.evidenceRefs; nothing public reads them.
+//   EntityPageCopy: the approved SEO and answer-first copy of an entity page; public pages read only status PUBLISHED.
+// ---------------------------------------------------------------------------
+
+enum WorkContributorRole {
+  ARRANGER
+  LYRICIST
+  TRANSLATOR
+}
+
+enum PipelineEntityKind {
+  COMPOSER
+  WORK
+  CONDUCTOR
+  CHOIR
+  ARTIST
+  VENUE
+  ENSEMBLE
+  PERSON
+  ORGANISATION
+}
+
+enum PipelineVideoStatus {
+  QUEUED
+  EXTRACTED
+  RESOLVED
+  RESEARCHED
+  AWAITING_APPROVAL
+  APPROVED
+  PUBLISHED
+  REJECTED
+  SKIPPED
+  FAILED
+}
+
+enum PipelineClaimStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  CONFLICT
+  STALE
+}
+
+enum PipelineSourceTier {
+  A
+  B
+  C
+  X
+}
+
+enum PipelineRunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  STOPPED_COST_CAP
+}
+
+enum EntityPageCopyStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Person {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  name        String
+  biography   String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("PersonCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("PersonUpdatedBy", fields: [updatedById], references: [id])
+
+  composers         Composer[]
+  conductors        Conductor[]
+  artists           Artist[]
+  workContributions MusicalWorkContributor[]
+
+  @@index([archivedAt])
+  @@map("persons")
+}
+
+model MusicalWorkContributor {
+  musicalWorkId String
+  personId      String
+  role          WorkContributorRole
+  createdAt     DateTime            @default(now())
+
+  musicalWork MusicalWork @relation(fields: [musicalWorkId], references: [id], onDelete: Cascade)
+  person      Person      @relation(fields: [personId], references: [id], onDelete: Restrict)
+
+  @@id([musicalWorkId, personId, role])
+  @@index([personId])
+  @@map("musical_work_contributors")
+}
+
+model Ensemble {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  name        String
+  description String?   @db.Text
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  updatedById String
+
+  createdBy StudioUser @relation("EnsembleCreatedBy", fields: [createdById], references: [id])
+  updatedBy StudioUser @relation("EnsembleUpdatedBy", fields: [updatedById], references: [id])
+
+  performances PerformanceEnsemble[]
+
+  @@index([archivedAt])
+  @@map("ensembles")
+}
+
+model PerformanceEnsemble {
+  performanceId String
+  ensembleId    String
+
+  performance Performance @relation(fields: [performanceId], references: [id], onDelete: Cascade)
+  ensemble    Ensemble    @relation(fields: [ensembleId], references: [id], onDelete: Restrict)
+
+  @@id([performanceId, ensembleId])
+  @@index([ensembleId])
+  @@map("performance_ensembles")
+}
+
+model EntityAlias {
+  id            String             @id @default(uuid())
+  entityKind    PipelineEntityKind
+  // The spelling as seen.
+  alias         String
+  // normalizeNameForComparison(alias): what matching compares.
+  aliasKey      String
+  // The catalogue spelling an editor chose.
+  canonicalName String
+  // The matched record, once one exists (not a foreign key: it may point at any entity table).
+  entityId      String?
+  // Where the decision came from, e.g. "review-names.csv (merge)".
+  source        String
+  decidedBy     String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([entityKind, aliasKey])
+  @@map("entity_aliases")
+}
+
+model PipelineRun {
+  id               String            @id @default(uuid())
+  trigger          String
+  dryRun           Boolean
+  status           PipelineRunStatus @default(RUNNING)
+  startedAt        DateTime          @default(now())
+  finishedAt       DateTime?
+  // A run holds the pipeline until this time; a later run starting before it is skipped (the stewardship lease pattern).
+  leaseExpiresAt   DateTime
+  videosConsidered Int               @default(0)
+  videosAdvanced   Int               @default(0)
+  inputTokens      Int               @default(0)
+  outputTokens     Int               @default(0)
+  webSearches      Int               @default(0)
+  costUsd          Decimal           @default(0) @db.Decimal(10, 4)
+  costCapUsd       Decimal           @db.Decimal(10, 4)
+  stoppedReason    String?
+  // Per-step counts and error KINDS (never messages, never secrets).
+  steps            Json?
+
+  @@index([startedAt])
+  @@map("pipeline_runs")
+}
+
+model PipelineVideo {
+  id                String              @id @default(uuid())
+  youtubeVideoRowId String              @unique
+  status            PipelineVideoStatus @default(QUEUED)
+  // sha256 of title, description and tags when queued: a changed video is re-queued, an unchanged one never is.
+  sourceFingerprint String
+  attempts          Int                 @default(0)
+  lastErrorKind     String?
+  extraction        Json?
+  resolution        Json?
+  research          Json?
+  draft             Json?
+  flags             String[]            @default([])
+  costUsd           Decimal             @default(0) @db.Decimal(10, 4)
+  recordingId       String?
+  decidedById       String?
+  decidedAt         DateTime?
+  decisionNote      String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  youtubeVideo YouTubeVideo    @relation(fields: [youtubeVideoRowId], references: [id], onDelete: Cascade)
+  decidedBy    StudioUser?     @relation("PipelineVideoDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  claims       PipelineClaim[]
+
+  @@index([status])
+  @@map("pipeline_videos")
+}
+
+model PipelineClaim {
+  id              String              @id @default(uuid())
+  pipelineVideoId String
+  // What the claim is about: the bundle's subject key ("VIDEO", or the resolution key of a new entity), and its kind and name.
+  subjectKey      String
+  entityKind      PipelineEntityKind?
+  entityId        String?
+  entityName      String
+  subjectKind     String
+  workTitle       String?
+  value           String?
+  statement       String              @db.Text
+  sourceUrl       String
+  sourceTitle     String?
+  excerpt         String
+  sourceTier      PipelineSourceTier
+  // AGREES, CONFLICTS or NOT_STATED, against the video's own title and description.
+  videoRelation   String
+  status          PipelineClaimStatus @default(PROPOSED)
+  decidedById     String?
+  decidedAt       DateTime?
+  retrievedAt     DateTime
+  createdAt       DateTime            @default(now())
+
+  pipelineVideo PipelineVideo @relation(fields: [pipelineVideoId], references: [id], onDelete: Cascade)
+  decidedBy     StudioUser?   @relation("PipelineClaimDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([pipelineVideoId])
+  @@index([entityKind, entityName])
+  @@map("pipeline_claims")
+}
+
+model EntityPageCopy {
+  id              String               @id @default(uuid())
+  entityKind      PipelineEntityKind
+  entityId        String
+  seoTitle        String
+  metaDescription String
+  summary         String               @db.Text
+  keyFacts        Json
+  sameAs          String[]             @default([])
+  sourceClaimIds  String[]             @default([])
+  status          EntityPageCopyStatus @default(DRAFT)
+  approvedById    String?
+  approvedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  approvedBy StudioUser? @relation("EntityPageCopyApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@unique([entityKind, entityId])
+  @@map("entity_page_copies")
 }

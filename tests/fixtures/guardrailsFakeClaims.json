@@ -1,0 +1,97 @@
+{
+  "_comment": "FAKE data for the content guardrails (docs/content-guardrails.md). Invented song, people, places and URLs. Seven claims; claims 4 and 6 are WEAK on purpose (below their type's minimum evidence). Same shape as the Dingiri Dingalae fixture is meant to have once the editor supplies its seven claims.",
+  "video": { "youtubeVideoId": "fakeFolk001", "title": "A Fake Folk Song" },
+  "claims": [
+    {
+      "claimId": "G-claim-1",
+      "youtubeVideoId": "fakeFolk001",
+      "subjectKind": "work-title",
+      "workTitle": "A Fake Folk Song",
+      "value": "A Fake Folk Song",
+      "statement": "The publisher lists the song as A Fake Folk Song.",
+      "sources": [{ "url": "https://examplepress.test/catalogue/fake-folk-song", "tier": "A", "excerpt": "A Fake Folk Song (SATB, unaccompanied)", "approved": true }],
+      "status": "accepted",
+      "approver": "Editor One",
+      "approvedAt": "2026-11-18T09:00:00.000Z",
+      "retrievedAt": "2026-11-18T08:00:00.000Z"
+    },
+    {
+      "claimId": "G-claim-2",
+      "youtubeVideoId": "fakeFolk001",
+      "subjectKind": "alternate-title",
+      "workTitle": "A Fake Folk Song",
+      "value": "Fake Folk Songe",
+      "statement": "A hymnal index also gives the spelling Fake Folk Songe.",
+      "sources": [{ "url": "https://hymnary.org/text/fake_folk_songe", "tier": "B", "excerpt": "Fake Folk Songe (alternative spelling)", "approved": true }],
+      "status": "accepted",
+      "approver": "Editor One",
+      "approvedAt": "2026-11-18T09:00:00.000Z",
+      "retrievedAt": "2026-11-18T08:00:00.000Z"
+    },
+    {
+      "claimId": "G-claim-3",
+      "youtubeVideoId": "fakeFolk001",
+      "subjectKind": "arranger",
+      "workTitle": "A Fake Folk Song",
+      "value": "Gus Arranger",
+      "statement": "The choral arrangement published by Example Press is by Gus Arranger.",
+      "sources": [{ "url": "https://examplepress.test/catalogue/fake-folk-song", "tier": "A", "excerpt": "arranged for choir by Gus Arranger", "approved": true }],
+      "status": "accepted",
+      "approver": "Editor One",
+      "approvedAt": "2026-11-18T09:00:00.000Z",
+      "retrievedAt": "2026-11-18T08:00:00.000Z"
+    },
+    {
+      "claimId": "G-claim-4",
+      "youtubeVideoId": "fakeFolk001",
+      "subjectKind": "composition-date",
+      "workTitle": "A Fake Folk Song",
+      "value": "1952",
+      "statement": "The song was first written down in 1952.",
+      "sources": [{ "url": "https://national-daily.example.test/arts/folk", "tier": "B", "excerpt": "first written down in 1952, the song", "approved": true }],
+      "status": "accepted",
+      "approver": "Editor One",
+      "approvedAt": "2026-11-18T09:00:00.000Z",
+      "retrievedAt": "2026-11-18T08:00:00.000Z"
+    },
+    {
+      "claimId": "G-claim-5",
+      "youtubeVideoId": "fakeFolk001",
+      "subjectKind": "choir",
+      "workTitle": null,
+      "value": "Fake Chorale",
+      "statement": "The Fake Chorale performs the song in this recording.",
+      "sources": [{ "url": "https://fakechorale.example.test/concerts/2025", "tier": "A", "excerpt": "the Fake Chorale sang A Fake Folk Song", "approved": true }],
+      "status": "accepted",
+      "approver": "Editor One",
+      "approvedAt": "2026-11-18T09:00:00.000Z",
+      "retrievedAt": "2026-11-18T08:00:00.000Z"
+    },
+    {
+      "claimId": "G-claim-6",
+      "youtubeVideoId": "fakeFolk001",
+      "subjectKind": "background",
+      "workTitle": "A Fake Folk Song",
+      "value": "Fakeville",
+      "statement": "The song was first sung at a harvest festival in Fakeville.",
+      "sources": [{ "url": "https://fakefolkfan.blogspot.com/2019/harvest", "tier": "C", "excerpt": "first sung at a harvest festival in Fakeville", "approved": true }],
+      "status": "accepted",
+      "approver": "Editor One",
+      "approvedAt": "2026-11-18T09:00:00.000Z",
+      "retrievedAt": "2026-11-18T08:00:00.000Z"
+    },
+    {
+      "claimId": "G-claim-7",
+      "youtubeVideoId": "fakeFolk001",
+      "subjectKind": "publisher",
+      "workTitle": "A Fake Folk Song",
+      "value": "Example Press",
+      "statement": "The arrangement is published by Example Press.",
+      "sources": [{ "url": "https://examplepress.test/catalogue/fake-folk-song", "tier": "A", "excerpt": "Example Press, catalogue no. EP-1234", "approved": true }],
+      "status": "accepted",
+      "approver": "Editor One",
+      "approvedAt": "2026-11-18T09:00:00.000Z",
+      "retrievedAt": "2026-11-18T08:00:00.000Z"
+    }
+  ]
+}

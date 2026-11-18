@@ -45,6 +45,8 @@ const VIDEO_SNAPSHOT_FIELDS = [
   "currentViewCount",
   "currentLikeCount",
   "currentCommentCount",
+  "tags",
+  "hashtags",
 ] as const;
 
 const PLAYLIST_SNAPSHOT_FIELDS = ["title", "description", "thumbnailUrl", "privacyStatus", "channelId", "publishedAt", "etag"] as const;

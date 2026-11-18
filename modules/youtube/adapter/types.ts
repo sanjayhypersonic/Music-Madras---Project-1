@@ -64,6 +64,11 @@ export interface YouTubeVideoRecord {
   likeCount: string | null;
   commentCount: string | null;
   etag: string | null;
+  /**
+   * R-34: `snippet.tags`, the uploader's keyword tags (untrusted text; YouTube returns them only to the channel's own reads on some keys, so an
+   * empty list is normal). Optional so records built elsewhere (fixtures, tests) need not carry it; when absent the sync leaves the column alone.
+   */
+  tags?: string[];
 }
 
 export interface YouTubePlaylistRecord {

@@ -97,6 +97,8 @@ Every credit and title records how we know it, from strongest to weakest:
 
 A credit moves up a tier only through a human decision or an approved source. A text error never becomes a credit.
 
+"Supported by another source" is refined for researched claims by the source tiers (A, B, C, X) and the minimum evidence per claim type in `docs/content-guardrails.md` section 2. A claim below its minimum is written only with attribution ("…, according to …"), never as plain fact.
+
 ## 9. Editor decisions on the five reference videos
 
 | Video | Decisions |

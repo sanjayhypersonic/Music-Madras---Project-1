@@ -8,6 +8,7 @@ import { getComposerEntityPageData } from "../../../../modules/db/repositories/e
 import type { EntityPageLifespan } from "../../../../modules/mmke/entityPage/entityPageContract";
 import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBreadcrumbs";
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
+import { EntityPageCopyBlock } from "../../../../components/museum/entity/EntityPageCopyBlock";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
@@ -91,6 +92,7 @@ export default async function ComposerPage({ params }: { params: Promise<{ slug:
       />
 
       <EntityHeader eyebrow="Composer" name={composer.name} subtitle={lifespanLabel} description={composer.description} />
+      <EntityPageCopyBlock kind="COMPOSER" entityId={composer.id} schemaType="Person" name={composer.name} emitJsonLd={false} />
 
       <EntitySection id="works" heading="Musical Works">
         {composer.relatedWorks && composer.relatedWorks.length > 0 ? (

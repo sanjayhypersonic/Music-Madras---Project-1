@@ -15,13 +15,19 @@ export interface VideoCreditsSource extends VideoText {
   publishedAt?: string | null;
 }
 
-export type VideoSkipReason = "NOT_PUBLIC" | "NOT_OBSERVED" | "NO_DESCRIPTION";
+export type VideoSkipReason = "NOT_PUBLIC" | "NOT_OBSERVED" | "NO_DESCRIPTION" | "NO_TEXT";
 
-/** Only public, currently observed videos with a description are sent; the rest are skipped without a provider call. */
-export function videoSkipReason(video: VideoCreditsSource): VideoSkipReason | null {
+/**
+ * Only public, currently observed videos with a description are sent; the rest are skipped without a provider call. With allowTitleOnly (the
+ * upload pipeline, R-34) a video with an empty description is sent too, and the validators then accept only quotes from its title (basis 1).
+ */
+export function videoSkipReason(video: VideoCreditsSource, options: { allowTitleOnly?: boolean } = {}): VideoSkipReason | null {
   if (video.privacyStatus !== "public") return "NOT_PUBLIC";
   if (video.observabilityState !== undefined && video.observabilityState !== null && video.observabilityState !== "OBSERVED") return "NOT_OBSERVED";
-  if ((video.description ?? "").trim().length === 0) return "NO_DESCRIPTION";
+  if ((video.description ?? "").trim().length === 0) {
+    if (!options.allowTitleOnly) return "NO_DESCRIPTION";
+    if ((video.title ?? "").trim().length === 0) return "NO_TEXT";
+  }
   return null;
 }
 
@@ -71,9 +77,9 @@ export type VideoCreditsOutcome =
       result: CheckedVideoCredits;
     };
 
-export async function extractVideoCredits(video: VideoCreditsSource, provider: AIProvider, options: { model?: string } = {}): Promise<VideoCreditsOutcome> {
+export async function extractVideoCredits(video: VideoCreditsSource, provider: AIProvider, options: { model?: string; allowTitleOnly?: boolean } = {}): Promise<VideoCreditsOutcome> {
   const base = { youtubeVideoId: video.youtubeVideoId, title: video.title };
-  const skip = videoSkipReason(video);
+  const skip = videoSkipReason(video, { allowTitleOnly: options.allowTitleOnly });
   if (skip) return { ...base, status: "SKIPPED", skipReason: skip };
 
   const request = buildVideoCreditsRequest(video, options.model);

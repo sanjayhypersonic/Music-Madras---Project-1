@@ -19,6 +19,10 @@ human-triggered action exists.
   (implemented).
 - §83 onward: **Phase 6H-7** — Source-Aware Editorial Intelligence &
   Generation Hardening (implemented).
+- §125: **Research-assisted content** (2026-11-18): AI may propose sources;
+  humans approve claims; nothing unapproved is stated.
+- §126: **Upload-to-draft pipeline** (2026-11-18): research inside the platform, proposals only;
+  the owner approves claims and bundles; nothing unapproved is published.
 
 ## 1. Purpose
 
@@ -2942,3 +2946,47 @@ A Recording is public only when `status = PUBLISHED` and a published revision po
 **Start-up configuration check.** `instrumentation.ts` -> `modules/config/productionConfig.ts` runs once when a Node.js server starts, for a production runtime only (never in development, tests or `next build`; no database or network access; variable NAMES only in any message). It requires: `DATABASE_URL` (a postgresql:// string), `PUBLIC_SITE_URL` and `AUTH_URL` (https, not local), `AUTH_SECRET` (set, not the placeholder, at least 32 characters); it refuses `AI_PROVIDER=fake` or an unsupported provider, `EMAIL_PROVIDER` other than `smtp` (and `smtp` without `SMTP_URL`/`EMAIL_FROM`), half-configured Google sign-in, and any `TEST_DATABASE_URL`/`TEST_DIRECT_URL`. Email, AI, Google, GA4 and YouTube remain optional (an unset `EMAIL_PROVIDER` or an anthropic selection without a key is only a logged warning). Verified against Next.js 16.4 (`next start`): a failing check is logged and the server then answers every request, including prerendered pages and `/api/health`, with HTTP 500, while the process itself stays running; a valid configuration, with or without AI, serves normally. The guard therefore makes a misconfigured deployment fail its health check, but it does not by itself keep that deployment from receiving traffic - that needs the platform gate in `docs/deployment-readiness-gate.md`. `/api/health` is liveness-only: with a valid configuration and an unreachable database it still returns 200 while database-backed routes return 500, so a database-backed route must be part of every readiness check.
 
 **Still needs the live platform or a console:** that the credentials work and the database is reachable (the check never connects); that the domain, TLS and canonical host are right; that email is deliverable (SPF/DKIM/DMARC and a real invite/reset); response headers and cookie flags on the live domain; the host's Node version matches `24.x`; and the deployment/migration/rollback procedure (the hosting-independent gate is in `docs/deployment-readiness-gate.md`; its provider-specific implementation is pending the choice of host). Note for deployers - install scripts: npm 11.17 does **not** skip dependency install scripts; its `allowScripts` field is advisory, installs still run the scripts by default and print `npm warn allow-scripts` for packages whose scripts have not been reviewed, and the npm documentation says a future release will block unreviewed scripts. Nothing in the repository records approvals yet, so a future npm may block `argon2`'s install step and the `@prisma/engines`/`prisma` scripts. `argon2` ships prebuilt binaries (glibc and musl on linux-x64, linux-arm64, win32-x64, darwin-arm64) that it loads without compiling, and it loaded on Node 24 here; the Prisma schema engine is needed for `prisma migrate`, not for serving. Verify on the real host: the install log shows no script failure, `argon2` loads and hashes, the build's `prisma generate` succeeds, `prisma --version` runs, and a Studio sign-in works.
+
+## 125. Research-assisted content: AI may propose sources; humans approve claims; nothing unapproved is stated
+
+Status: designed and built 2026-11-18 on `wip/credits-extraction`, uncommitted (project register R-32). It has run only on fake data; no research session has run yet. Procedure: `docs/video-research-workflow.md`.
+
+**What changes, and what does not.** §103 says "Music Madras retrieves external evidence; AI does not browse for truth", and §84 says no prompt instructs a model to research the web. Both stay true for the generation gateway: no prompt sent by the application asks for research, and no application code fetches pages. This section adds one bounded exception, outside the application. A person starts a Claude Code session with web access. It reads a research brief built from **approved** credits and writes a local research-proposals file of **claims**. Each claim has a source URL, a short excerpt and a stated source strength. That file is data, like the YouTube text in §64: nothing in it is trusted until an editor accepts a claim.
+
+**The rule, in three parts.**
+1. **AI may propose sources.** The research session proposes claims and sources, and reports questions it could not answer. It approves nothing, writes nothing but its proposals file, and never resolves a conflict.
+2. **Humans approve claims.** `npm run ai:video-research-sheet` checks each proposal deterministically and puts it in `research-claims.csv`:
+   - the URL must be http(s); the excerpt must be short and contain the claimed value; lyrics are never a claim;
+   - the source strength is fixed or capped by known domains: IMSLP is catalogue/publisher; Hymnary.org is a reference work; Wikipedia is a pointer only and cannot be cited; social, video, blog and lyrics hosts are at most fan sites;
+   - each claim is compared with the video's approved credits (matches, CONFLICTS showing both values, or not stated).
+
+   An editor accepts, edits, rejects or defers each row, and names the approver. Flagged and unverified claims can never be used, and fan-site claims need a note. A conflict, with the video's credits or between two claims, blocks every claim in it until a person rejects all but one value or corrects the credits (§86's principle: prevent silent resolution by never resolving; gate 2 of `docs/content-guardrails.md`).
+3. **Nothing unapproved is stated.** `npm run ai:video-describe-draft` builds drafts from approved credits and accepted claims only. The deterministic template cites each claim sentence (`[1]`) and the video's own text (`[V]`). The `video-description-v1` prompt (`modules/ai/prompts/videoDescription/videoDescriptionPromptV1.ts`) applies the same closed world to a model: only supplied ids, each paragraph listing its evidence, the Details block and citations kept deterministic. It is written to a local file; no API call is made.
+
+**Tiers.** An accepted claim is basis 3 ("supported by another source", `docs/content-editorial-standard.md` §8). A proposed claim is basis 5. In §5's hierarchy an accepted claim sits with approved external sources (tier 3). It does not become a `Source` or `Citation` row: registering a Source stays a Studio action (§105). Nothing here writes to a database, to YouTube or to a provider.
+
+**Limits, stated plainly (as §90).**
+- The checks prove that a claim's value appears in its excerpt and that the excerpt is short. They do not prove that the excerpt is on the page, that the page is what it claims to be, or that the claim is true. The editor opens the URL.
+- The session's stated strength is trusted only for domains no rule covers, and is marked "check it".
+- There is no validator yet for a model's prose against the prompt's output schema, so model prose must not be used without a line-by-line check against the cited ids until one exists.
+
+**Enforced by the content guardrails (2026-11-18, R-33).** `docs/content-guardrails.md` turns this rule into five gates implemented as pure functions in `modules/mmke/guardrails/`:
+1. sources: tiers A/B/C/X, independence, minimum evidence per claim type;
+2. claims: schema, scope, exclusions, conflicts that block both sides until a person resolves them, a named approver;
+3. generation: sentence-to-claim traceability, name/date/number checks, weak claims only with attribution, opening-sentence, banned-phrase, anti-generic and near-duplicate checks;
+4. publication: never automatic; batches with a second-review sample;
+5. audit: an append-only decision log and stale-claim marking.
+
+The playlist assistant's text helpers (`fold`, `tokens`, `stem`, sentence boundaries, negation) moved unchanged into `modules/mmke/guardrails/text.ts`, so both use one implementation.
+
+## 126. The upload-to-draft pipeline: AI may propose sources, humans approve claims, nothing unapproved is published
+
+Status: built 2026-11-18 on `wip/credits-extraction`, uncommitted (project register R-34); migration written, not applied; never run against a database or a real AI provider. Design: `docs/upload-pipeline.md`.
+
+**The policy change, recorded.** Until now the application itself never researched the web (§84, §103: "Music Madras retrieves external evidence; AI does not browse for truth"), and §125 allowed research only in a supervised session outside the application. The upload pipeline moves research INSIDE the platform, as a scheduled, budgeted, switched-off-by-default job. It may call a provider's web-search tool (Anthropic `web_search_20260209`) through a new optional `AIProvider.research()` method. The rule that governs it, in three parts:
+
+1. **AI may propose sources.** Research is restricted to NEW entities and the video's own work. It returns cited passages only. A second, closed-world structured call turns citations into claims, and every claim is checked in code against the provider's citations: the URL and excerpt come from the citation, never from the model; the value must be in the cited text; the tier comes from gate 1; and the claim is compared with the video's own text. A conflict is stored as CONFLICT and never resolved by code. Claims are proposals.
+2. **Humans approve claims.** The owner decides every bundle in Studio → Pipeline (RECORDING_PUBLISH). Claims are accepted or rejected one by one, and a conflicting claim cannot be passed over. Bulk approval exists only for bundles with no flags. Only ACCEPTED claims of tier A or B may supply `sameAs` links.
+3. **Nothing unapproved is published.** Drafts are closed-world (gate 3 checks every sentence against the credits and claims it cites). Catalogue records are created only on approval, through the existing creation tool. Publication goes through the existing `publishRecordingDraft`, with completeness, locks, Recording holds and audit unchanged; video exposure approvals keep their own workflow. A weak claim is published only with attribution, and a rejected or conflicting claim never.
+
+**What stays true.** The prompt-injection boundary (§64): video text, tags, hashtags and web pages are data, and system instructions travel apart from them. Validation cannot prove truth (§90): the checks prove that a claim's value is in a page's cited text, not that the page is right, which is why the owner approves. Entity matching is exact-normalised plus approved aliases; nothing is matched fuzzily. Cost is capped per run (`MAX_USD_PER_RUN`), and every run logs tokens, searches and cost.

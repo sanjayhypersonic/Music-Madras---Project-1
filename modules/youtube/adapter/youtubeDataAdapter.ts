@@ -163,6 +163,7 @@ export class YouTubeDataApiAdapter implements YouTubeDataAdapter {
           likeCount: item.statistics?.likeCount ?? null,
           commentCount: item.statistics?.commentCount ?? null,
           etag: item.etag ?? null,
+          tags: Array.isArray(item.snippet?.tags) ? item.snippet.tags.filter((t): t is string => typeof t === "string") : [],
         });
       }
     }
@@ -247,6 +248,7 @@ interface YouTubeVideosListResponse {
       channelId?: string;
       channelTitle?: string;
       thumbnails?: unknown;
+      tags?: unknown[];
     };
     contentDetails?: { duration?: string };
     status?: { privacyStatus?: string; uploadStatus?: string; embeddable?: boolean };

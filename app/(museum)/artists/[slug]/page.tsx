@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getArtistEntityPageData } from "../../../../modules/db/repositories/entityRelationshipsRepository";
 import { EntityBreadcrumbs } from "../../../../components/museum/entity/EntityBreadcrumbs";
 import { EntityHeader } from "../../../../components/museum/entity/EntityHeader";
+import { EntityPageCopyBlock } from "../../../../components/museum/entity/EntityPageCopyBlock";
 import { EntitySection } from "../../../../components/museum/entity/EntitySection";
 import { EntityEmptyState } from "../../../../components/museum/entity/EntityEmptyState";
 import { RecordingCard } from "../../../../components/museum/RecordingCard";
@@ -67,6 +68,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ slug: s
       />
 
       <EntityHeader eyebrow="Artist" name={artist.name} subtitle={artist.secondaryDetail} description={artist.description} />
+      <EntityPageCopyBlock kind="ARTIST" entityId={artist.id} schemaType="Person" name={artist.name} emitJsonLd={false} />
 
       <EntitySection id="programmes" heading="Programmes">
         {artist.relatedProgrammes.length > 0 ? (

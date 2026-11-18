@@ -1,4 +1,4 @@
-import type { AIGenerationRequest, AIGenerationResult, AIProvider, AIProviderCapabilities, AIProviderConfigurationStatus } from "../../provider/aiProvider";
+import type { AIGenerationRequest, AIGenerationResult, AIProvider, AIProviderCapabilities, AIProviderConfigurationStatus, AIResearchRequest, AIResearchResult, AIResearchSuccess } from "../../provider/aiProvider";
 
 // Phase 6H-5 — a deterministic provider implementing the exact same
 // AIProvider interface as AnthropicProvider. Exists so the automated test
@@ -19,6 +19,11 @@ export interface FakeAIProviderConfig {
    */
   respond?: (request: AIGenerationRequest) => unknown;
   configured?: boolean;
+  /**
+   * R-34: the answer to a research() request (passages with citations, as a web-search provider returns them). Omitted: research() returns no
+   * passages. Returning an AIResearchResult with ok:false simulates a failed research call.
+   */
+  researchRespond?: (request: AIResearchRequest) => Partial<Pick<AIResearchSuccess, "passages" | "searchResults" | "usage">> | AIResearchResult;
 }
 
 const DEFAULT_SUCCESS_OUTPUT = {
@@ -45,6 +50,28 @@ export class FakeAIProvider implements AIProvider {
 
   capabilities(): AIProviderCapabilities {
     return { structuredOutput: true, vision: false, toolCalling: false, streaming: false, usageMetrics: true };
+  }
+
+  /** R-34: deterministic research for tests: whatever researchRespond returns, with fixed usage (1 search) unless it says otherwise. Never a network call. */
+  async research(request: AIResearchRequest): Promise<AIResearchResult> {
+    const timestamp = new Date();
+    const model = "fake-model-v1";
+    if (this.validateConfiguration().configured === false) {
+      return { ok: false, provider: this.providerName, model, error: { type: "CONFIGURATION", message: "Fake provider explicitly configured as unconfigured for this test.", retryable: false }, promptVersion: request.promptVersion, timestamp };
+    }
+    const answer = this.config.researchRespond?.(request) ?? {};
+    if ("ok" in answer) return answer;
+    return {
+      ok: true,
+      provider: this.providerName,
+      model,
+      passages: answer.passages ?? [],
+      searchResults: answer.searchResults ?? [],
+      usage: answer.usage ?? { inputTokens: 1000, outputTokens: 200, webSearchRequests: 1 },
+      stopReason: "end_turn",
+      promptVersion: request.promptVersion,
+      timestamp,
+    };
   }
 
   async generate(request: AIGenerationRequest): Promise<AIGenerationResult> {

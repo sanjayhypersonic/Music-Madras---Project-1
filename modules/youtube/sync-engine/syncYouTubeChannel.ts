@@ -2,6 +2,7 @@ import type { YouTubeDataAdapter, YouTubePlaylistItemRecord, YouTubePlaylistReco
 import { parseIso8601Duration } from "./parseIso8601Duration";
 import { selectBestThumbnail } from "./selectBestThumbnail";
 import { computeObservabilityUpdate } from "../availability/computeObservabilityUpdate";
+import { extractHashtags, sameStringList } from "./extractHashtags";
 import type { FieldOwnershipState, ObservabilityState } from "@prisma/client";
 
 // The pure reconciliation engine behind the Phase 6F initial (and every
@@ -399,6 +400,12 @@ async function syncVideo(
   if (description.writable) fields.description = video.description;
   if (thumbnail.writable) fields.thumbnailUrl = thumbnailUrl;
   if (visibility.writable) fields.privacyStatus = video.privacyStatus;
+  // R-34: tags and hashtags are YouTube's own text, stored for the upload pipeline (never FieldOwnership-tracked: Music Madras never edits them).
+  // Only when the adapter supplied tags, so a record without them (older fixtures) leaves the columns untouched.
+  if (video.tags !== undefined) {
+    fields.tags = video.tags;
+    fields.hashtags = extractHashtags(video.title, video.description);
+  }
 
   if (identity.isNew) {
     await repo.updateVideoFields(resourceId, { ...fields, statisticsUpdatedAt: now });
@@ -559,6 +566,10 @@ function hasAnyDifference(snapshot: Record<string, unknown>, fields: Record<stri
     const existingValue = snapshot[key];
     if (existingValue instanceof Date && value instanceof Date) {
       if (existingValue.getTime() !== value.getTime()) return true;
+      continue;
+    }
+    if (Array.isArray(value)) {
+      if (!sameStringList(existingValue, value)) return true; // tags / hashtags (R-34): compared by value, not identity
       continue;
     }
     if (existingValue !== value) return true;

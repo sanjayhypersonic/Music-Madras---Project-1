@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
-import type { AIGenerationRequest, AIGenerationResult, AIProvider, AIProviderCapabilities, AIProviderConfigurationStatus, AIProviderErrorInfo } from "../../provider/aiProvider";
+import type { AIGenerationRequest, AIGenerationResult, AIProvider, AIProviderCapabilities, AIProviderConfigurationStatus, AIProviderErrorInfo, AIResearchRequest, AIResearchResult } from "../../provider/aiProvider";
 import { normalizeAnthropicError } from "./normalizeAnthropicError";
 
 // Phase 6H-5 — the first (and, by design, replaceable) real provider
@@ -78,6 +78,34 @@ export function interpretAnthropicResponse(response: {
   }
 }
 
+/** R-34: how many times a paused web-search turn is resumed. */
+export const MAX_RESEARCH_TURNS = 3;
+
+/**
+ * R-34: the passages and search results in a web-search response. Pure. Only text blocks' `web_search_result_location` citations are kept (URL,
+ * title, cited text); a `web_search_tool_result` whose content is an error object (not a list) contributes nothing.
+ */
+export function interpretAnthropicResearchContent(content: ReadonlyArray<{ type: string } & Record<string, unknown>>): {
+  passages: Array<{ text: string; citations: Array<{ url: string; title: string | null; citedText: string }> }>;
+  searchResults: Array<{ url: string; title: string | null }>;
+} {
+  const passages: Array<{ text: string; citations: Array<{ url: string; title: string | null; citedText: string }> }> = [];
+  const searchResults: Array<{ url: string; title: string | null }> = [];
+  for (const block of content) {
+    if (block.type === "text" && typeof block.text === "string") {
+      const citations = (Array.isArray(block.citations) ? block.citations : [])
+        .filter((c): c is { type: string; url: string; title?: string | null; cited_text: string } => typeof c === "object" && c !== null && (c as { type?: string }).type === "web_search_result_location" && typeof (c as { url?: unknown }).url === "string" && typeof (c as { cited_text?: unknown }).cited_text === "string")
+        .map((c) => ({ url: c.url, title: c.title ?? null, citedText: c.cited_text }));
+      if (block.text.trim()) passages.push({ text: block.text, citations });
+    } else if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
+      for (const r of block.content as Array<{ type?: string; url?: unknown; title?: unknown }>) {
+        if (r?.type === "web_search_result" && typeof r.url === "string") searchResults.push({ url: r.url, title: typeof r.title === "string" ? r.title : null });
+      }
+    }
+  }
+  return { passages, searchResults };
+}
+
 export class AnthropicProvider implements AIProvider {
   readonly providerName = "anthropic";
 
@@ -91,7 +119,62 @@ export class AnthropicProvider implements AIProvider {
   }
 
   capabilities(): AIProviderCapabilities {
-    return { structuredOutput: true, vision: false, toolCalling: false, streaming: false, usageMetrics: true };
+    return { structuredOutput: true, vision: false, toolCalling: false, streaming: false, usageMetrics: true, webResearch: true };
+  }
+
+  /**
+   * R-34: one bounded web-search session (the server-side `web_search_20260209` tool; Anthropic runs the searches). No structured output here:
+   * structured outputs cannot be combined with citations, and the citations (URL, title and the page's own cited text) are the evidence. A
+   * `pause_turn` is resumed at most MAX_RESEARCH_TURNS times by sending the assistant turn back unchanged. Usage (tokens and the number of web
+   * searches) is returned for cost logging. Untested against the live API in this phase (no API calls were made); covered by the pure
+   * interpreter below and by the fake provider in the pipeline tests.
+   */
+  async research(request: AIResearchRequest): Promise<AIResearchResult> {
+    const timestamp = new Date();
+    const model = request.model ?? this.config.model ?? DEFAULT_MODEL;
+    const configCheck = this.validateConfiguration();
+    if (!configCheck.configured) {
+      return { ok: false, provider: this.providerName, model, error: { type: "CONFIGURATION", message: configCheck.reason ?? "Anthropic provider is not configured.", retryable: false }, promptVersion: request.promptVersion, timestamp };
+    }
+    const client = new Anthropic({ apiKey: this.config.apiKey, timeout: this.config.timeoutMs ?? ANTHROPIC_DEFAULT_TIMEOUT_MS, maxRetries: this.config.maxRetries ?? DEFAULT_MAX_RETRIES });
+    const messages: Anthropic.MessageParam[] = [{ role: "user", content: JSON.stringify({ context: request.contextPayload }) }];
+    const tool: Anthropic.WebSearchTool20260209 = {
+      type: "web_search_20260209",
+      name: "web_search",
+      max_uses: Math.max(1, Math.min(request.maxSearches, 10)),
+      ...(request.blockedDomains && request.blockedDomains.length > 0 ? { blocked_domains: request.blockedDomains } : {}),
+    };
+    const usage = { inputTokens: 0, outputTokens: 0, webSearchRequests: 0 };
+    const content: Array<{ type: string } & Record<string, unknown>> = [];
+    let stopReason: string | undefined;
+    try {
+      for (let turn = 0; turn < MAX_RESEARCH_TURNS; turn++) {
+        const response = await client.messages.create({
+          model,
+          max_tokens: request.maxOutputTokens ?? ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS,
+          system: request.systemInstructions, // the instructions stay in `system`; the subject travels as data in the user turn
+          messages,
+          tools: [tool],
+        });
+        usage.inputTokens += response.usage?.input_tokens ?? 0;
+        usage.outputTokens += response.usage?.output_tokens ?? 0;
+        usage.webSearchRequests += response.usage?.server_tool_use?.web_search_requests ?? 0;
+        stopReason = response.stop_reason ?? undefined;
+        if (response.stop_reason === "refusal") {
+          return { ok: false, provider: this.providerName, model, error: { type: "REFUSAL", message: "The model declined this research request.", retryable: false }, promptVersion: request.promptVersion, timestamp };
+        }
+        if (response.stop_reason !== null && TRUNCATING_STOP_REASONS.has(response.stop_reason)) {
+          return { ok: false, provider: this.providerName, model, error: { type: "OUTPUT_TRUNCATED", message: "The research response was cut off; nothing from it is used.", retryable: false }, promptVersion: request.promptVersion, timestamp };
+        }
+        content.push(...(response.content as unknown as Array<{ type: string } & Record<string, unknown>>));
+        if (response.stop_reason !== "pause_turn") break;
+        messages.push({ role: "assistant", content: response.content });
+      }
+    } catch (err) {
+      return { ok: false, provider: this.providerName, model, error: normalizeAnthropicError(err), promptVersion: request.promptVersion, timestamp };
+    }
+    const interpreted = interpretAnthropicResearchContent(content);
+    return { ok: true, provider: this.providerName, model, ...interpreted, usage, stopReason, promptVersion: request.promptVersion, timestamp };
   }
 
   async generate(request: AIGenerationRequest): Promise<AIGenerationResult> {

@@ -40,6 +40,9 @@ export default async function ProtectedStudioLayout({ children }: { children: Re
   if (can(role, "RECORDING_WRITE")) {
     navLinks.push({ href: "/studio/content-suggestions", label: "Content Suggestions" });
   }
+  if (can(role, "RECORDING_PUBLISH")) {
+    navLinks.push({ href: "/studio/pipeline", label: "Pipeline" });
+  }
   if (canManageUsers(role)) {
     navLinks.push({ href: "/studio/users", label: "Users" });
   }

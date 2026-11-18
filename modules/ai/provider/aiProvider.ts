@@ -84,7 +84,53 @@ export interface AIProviderCapabilities {
   toolCalling: boolean;
   streaming: boolean;
   usageMetrics: boolean;
+  /** R-34: the provider can run a web search and return cited passages (AIProvider.research). */
+  webResearch?: boolean;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// R-34 (upload-to-draft pipeline, docs/upload-pipeline.md): web research with citations.
+//
+// One request = one bounded search session about one subject. The provider returns only what the search tool produced: passages of text with
+// the citations the provider attached (URL, page title and the VERBATIM cited text from that page) and the list of results it saw. It returns no
+// structured claims: turning passages into claims is a second, ordinary generate() call over this data, and every claim is then checked in code
+// against these citations (modules/pipeline/research.ts). Web pages are untrusted data, never instructions.
+
+export interface AIResearchRequest {
+  systemInstructions: string;
+  /** What to research (subject, role, the video's title) — DATA, never instructions. */
+  contextPayload: unknown;
+  promptVersion: string;
+  targetEntityType: string;
+  targetEntityId: string;
+  /** Upper bound on searches in this request (cost control). */
+  maxSearches: number;
+  /** Domains never to use (e.g. lyrics sites). */
+  blockedDomains?: string[];
+  model?: string;
+  maxOutputTokens?: number;
+}
+
+export interface AIResearchCitation {
+  url: string;
+  title: string | null;
+  /** The text the provider says it cited, copied from the page. */
+  citedText: string;
+}
+
+export interface AIResearchSuccess {
+  ok: true;
+  provider: string;
+  model: string;
+  passages: Array<{ text: string; citations: AIResearchCitation[] }>;
+  searchResults: Array<{ url: string; title: string | null }>;
+  usage?: { inputTokens?: number; outputTokens?: number; webSearchRequests?: number };
+  stopReason?: string;
+  promptVersion: string;
+  timestamp: Date;
+}
+
+export type AIResearchResult = AIResearchSuccess | AIGenerationFailure;
 
 export interface AIProviderConfigurationStatus {
   configured: boolean;
@@ -101,4 +147,6 @@ export interface AIProvider {
   generate(request: AIGenerationRequest): Promise<AIGenerationResult>;
   validateConfiguration(): AIProviderConfigurationStatus;
   capabilities(): AIProviderCapabilities;
+  /** R-34: optional. A provider without web research leaves it out, and the pipeline flags the bundle "research unavailable". */
+  research?(request: AIResearchRequest): Promise<AIResearchResult>;
 }
