@@ -26,7 +26,7 @@ Written 2026-11-18 for branch `wip/credits-extraction` (project register R-34). 
    ```powershell
    $env:VERIFY_DATABASE_URL = "<RESTORE>"; npm run ops:verify-database -- --compare restore-point-staging-upload-pipeline.json
    ```
-5. **See what is pending (read-only).** Expect exactly one pending migration, `20261118100000_upload_pipeline`, classified **ADDITIVE** with 0 blocking. Note the printed `host:port/database`: that is `<HOST>`.
+5. **See what is pending (read-only).** Expect `20261118100000_upload_pipeline` (unless it was already applied) and `20261120100000_pipeline_manual_mode` (added 2026-11-20, manual mode), each classified **ADDITIVE** with 0 blocking. Note the printed `host:port/database`: that is `<HOST>`. If Part A was already done once for the first migration, repeat it for the second with a new restore point (`restore-staging-2026-11-20-pipeline-manual-mode`).
    ```powershell
    $env:MIGRATE_DATABASE_URL = "<STAGING>"; npm run migrate -- status
    ```
@@ -117,6 +117,7 @@ These matter only for the **deployed** site: the `/api/cron/pipeline` route and 
    | `MAX_USD_PER_RUN` | `2` |
    | `PIPELINE_MAX_VIDEOS_PER_RUN` | `1` |
    | `PIPELINE_APPROVE_PUBLIC_VIDEO_PAGE` | leave **unset** (on): approval also publishes a public video's page; `false` turns that off |
+   | `PIPELINE_EXTRACT_MODE` / `PIPELINE_RESEARCH_MODE` / `PIPELINE_DRAFT_MODE` | leave **unset** (manual: no AI call; work is imported with `npm run pipeline:import`), or `api` per stage once the key is set (`docs/upload-pipeline.md` section 9). `AI_PROVIDER` and `ANTHROPIC_API_KEY` are needed only for a stage set to `api`. |
 
 4. **Redeploy.** **Deployments** (top tabs) → the latest Preview deployment → **⋯** → **Redeploy**. Variables apply only to new deployments.
 5. **Check readiness.** Open `https://<preview-url>/api/ready`. It must answer `200 {"status":"ready"}`; "not ready" means Part A was not applied to the database this deployment uses.
@@ -125,6 +126,8 @@ These matter only for the **deployed** site: the `/api/cron/pipeline` route and 
 ## Part E. Run the five reference videos
 
 The videos: `Vl8Xe2COp2c`, `zRjM7rP7hpM`, `S4aemnTWODM`, `jiNrP52imwg`, `rxGfBGWLnTI`.
+
+Part E as written uses the API for every stage: in step 1 also set `$env:PIPELINE_EXTRACT_MODE = "api"; $env:PIPELINE_RESEARCH_MODE = "api"`. **Without a key (manual mode, the default)** the run queues the videos and they wait: import each extraction (`npm run pipeline:packet -- --extract <id> --confirm-host "<HOST>"`, paste it into your own Claude account, then `npm run pipeline:import -- --file <answer>.json --confirm-host "<HOST>" --execute`), research the entities with `pipeline:entities`, `pipeline:packet` and `pipeline:import`, and run `pipeline:run` again to draft (`docs/upload-pipeline.md` section 9).
 
 1. **Set this shell.** The scripts do not read `.env`.
    ```powershell

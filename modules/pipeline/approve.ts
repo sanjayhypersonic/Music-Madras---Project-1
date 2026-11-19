@@ -15,7 +15,10 @@
 //      hold (and PIPELINE_APPROVE_PUBLIC_VIDEO_PAGE is on), its page is published through the existing page-publication service INSIDE the
 //      Recording's publish transaction, with the approving editor as actor and the reason "approved with pipeline bundle": both go live or
 //      neither does. Unlisted and private videos are left exactly as they are (an unlisted page keeps its own decision in the unlisted review).
-// Bulk approve: only bundles with NO flags. Reject: the bundle and its claims are rejected; nothing is created.
+// Summary prose written outside the template (manual video-draft import, or PIPELINE_DRAFT_MODE=api) is kept only if it still passes gate 3
+// against the DECIDED claims; otherwise the template summary is used and a note says why. The owner's own edits always win.
+// Bulk approve: only bundles with NO flags. Reject: the bundle and ITS OWN claims are rejected; nothing is created. Entity-first claims are
+// shared by every bundle naming the entity, so rejecting one video's bundle leaves them for the entity's other bundles.
 
 import type { CheckedVideoCredits } from "../ai/structuredOutput/validateVideoCreditsOutput";
 import { planVideo, type VideoCreatePlan } from "../jobs/videoCreditsCreate";
@@ -25,6 +28,8 @@ import { draftBundle, type BundleDraft, type PipelineVideoRow } from "./run";
 import type { DraftClaim, PageDraft } from "./drafts";
 import type { Resolution } from "./resolve";
 import { findBannedPhrases } from "../mmke/guardrails/generation";
+import { draftCredits } from "./facts";
+import { applyProse, checkPageProse } from "./pageProse";
 import { PIPELINE_VIDEO_PAGE_REASON, planVideoPage, type VideoPageFacts, type VideoPagePlan } from "./videoPage";
 
 export interface BundleForApproval {
@@ -114,13 +119,22 @@ export async function approveBundle(input: { id: string; actorId: string; edits?
 
   // Re-draft with the decided claims only, then the owner's own words on top.
   const row: PipelineVideoRow = { id: bundle.id, youtubeVideoId: bundle.youtubeVideoId, title: bundle.youtubeTitle, description: bundle.description, publishedAt: bundle.publishedAt, privacyStatus: "public", observabilityState: "OBSERVED", status: "RESEARCHED", attempts: 0, extraction: bundle.extraction, resolution: bundle.resolution };
-  const redrafted = (await draftBundle(row, bundle.extraction, bundle.resolution, claims, [], await deps.listPublishedCopySummaries())).draft;
-  const video = { ...redrafted.video, ...(edits.seoTitle ? { seoTitle: edits.seoTitle.trim() } : {}), ...(edits.metaDescription ? { metaDescription: edits.metaDescription.trim() } : {}), ...(edits.summary ? { summary: [edits.summary.trim()] } : {}) };
+  const redraft = await draftBundle(row, bundle.extraction, bundle.resolution, claims, [], await deps.listPublishedCopySummaries());
+  const redrafted = redraft.draft;
+  const notes: string[] = [];
+  let base = redrafted.video;
+  const prose = bundle.draft.video.prose;
+  if (prose && !edits.summary) {
+    const ctx = { youtubeVideoId: bundle.youtubeVideoId, recordingTitle: redrafted.video.name, transliteration: redraft.transliteration, credits: draftCredits(bundle.extraction.checked, bundle.resolution), claims };
+    const again = checkPageProse({ summary: prose.sentences.map((sentence, i) => ({ sentence, support: prose.support[i] ?? [] })), seoTitle: prose.seoTitle, metaDescription: prose.metaDescription }, ctx, prose.provenance);
+    if (again.ok) base = applyProse(redrafted.video, again.prose);
+    else notes.push(`summary by ${prose.provenance} not used: ${again.problems.slice(0, 3).join("; ")}; the template summary was used`);
+  }
+  const video = { ...base, ...(edits.seoTitle ? { seoTitle: edits.seoTitle.trim() } : {}), ...(edits.metaDescription ? { metaDescription: edits.metaDescription.trim() } : {}), ...(edits.summary ? { summary: [edits.summary.trim()] } : {}) };
   const draft: BundleDraft = { ...redrafted, video, entities: redrafted.entities.map((e) => ({ ...e, searchQueries: bundle.draft.entities.find((x) => x.subjectKey === e.subjectKey)?.searchQueries ?? [] })) };
 
   await deps.decideClaims({ pipelineVideoId: bundle.id, accepted: claims.filter((c) => c.status === "ACCEPTED").map((c) => c.dbId), rejected: claims.filter((c) => c.status === "REJECTED").map((c) => c.dbId), actorId: input.actorId, at: input.now });
 
-  const notes: string[] = [];
   const executed = await deps.executePlans([plan], input.actorId);
   notes.push(...executed.steps.filter((s) => s.outcome === "SKIPPED" || s.outcome === "REPORTED").map((s) => `${s.entity}: ${s.detail ?? s.outcome}`));
   const recording = await deps.findRecordingForVideo(bundle.youtubeVideoRowId);
@@ -161,7 +175,7 @@ export async function rejectBundle(input: { id: string; actorId: string; note: s
   const bundle = await deps.loadBundle(input.id);
   if (!bundle) return { ok: false, reason: "NOT_FOUND" };
   if (bundle.status !== "AWAITING_APPROVAL") return { ok: false, reason: `the bundle is ${bundle.status}` };
-  await deps.decideClaims({ pipelineVideoId: bundle.id, accepted: [], rejected: bundle.claims.filter((c) => c.status !== "REJECTED").map((c) => c.dbId), actorId: input.actorId, at: input.now });
+  await deps.decideClaims({ pipelineVideoId: bundle.id, accepted: [], rejected: bundle.claims.filter((c) => c.status !== "REJECTED" && !c.entityLevel).map((c) => c.dbId), actorId: input.actorId, at: input.now });
   await deps.markDecision(bundle.id, { status: "REJECTED", decidedById: input.actorId, decidedAt: input.now, decisionNote: input.note.trim() || null });
   await deps.audit({ actorId: input.actorId, action: "PIPELINE_BUNDLE_REJECTED", entityId: bundle.id, afterSnapshot: { note: input.note.trim().slice(0, 300) } });
   return { ok: true };

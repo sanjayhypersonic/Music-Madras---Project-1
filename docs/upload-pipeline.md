@@ -4,7 +4,8 @@ Status: built 2026-11-18 on `wip/credits-extraction`, uncommitted (project regis
 - **Migration:** written, not applied.
 - **Testing:** the unit tests use a fake AI provider and in-memory ports.
 - **Never run:** no real AI call, no database run, and the cron has never run.
-- **Default state:** switched off and dry-run.
+- **Default state:** switched off and dry-run, with every paid stage MANUAL (section 9: done in the owner's own Claude account and imported).
+- **Migrations:** `20261118100000_upload_pipeline` and `20261120100000_pipeline_manual_mode` (section 9), both additive.
 
 Rules it follows:
 - `docs/content-intelligence-architecture.md` §125–§126: AI may propose sources, humans approve claims, nothing unapproved is published.
@@ -204,3 +205,84 @@ To run chosen videos by hand instead of waiting for the cron, use `npm run pipel
 - **Existing pages show the approved summary without its `sameAs`.** The composer, conductor, choir, artist and venue pages keep their own JSON-LD, so the approved `sameAs` appears only on the new person and ensemble pages.
 - **Some duplication between drafts.** A person in two roles in one video (for example composer and lyricist) gets a composer page draft and a person page draft.
 - **Search demand is pattern-based only.** The Search Console and Google Ads adapters are stubs.
+
+## 9. Manual, entity-first mode (default since 2026-11-20)
+
+Each paid stage can be done **outside the app, in the owner's own Claude account**, and brought back through the same validators, guardrails,
+tables and Studio → Pipeline inbox. Research is done **once per entity** (a composer, a work, a choir …), not once per video, and every bundle
+that names the entity sees it. Migration `20261120100000_pipeline_manual_mode` (written, not applied; additive: `pipeline_claims.pipelineVideoId`
+becomes nullable, `provenance` columns with defaults) holds this.
+
+### Stage modes
+
+| Variable | Values (default **manual**) | Manual / existing | Api |
+|---|---|---|---|
+| `PIPELINE_EXTRACT_MODE` | `manual`, `api`, `existing` | A queued video **waits** (no call, no attempt counted) until its extraction is imported: a pasted video-credits-v2 answer (`manual`), or the reviewed credits sheets (`existing`, `pipeline:import -- --reviewed`). | The pipeline calls the provider (video-credits v2). |
+| `PIPELINE_RESEARCH_MODE` | `manual`, `api` | RESOLVED → RESEARCHED with **no call**; entity research is imported with `pipeline:import`. | Two-call web research per new subject (section 1). |
+| `PIPELINE_DRAFT_MODE` | `manual`, `api` | The closed-world template draft; the owner may import their own summary (`video-draft`). | The provider writes the summary under the same contract (`pipeline-page-prose-v1`) and validator; a refusal keeps the template. |
+
+Whatever the mode, the draft stage **never researches**: a page uses the video's credits and the claims already in the tables, and an
+**entity-first claim only once it is approved** (ACCEPTED). Proposed entity claims are listed in the bundle for the owner and flag it
+("entity research awaiting decision"); approving the bundle accepts those not rejected and re-drafts the pages with them.
+
+### The manual loop
+
+1. **Queue.** `npm run pipeline:entities` reads `reports/video-credits/review-credits.csv` and `review-names.csv` and writes
+   `reports/pipeline-manual/entities-queue.csv`: every unique work, composer, choir, ensemble, venue, organisation and person; how many videos
+   mention it; depth tier (**DEEP** for works, composers, choirs, ensembles, venues, organisations, and lyricists and arrangers; **LIGHT** for
+   performers, conductors and presenters); status (`not started`, `packet written`, `imported`, `approved`); sorted by video count. Merged and
+   canonical spellings from review-names.csv make one entity; rejected names are left out; undecided names are listed with a note (an import for
+   them is refused until the name is decided). With `--confirm-host` it also reads, read-only, which entities have approved claims on staging.
+2. **Packets.** `npm run pipeline:packet -- --batch N [--tier DEEP|LIGHT] [--rewrite]` writes one research packet per entity for the next N
+   unresearched entities under `reports/pipeline-manual/packets/`: what the videos say about it (marked DATA), the guardrail rules (source
+   tiers, the claim schema, never resolve conflicts, preserve original scripts, no lyrics, nothing personal), what to research for its tier, and
+   the exact output JSON schema (`music-madras/entity-research@1`, contract `pipeline-entity-research-v1`). Resumable: run it again for the next N.
+   `--drafts --confirm-host …` writes draft packets for bundles awaiting approval; `--extract <id> --confirm-host …` an extraction packet for a
+   queued video (both read-only).
+3. **Research.** Paste a packet into a new chat in your own Claude account with web search on; save the JSON answer under
+   `reports/pipeline-manual/imports/`.
+4. **Import.** `npm run pipeline:import -- --file <answer>.json` (dry run, offline) → add `--confirm-host "<HOST>"` (read-only check against
+   staging: claims already stored, the bundle or video a draft or extraction belongs to) → add `--execute` (writes proposals). It:
+   - checks each claim with the **API route's own per-claim rules** (`checkClaimCore` in `modules/pipeline/research.ts`: known kind, never lyrics,
+     one sentence of at most 300 characters, banned wording, never a lyrics site, value verbatim in the source text, tier from the domain rules),
+     plus: source URL and excerpt present; excerpt at most 30 words and 200 characters, and verbatim (it must contain the value); a value for
+     every kind but `background`; tier A/B/C/X and never above what the domain allows (lowered, with a note); at most 12 claims (DEEP) or 4
+     (LIGHT); the entity name exactly as in the queue (original script); duplicates in the file or already stored are skipped;
+   - never resolves a disagreement: two values for one fact, a listed conflict, or a value the reviewed credits contradict make every claim
+     involved a **CONFLICT** for the owner to decide;
+   - marks provenance **"manual (owner's Claude account)"**, writes claims as PROPOSED or CONFLICT only, updates the queue status, records the
+     file's sha256 (the same file is never imported twice), and **never approves or publishes**;
+   - uses the staging guard of every pipeline operator script (`STAGING_DATABASE_URL`, direct Neon host, "staging" in the name,
+     `--confirm-host` typed exactly, never a configured real database).
+
+   The same command imports a `video-draft` (gate-3 checked summary prose; only credits and approved claims may be cited) and a
+   `video-extraction` (the extraction validator); `--reviewed` turns the reviewed sheets (accept / edit rows only) into extractions of queued
+   videos (`PIPELINE_EXTRACT_MODE=existing`).
+5. **Decide.** Studio → Pipeline: entity claims appear in every bundle naming the entity ("Entity research, shared with every video that names
+   it"). Deciding one in any bundle decides it for the entity. Rejecting a whole bundle rejects only that video's own claims, never the shared
+   entity research.
+
+### Switching a stage to the API later
+
+Adding the key changes **only environment variables**. For the cron (Vercel, Preview first) or for a `pipeline:run` shell:
+
+1. Set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=<key>` (Sensitive). Optionally `PIPELINE_AI_MODEL`.
+2. Per stage, one variable:
+   - extraction: `PIPELINE_EXTRACT_MODE=api`;
+   - research: `PIPELINE_RESEARCH_MODE=api` (web search; `PIPELINE_MAX_SEARCHES_PER_ENTITY`, default 3);
+   - drafting: `PIPELINE_DRAFT_MODE=api` (one page-prose call per bundle, estimated at 4,000 input and 1,000 output tokens).
+3. Keep `MAX_USD_PER_RUN` small (for example `0.50`) and `PIPELINE_DRY_RUN` unset for the first call. Read the dry-run report (it shows each
+   stage's mode and whether its next paid call fits the cap), then set `PIPELINE_DRY_RUN=false`.
+4. Stages can be switched one at a time, and back. Manual and api write the same tables, so imported entity research stays in use after
+   research switches to api (an entity with approved research is not researched again).
+
+`pipeline:run` asks for a configured provider only when at least one stage is `api`.
+
+### Not done, or not verified (manual mode)
+
+- **Never run against a database.** The import, the queue's "approved" read and the entity-claim attachment in the repository are type-checked
+  and unit-tested with fakes only.
+- **A later contradiction does not un-approve.** An approved entity claim that a later video contradicts is flagged in that bundle and never
+  stated on its page, but it stays approved for the entity; re-deciding it means rejecting it in a bundle.
+- **No imported entity page drafts.** Entity page copy (EntityPageCopy) is still drafted by the template at approval, because a NEW entity has no
+  catalogue id before approval. The column `entity_page_copies.provenance` is ready for it.

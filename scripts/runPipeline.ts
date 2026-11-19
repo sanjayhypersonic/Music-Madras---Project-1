@@ -27,7 +27,7 @@ async function main(): Promise<number> {
   const { args } = parsed;
   const config = readPipelineConfig(process.env);
   const scope = args.only ? `videos ${args.only.join(", ")}` : `the first ${args.limit} queued video(s)`;
-  console.log(`Pipeline run for ${scope}: ${args.execute ? "EXECUTE" : "dry run"}; PIPELINE_ENABLED=${config.enabled}; cap $${config.maxUsdPerRun.toFixed(2)} per run; model ${config.model ?? process.env.AI_MODEL ?? "the provider default"}.`);
+  console.log(`Pipeline run for ${scope}: ${args.execute ? "EXECUTE" : "dry run"}; PIPELINE_ENABLED=${config.enabled}; modes: extract ${config.extractMode}, research ${config.researchMode}, draft ${config.draftMode}; cap $${config.maxUsdPerRun.toFixed(2)} per run; model ${config.model ?? process.env.AI_MODEL ?? "the provider default"}.`);
 
   if (!args.confirmHost) {
     console.log("DRY RUN (offline): no database was named, so nothing was read, called or written. Add --confirm-host with STAGING_DATABASE_URL to see what each video would do.");
@@ -58,7 +58,8 @@ async function main(): Promise<number> {
     console.log(`Selected: ${selected.join(", ")}`);
 
     const provider = getConfiguredAIProvider();
-    if (args.execute) {
+    // A provider key is needed only when a stage is switched to api; with every stage manual the run makes no AI call.
+    if (args.execute && (config.extractMode === "api" || config.researchMode === "api" || config.draftMode === "api")) {
       const status = provider.validateConfiguration();
       if (!status.configured) return refuse(`the AI provider is not configured (${status.reason ?? "unknown"}). Set AI_PROVIDER and ANTHROPIC_API_KEY in this shell.`);
     }

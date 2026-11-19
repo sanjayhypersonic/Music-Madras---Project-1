@@ -5,6 +5,7 @@ import type { PipelinePorts, PipelineVideoRow, QueueCandidate, StagePatch } from
 import type { AliasDecision, CatalogueIndex } from "../../modules/pipeline/resolve";
 import type { ProposedPipelineClaim } from "../../modules/pipeline/research";
 import type { DraftClaim } from "../../modules/pipeline/drafts";
+import type { StoredEntityClaim } from "../../modules/pipeline/entityClaims";
 
 export const FAKE_TITLE = "Come Now, Fake Child | Fake Chapel Choir";
 export const FAKE_DESCRIPTION = [
@@ -83,6 +84,7 @@ export class FakePorts implements PipelinePorts {
   catalogue: CatalogueIndex;
   aliases: AliasDecision[];
   approvedResearch = new Set<string>();
+  entityClaims: StoredEntityClaim[] = [];
 
   constructor(opts: { videos?: QueueCandidate[]; catalogue?: CatalogueIndex; aliases?: AliasDecision[] } = {}) {
     this.videos = opts.videos ?? [{ youtubeVideoRowId: "row-1", youtubeVideoId: "fakeVideo01", title: FAKE_TITLE, description: FAKE_DESCRIPTION, tags: ["advent"], existing: null }];
@@ -123,6 +125,9 @@ export class FakePorts implements PipelinePorts {
   }
   async loadClaims(id: string): Promise<DraftClaim[]> {
     return (this.claims.get(id) ?? []).map((c, i) => ({ id: `R${i + 1}`, dbId: `claim-${i + 1}`, subjectKey: c.subjectKey, subjectKind: c.subjectKind, value: c.value, statement: c.statement, excerpt: c.excerpt, sourceUrl: c.sourceUrl, sourceTitle: c.sourceTitle, sourceTier: c.sourceTier, videoRelation: c.videoRelation, status: c.status }));
+  }
+  async loadEntityClaims(keys: readonly string[]) {
+    return this.entityClaims.filter((c) => keys.includes(c.entityKey));
   }
   async loadCatalogueIndex() {
     return this.catalogue;

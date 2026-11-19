@@ -65,7 +65,7 @@ describe("running exactly the chosen videos (fake provider)", () => {
         { youtubeVideoRowId: "row-2", youtubeVideoId: "fakeVideo02", title: FAKE_TITLE, description: FAKE_DESCRIPTION, tags: [], existing: null },
       ],
     });
-  const config = (dryRun: boolean) => ({ ...readPipelineConfig({ PIPELINE_ENABLED: "true", PIPELINE_DRY_RUN: dryRun ? "true" : "false" }), dryRun, maxVideosPerRun: 1, maxQueuePerRun: 1, maxEntitiesResearchedPerVideo: 10 });
+  const config = (dryRun: boolean) => ({ ...readPipelineConfig({ PIPELINE_EXTRACT_MODE: "api", PIPELINE_RESEARCH_MODE: "api", PIPELINE_ENABLED: "true", PIPELINE_DRY_RUN: dryRun ? "true" : "false" }), dryRun, maxVideosPerRun: 1, maxQueuePerRun: 1, maxEntitiesResearchedPerVideo: 10 });
 
   it("advances only the selected video, leaves the other untouched, and prints stages, tokens, searches and cost", async () => {
     // These in-memory ports are NOT scoped in their queries (the Prisma ports are), so they return every video; the wrapper alone must keep the

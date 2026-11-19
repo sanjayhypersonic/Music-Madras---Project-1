@@ -11,6 +11,16 @@
 // maxAttempts); its error KIND is recorded, never its message. DRY RUN (the default) reads only: it reports what it would queue and do and what
 // that would cost, and calls no provider and writes nothing. Nothing here creates a catalogue record or publishes: that happens only when the
 // owner approves a bundle (modules/pipeline/approve.ts).
+//
+// STAGE MODES (docs/upload-pipeline.md section 9; modules/pipeline/config.ts). Each paid stage is MANUAL by default and switches to API with one
+// environment variable, so adding the provider key later changes nothing else:
+//   PIPELINE_EXTRACT_MODE   manual | existing: a QUEUED video WAITS (no call, no attempt counted) until its extraction is imported with
+//                           npm run pipeline:import (a pasted video-credits answer, or --reviewed for the reviewed credits files); api: the call above.
+//   PIPELINE_RESEARCH_MODE  manual: RESOLVED -> RESEARCHED with no call; research is done per ENTITY outside the app (pipeline:entities,
+//                           pipeline:packet, pipeline:import) and attached to every bundle that names the entity; api: the two-call research above.
+//   PIPELINE_DRAFT_MODE     manual: the template draft (closed-world, gate 3), and the owner may import their own prose (video-draft); api: the
+//                           provider writes the summary from the same data and contract, checked by the same validator; a refusal keeps the template.
+// Whatever the mode, drafts use only claims already in the tables: an entity-first claim only once APPROVED. The draft stage never researches.
 
 import type { AIProvider } from "../ai/provider/aiProvider";
 import { extractVideoCredits } from "../ai/gateway/extractVideoCredits";
@@ -23,6 +33,8 @@ import { buildClaimsRequest, buildSearchRequest, checkResearchClaims, type Propo
 import { draftCredits, toVideoFacts } from "./facts";
 import { assessDraftClaims, draftEntityPage, draftVideoPage, draftWordingProblems, nearDuplicateProblems, type DraftClaim, type PageDraft } from "./drafts";
 import { suggestQueries, type DemandSubjectKind, type SearchDemandProvider } from "./searchDemand";
+import { attachEntityClaims, bundleEntityKeys, type StoredEntityClaim } from "./entityClaims";
+import { applyProse, buildProseRequest, checkPageProse, draftableClaims } from "./pageProse";
 import { sourceFingerprint, queueDecision } from "./queue";
 
 export type WorkStatus = "QUEUED" | "EXTRACTED" | "RESOLVED" | "RESEARCHED";
@@ -69,7 +81,10 @@ export interface PipelinePorts {
   listWork(limit: number, maxAttempts: number): Promise<PipelineVideoRow[]>;
   saveStage(id: string, patch: StagePatch): Promise<void>;
   replaceClaims(id: string, claims: ProposedPipelineClaim[]): Promise<void>;
+  /** The video's own claims (API research), numbered R1 … in creation order. */
   loadClaims(id: string): Promise<DraftClaim[]>;
+  /** Entity-first claims (manual research) for these entity keys, in creation order. */
+  loadEntityClaims(entityKeys: readonly string[]): Promise<StoredEntityClaim[]>;
   loadCatalogueIndex(): Promise<CatalogueIndex>;
   loadAliases(): Promise<AliasDecision[]>;
   hasApprovedResearch(kind: EntityKind, name: string): Promise<boolean>;
@@ -84,6 +99,8 @@ export interface RunReport {
   advanced: Array<{ id: string; youtubeVideoId: string; from: string; to: string }>;
   failures: Array<{ id: string; youtubeVideoId: string; stage: string; kind: string }>;
   wouldDo: string[];
+  /** Videos waiting for work done outside the app (manual or existing mode). */
+  waiting: string[];
   stoppedReason: "COST_CAP" | null;
   usage: ReturnType<CostMeter["summary"]>;
 }
@@ -94,7 +111,7 @@ export async function runPipeline(input: { ports: PipelinePorts; provider: AIPro
   const { ports, provider, config, now } = input;
   const model = config.model ?? "claude-sonnet-5-5";
   const meter = new CostMeter(config.maxUsdPerRun, model);
-  const report: RunReport = { dryRun: config.dryRun, queued: 0, requeued: 0, considered: 0, advanced: [], failures: [], wouldDo: [], stoppedReason: null, usage: meter.summary() };
+  const report: RunReport = { dryRun: config.dryRun, queued: 0, requeued: 0, considered: 0, advanced: [], failures: [], wouldDo: [], waiting: [], stoppedReason: null, usage: meter.summary() };
 
   // 1. Queue.
   for (const c of await ports.listQueueCandidates(config.maxQueuePerRun)) {
@@ -134,8 +151,14 @@ export async function runPipeline(input: { ports: PipelinePorts; provider: AIPro
         await ports.saveStage(row.id, { attempts, lastErrorKind: kind, ...(attempts >= config.maxAttempts ? { status: "FAILED" } : {}) });
       };
 
+      if (status === "QUEUED" && config.extractMode !== "api") {
+        report.waiting.push(`${row.youtubeVideoId}: waiting for its extraction to be imported (PIPELINE_EXTRACT_MODE=${config.extractMode}: npm run pipeline:import${config.extractMode === "existing" ? " -- --reviewed" : ""})`);
+        continue;
+      }
       if (config.dryRun) {
-        const est = status === "QUEUED" ? ESTIMATES.extraction : status === "RESOLVED" ? ESTIMATES.research(config.maxSearchesPerEntity) : { inputTokens: 0, outputTokens: 0, webSearchRequests: 0 };
+        const none = { inputTokens: 0, outputTokens: 0, webSearchRequests: 0 };
+        const est =
+          status === "QUEUED" ? ESTIMATES.extraction : status === "RESOLVED" && config.researchMode === "api" ? ESTIMATES.research(config.maxSearchesPerEntity) : status === "RESEARCHED" && config.draftMode === "api" ? ESTIMATES.prose : none;
         report.wouldDo.push(`advance ${row.youtubeVideoId} from ${status}${est.inputTokens ? (meter.wouldExceed(est) ? " (its next paid call would exceed the cost cap)" : " (its next paid call fits the cost cap)") : ""}`);
         continue;
       }
@@ -175,7 +198,11 @@ export async function runPipeline(input: { ports: PipelinePorts; provider: AIPro
       if (!resolution) continue;
 
       // RESOLVED -> RESEARCHED
-      if (status === "RESOLVED") {
+      if (status === "RESOLVED" && config.researchMode === "manual") {
+        // No call: the entity-first research already imported (or imported later) is attached when the bundle is drafted.
+        await ports.saveStage(row.id, { status: "RESEARCHED", research: { mode: "manual", entityKeys: bundleEntityKeys(resolution), note: "research is done per entity outside the app (npm run pipeline:entities / pipeline:packet / pipeline:import)" } });
+        step("RESEARCHED");
+      } else if (status === "RESOLVED") {
         const research = await researchVideo(row, extraction.checked, resolution, { ports, provider, config, model, guard, charge, now });
         await ports.replaceClaims(row.id, research.claims);
         await ports.saveStage(row.id, { status: "RESEARCHED", research: research.log, addCostUsd: research.usd });
@@ -184,10 +211,20 @@ export async function runPipeline(input: { ports: PipelinePorts; provider: AIPro
 
       // RESEARCHED -> AWAITING_APPROVAL
       if (status === "RESEARCHED") {
-        const claims = await ports.loadClaims(row.id);
+        const claims = attachEntityClaims({ videoClaims: await ports.loadClaims(row.id), entityClaims: await ports.loadEntityClaims(bundleEntityKeys(resolution)), resolution, video: { title: row.title, description: row.description }, checked: extraction.checked });
         const existing = await ports.listPublishedCopySummaries();
         const bundle = await draftBundle(row, extraction, resolution, claims, input.demand, existing);
-        await ports.saveStage(row.id, { status: "AWAITING_APPROVAL", draft: bundle.draft, flags: bundle.flags });
+        let usd = 0;
+        if (config.draftMode === "api") {
+          guard(ESTIMATES.prose);
+          const ctx = { youtubeVideoId: row.youtubeVideoId, recordingTitle: bundle.draft.video.name, transliteration: bundle.transliteration, credits: draftCredits(extraction.checked, resolution), claims };
+          const generated = await provider.generate(buildProseRequest(ctx, { model: config.model }));
+          usd = charge(generated.ok ? generated.usage : undefined, ESTIMATES.prose, generated.model ?? model);
+          const checkedProse = generated.ok ? checkPageProse(generated.output, ctx, "api") : { ok: false as const, problems: [`provider failed (${generated.error.type})`] };
+          if (checkedProse.ok) bundle.draft.video = applyProse(bundle.draft.video, checkedProse.prose);
+          else bundle.draft.video.notes.push(`AI summary not used (${checkedProse.problems.slice(0, 3).join("; ")}): the template summary stands`);
+        }
+        await ports.saveStage(row.id, { status: "AWAITING_APPROVAL", draft: bundle.draft, flags: bundle.flags, ...(usd ? { addCostUsd: usd } : {}) });
         step("AWAITING_APPROVAL");
       }
     }
@@ -283,8 +320,9 @@ export async function draftBundle(
   claims: readonly DraftClaim[],
   demand: readonly SearchDemandProvider[],
   existing: ReadonlyArray<{ id: string; summary: string; name: string }>
-): Promise<{ draft: BundleDraft; flags: string[] }> {
+): Promise<{ draft: BundleDraft; flags: string[]; transliteration: string | null }> {
   const checked = extraction.checked;
+  const usable = draftableClaims(claims);
   const credits = draftCredits(checked, resolution);
   const facts = toVideoFacts({ youtubeVideoId: row.youtubeVideoId, youtubeTitle: row.title ?? "", checked, resolution });
   const plan = planVideo(facts);
@@ -298,7 +336,7 @@ export async function draftBundle(
     recordingTitle,
     transliteration: translit,
     credits,
-    claims: [...claims],
+    claims: usable,
     queries: await suggestQueries(demand, { kind: "VIDEO", name: recordingTitle, workTitle: credits.find((c) => c.role === "WORK")?.name ?? null, alternateTitle: translit }),
   });
   const entities: PageDraft[] = [];
@@ -311,7 +349,7 @@ export async function draftBundle(
         name: e.canonicalName,
         credits: credits.filter((c) => c.subjectKey === e.key),
         recordingTitle,
-        claims: [...claims],
+        claims: usable,
         queries: await suggestQueries(demand, { kind: DEMAND_KIND[e.kind] ?? "PERSON", name: e.canonicalName }),
       })
     );
@@ -320,7 +358,10 @@ export async function draftBundle(
   const flags: string[] = [];
   for (const x of resolution.exceptions) flags.push(`exception: ${x}`);
   for (const c of claims.filter((x) => x.status === "CONFLICT")) flags.push(`conflict: ${c.id} (${c.subjectKind} "${c.value ?? ""}") disagrees with the video; decide it before approval`);
-  const uses = assessDraftClaims(claims);
+  for (const c of claims.filter((x) => x.entityLevel && x.status === "ACCEPTED" && x.videoRelation === "CONFLICTS")) flags.push(`conflict: ${c.id} (${c.subjectKind} "${c.value ?? ""}") is approved entity research that this video contradicts; it is not stated on this page`);
+  const proposedEntity = claims.filter((x) => x.entityLevel && x.status === "PROPOSED");
+  if (proposedEntity.length) flags.push(`entity research awaiting decision: ${proposedEntity.map((c) => c.id).join(", ")} (approving this bundle accepts those you do not reject, and the page is re-drafted with them)`);
+  const uses = assessDraftClaims(usable);
   for (const d of [video, ...entities]) {
     for (const p of [...d.problems, ...draftWordingProblems(d)]) flags.push(`draft (${d.name}): ${p}`);
     const used = new Set(d.summarySupport.flat());
@@ -342,5 +383,6 @@ export async function draftBundle(
       titleOnly: extraction.titleOnly,
     },
     flags: [...new Set(flags)],
+    transliteration: translit,
   };
 }

@@ -47,7 +47,7 @@ describe("the video-page rule", () => {
 describe("one-click approval", () => {
   async function bundle(): Promise<BundleForApproval> {
     const ports = new FakePorts();
-    await runPipeline({ ports, provider: fakeProvider(), demand: [], config: { ...readPipelineConfig({ PIPELINE_ENABLED: "true", PIPELINE_DRY_RUN: "false" }), maxEntitiesResearchedPerVideo: 10 }, now: NOW });
+    await runPipeline({ ports, provider: fakeProvider(), demand: [], config: { ...readPipelineConfig({ PIPELINE_EXTRACT_MODE: "api", PIPELINE_RESEARCH_MODE: "api", PIPELINE_ENABLED: "true", PIPELINE_DRY_RUN: "false" }), maxEntitiesResearchedPerVideo: 10 }, now: NOW });
     const row = ports.rows.get("pv-row-1")!;
     const claims = (await ports.loadClaims(row.id)) as BundleForApproval["claims"];
     return { id: row.id, status: row.status, flags: row.flags, youtubeVideoRowId: "row-1", youtubeVideoId: row.youtubeVideoId, youtubeTitle: row.title, description: row.description, publishedAt: row.publishedAt, extraction: row.extraction!, resolution: row.resolution!, draft: row.draft as BundleForApproval["draft"], claims };

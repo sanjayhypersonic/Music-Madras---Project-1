@@ -24,6 +24,25 @@ export interface PipelineConfig {
   model: string | undefined;
   /** Approving a bundle also publishes the video page of a PUBLIC video (modules/pipeline/videoPage.ts). On unless exactly "false". */
   approvePublicVideoPage: boolean;
+  /**
+   * Where each stage's work comes from (docs/upload-pipeline.md section 9). MANUAL = done outside the app in the owner's own Claude account and
+   * imported with npm run pipeline:import through the same validators; API = the pipeline calls the AI provider itself; EXISTING (extraction
+   * only) = the reviewed credits files. All default to manual: switching a stage to api later changes only these variables and the provider key.
+   */
+  extractMode: ExtractMode;
+  researchMode: StageMode;
+  draftMode: StageMode;
+}
+
+export type StageMode = "manual" | "api";
+export type ExtractMode = StageMode | "existing";
+
+export function readStageMode(raw: string | undefined): StageMode {
+  return raw?.trim().toLowerCase() === "api" ? "api" : "manual";
+}
+export function readExtractMode(raw: string | undefined): ExtractMode {
+  const v = raw?.trim().toLowerCase();
+  return v === "api" || v === "existing" ? v : "manual";
 }
 
 export const PIPELINE_DEFAULTS = {
@@ -55,5 +74,8 @@ export function readPipelineConfig(env: Readonly<Record<string, string | undefin
     leaseSeconds: PIPELINE_DEFAULTS.leaseSeconds,
     model: env.PIPELINE_AI_MODEL?.trim() || undefined,
     approvePublicVideoPage: env.PIPELINE_APPROVE_PUBLIC_VIDEO_PAGE !== "false",
+    extractMode: readExtractMode(env.PIPELINE_EXTRACT_MODE),
+    researchMode: readStageMode(env.PIPELINE_RESEARCH_MODE),
+    draftMode: readStageMode(env.PIPELINE_DRAFT_MODE),
   };
 }

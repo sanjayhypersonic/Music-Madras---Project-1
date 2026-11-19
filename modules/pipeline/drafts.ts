@@ -38,6 +38,10 @@ export interface DraftClaim {
   id: string;
   /** The PipelineClaim row id, when the claim is stored. */
   dbId?: string;
+  /** An ENTITY-FIRST claim (manual research, docs/upload-pipeline.md section 9): shared by every bundle that names the entity. */
+  entityLevel?: boolean;
+  /** "api" or "manual (owner's Claude account)". */
+  provenance?: string;
   subjectKey: string;
   subjectKind: string;
   value: string | null;
@@ -75,6 +79,11 @@ export interface PageDraft {
   problems: string[];
   /** Informational (not flags), e.g. "no researched facts". */
   notes: string[];
+  /**
+   * Summary prose written outside the template (PIPELINE_DRAFT_MODE=api, or a manual video-draft import), as it passed gate 3. Absent: the
+   * summary is the template's. Re-checked at approval against the decided claims (modules/pipeline/pageProse.ts).
+   */
+  prose?: { provenance: string; sentences: string[]; support: string[][]; seoTitle: string | null; metaDescription: string | null };
 }
 
 export const ARCHIVE_BOILERPLATE = "This performance is part of the Music Madras archive.";
@@ -147,7 +156,7 @@ const citable = (credits: readonly DraftCredit[], uses: readonly ClaimUse[]): Ci
 ];
 
 /** Runs gate 3 on a summary: each sentence rendered with its ids as markers, then checked against the credits and claims it cites. */
-function checkSummary(title: string, sentences: readonly string[], support: readonly string[][], credits: readonly DraftCredit[], uses: readonly ClaimUse[], allowed: readonly string[]): string[] {
+export function checkSummary(title: string, sentences: readonly string[], support: readonly string[][], credits: readonly DraftCredit[], uses: readonly ClaimUse[], allowed: readonly string[]): string[] {
   const marked = sentences.map((s, i) => `${withoutEnd(s)} ${support[i].map((id) => `[${id}]`).join("")}.`).join(" ");
   // Markers are numeric or C/R ids; the checker's marker pattern accepts C<n> and digits, so R ids are mapped to digits for the check.
   const toMarker = new Map<string, string>();

@@ -19,6 +19,7 @@ export function describeRunReport(report: RunReport, selected: readonly string[]
     lines.push(`  ${id}: ${steps.length ? `${steps[0].from} -> ${steps.map((s) => s.to).join(" -> ")}` : "no stage advanced"}${failures.length ? `; failed at ${failures.map((f) => `${f.stage} (${f.kind})`).join(", ")}` : ""}`);
   }
   for (const w of report.wouldDo) lines.push(`  would: ${w}`);
+  for (const w of report.waiting ?? []) lines.push(`  waiting: ${w}`);
   if (report.stoppedReason) lines.push(`  STOPPED: ${report.stoppedReason === "COST_CAP" ? "the next paid call would have gone over MAX_USD_PER_RUN; the run resumes from its saved stage next time" : report.stoppedReason}`);
   const u = report.usage;
   lines.push(`  Usage: ${u.calls} AI call(s), ${u.inputTokens} input + ${u.outputTokens} output tokens, ${u.webSearches} web search(es), $${u.costUsd.toFixed(4)} of the $${u.capUsd.toFixed(2)} cap${report.dryRun ? " (dry run: nothing was called or written)" : ""}`);
@@ -36,6 +37,7 @@ export function scopePorts(ports: PipelinePorts, youtubeVideoIds: readonly strin
     saveStage: (id, patch) => ports.saveStage(id, patch),
     replaceClaims: (id, claims) => ports.replaceClaims(id, claims),
     loadClaims: (id) => ports.loadClaims(id),
+    loadEntityClaims: (keys) => ports.loadEntityClaims(keys),
     loadCatalogueIndex: () => ports.loadCatalogueIndex(),
     loadAliases: () => ports.loadAliases(),
     hasApprovedResearch: (kind, name) => ports.hasApprovedResearch(kind, name),

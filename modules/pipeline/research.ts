@@ -135,6 +135,39 @@ export function relationToVideo(subjectKind: string, workTitle: string | null, v
   return credited.length > 0 && !credited.some((c) => fold(c.name) === fold(value)) ? "CONFLICTS" : "NOT_STATED";
 }
 
+/** The source kinds a claim may name (the same list for the API route and a manual import). */
+export const SOURCE_KINDS = Object.keys(SOURCE_KIND_STRENGTH);
+
+/**
+ * The per-claim rules SHARED by the API route (checkResearchClaims, below) and the manual import (modules/pipeline/manualImport.ts): a known
+ * subject kind, never lyrics, one sentence of at most 300 characters with no banned wording, never a lyrics site, the value VERBATIM in the source
+ * text and in the statement, and the source strength from the domain rules (gate 1), never from the claimant alone.
+ */
+export function checkClaimCore(input: { subjectKind: string; value: string | null; statement: string; sourceText: string; sourceUrl: string; sourceKind: string }):
+  | { ok: true; subjectKind: string; value: string | null; statement: string; strength: ReturnType<typeof resolveSourceStrength> }
+  | { ok: false; reason: string } {
+  const subjectKind = input.subjectKind.trim();
+  if (/lyric/i.test(subjectKind)) return { ok: false, reason: "lyrics are never a claim" };
+  if (!(CLAIM_KINDS as readonly string[]).includes(subjectKind)) return { ok: false, reason: `unknown subject kind "${subjectKind}"` };
+  const value = input.value?.trim() || null;
+  const statement = input.statement.trim().replace(/\s+/g, " ");
+  if (!statement || statement.length > STATEMENT_MAX_CHARS || containsSentenceBoundary(statement)) return { ok: false, reason: "the statement must be one sentence of at most 300 characters" };
+  const banned = findBannedPhrases(statement);
+  if (banned.length) return { ok: false, reason: `banned wording: ${banned.join(", ")}` };
+  let host: string;
+  try {
+    const u = new URL(input.sourceUrl);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return { ok: false, reason: "the source URL must start with https:// or http://" };
+    host = u.hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return { ok: false, reason: "the source URL is missing or not a valid URL" };
+  }
+  if (BLOCKED_RESEARCH_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))) return { ok: false, reason: `${host} is a lyrics site and is never a source` };
+  if (value && !fold(input.sourceText).includes(fold(value))) return { ok: false, reason: `the value "${value}" is not in the cited text` };
+  if (value && !fold(statement).includes(fold(value))) return { ok: false, reason: `the statement does not contain its value "${value}"` };
+  return { ok: true, subjectKind, value, statement, strength: resolveSourceStrength(input.sourceUrl, SOURCE_KIND_STRENGTH[input.sourceKind.trim()] ?? "unverified") };
+}
+
 export interface ClaimCheckResult {
   claims: ProposedPipelineClaim[];
   rejected: Array<{ index: number; reason: string }>;
@@ -162,17 +195,9 @@ export function checkResearchClaims(input: {
     if (!isObject(raw)) return reject("not an object");
     const citation = citations.get(str(raw.citation));
     if (!citation) return reject(`cites "${str(raw.citation)}", which the search did not return`);
-    const subjectKind = str(raw.subjectKind);
-    if (!(CLAIM_KINDS as readonly string[]).includes(subjectKind)) return reject(`unknown subject kind "${subjectKind}"`);
-    if (/lyric/i.test(subjectKind)) return reject("lyrics are never a claim");
-    const value = str(raw.value) || null;
-    const statement = str(raw.statement).replace(/\s+/g, " ");
-    if (!statement || statement.length > STATEMENT_MAX_CHARS || containsSentenceBoundary(statement)) return reject("the statement must be one sentence of at most 300 characters");
-    const banned = findBannedPhrases(statement);
-    if (banned.length) return reject(`banned wording: ${banned.join(", ")}`);
-    if (value && !fold(citation.citedText).includes(fold(value))) return reject(`the value "${value}" is not in the cited text`);
-    if (value && !fold(statement).includes(fold(value))) return reject(`the statement does not contain its value "${value}"`);
-    const strength = resolveSourceStrength(citation.url, SOURCE_KIND_STRENGTH[str(raw.sourceKind)] ?? "unverified");
+    const core = checkClaimCore({ subjectKind: str(raw.subjectKind), value: str(raw.value) || null, statement: str(raw.statement), sourceText: citation.citedText, sourceUrl: citation.url, sourceKind: str(raw.sourceKind) });
+    if (!core.ok) return reject(core.reason);
+    const { subjectKind, value, statement, strength } = core;
     const relation = relationToVideo(subjectKind, str(raw.workTitle) || input.subject.workTitle, value, input.video, input.checked);
     const dedupe = `${citation.url}\u0000${fold(statement)}`;
     if (seen.has(dedupe)) return;

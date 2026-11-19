@@ -31,6 +31,8 @@ export const ESTIMATES = {
   extraction: { inputTokens: 6_000, outputTokens: 4_000, webSearchRequests: 0 },
   claimsFromCitations: { inputTokens: 12_000, outputTokens: 3_000, webSearchRequests: 0 },
   research: (maxSearches: number) => ({ inputTokens: 40_000, outputTokens: 4_000, webSearchRequests: maxSearches }),
+  /** PIPELINE_DRAFT_MODE=api: one page-prose call per bundle (modules/pipeline/pageProse.ts). */
+  prose: { inputTokens: 4_000, outputTokens: 1_000, webSearchRequests: 0 },
 } as const;
 
 export class CostMeter {

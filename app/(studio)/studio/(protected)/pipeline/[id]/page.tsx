@@ -179,6 +179,12 @@ export default async function PipelineBundlePage({ params, searchParams }: { par
                       {c.statement}
                       <br />
                       <span className="studio-muted">“{c.excerpt}”</span>
+                      {c.entityLevel && (
+                        <>
+                          <br />
+                          <span className="studio-muted">Entity research, shared with every video that names it ({c.provenance ?? "manual"})</span>
+                        </>
+                      )}
                     </td>
                     <td>
                       <a href={c.sourceUrl} rel="noopener noreferrer nofollow">{c.sourceTitle ?? c.sourceUrl}</a>

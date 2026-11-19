@@ -21,7 +21,7 @@ import { FAKE_DESCRIPTION, FAKE_TITLE, FakePorts, extractionOutput, fakeProvider
 // R-34, the upload-to-draft pipeline: every stage on FAKE data, with the fake AI provider and in-memory ports. No database, no network.
 
 const NOW = new Date("2026-11-18T12:00:00.000Z");
-const config = (over: Partial<PipelineConfig> = {}): PipelineConfig => ({ ...readPipelineConfig({ PIPELINE_ENABLED: "true", PIPELINE_DRY_RUN: "false" }), maxEntitiesResearchedPerVideo: 10, ...over });
+const config = (over: Partial<PipelineConfig> = {}): PipelineConfig => ({ ...readPipelineConfig({ PIPELINE_EXTRACT_MODE: "api", PIPELINE_RESEARCH_MODE: "api", PIPELINE_ENABLED: "true", PIPELINE_DRY_RUN: "false" }), maxEntitiesResearchedPerVideo: 10, ...over });
 const checked = () => {
   const r = validateVideoCreditsOutput(extractionOutput, { youtubeVideoId: "fakeVideo01", title: FAKE_TITLE, description: FAKE_DESCRIPTION });
   if (!r.ok) throw new Error(r.problems.join(" "));

@@ -2842,7 +2842,11 @@ model PipelineVideo {
 
 model PipelineClaim {
   id              String              @id @default(uuid())
-  pipelineVideoId String
+  // Null for an ENTITY-FIRST research claim (manual mode, R-34 section 9): it belongs to the entity (kind + name) and is attached to every
+  // bundle that mentions that entity. Set for a claim researched for one video (api mode).
+  pipelineVideoId String?
+  // Who produced the claim: "api" (the pipeline's own research call) or "manual (owner's Claude account)" (imported with pipeline:import).
+  provenance      String              @default("api")
   // What the claim is about: the bundle's subject key ("VIDEO", or the resolution key of a new entity), and its kind and name.
   subjectKey      String
   entityKind      PipelineEntityKind?
@@ -2864,8 +2868,8 @@ model PipelineClaim {
   retrievedAt     DateTime
   createdAt       DateTime            @default(now())
 
-  pipelineVideo PipelineVideo @relation(fields: [pipelineVideoId], references: [id], onDelete: Cascade)
-  decidedBy     StudioUser?   @relation("PipelineClaimDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  pipelineVideo PipelineVideo? @relation(fields: [pipelineVideoId], references: [id], onDelete: Cascade)
+  decidedBy     StudioUser?    @relation("PipelineClaimDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
 
   @@index([pipelineVideoId])
   @@index([entityKind, entityName])
@@ -2882,6 +2886,8 @@ model EntityPageCopy {
   keyFacts        Json
   sameAs          String[]             @default([])
   sourceClaimIds  String[]             @default([])
+  // "template" (built by code from claims), "api" (AI prose, gate-3 checked) or "manual (owner's Claude account)" (imported, gate-3 checked).
+  provenance      String               @default("template")
   status          EntityPageCopyStatus @default(DRAFT)
   approvedById    String?
   approvedAt      DateTime?

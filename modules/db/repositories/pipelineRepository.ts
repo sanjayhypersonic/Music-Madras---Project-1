@@ -9,6 +9,9 @@ import type { AliasSeedRow } from "../../pipeline/aliasSeed";
 import type { CatalogueIndex, EntityKind } from "../../pipeline/resolve";
 import { nameKey } from "../../pipeline/resolve";
 import type { DraftClaim } from "../../pipeline/drafts";
+import { attachEntityClaims, bundleEntityKeys, type StoredEntityClaim } from "../../pipeline/entityClaims";
+import { entityKeyOf } from "../../pipeline/entities";
+import type { ManualEntityClaim } from "../../pipeline/manualImport";
 import type { VideoRunFacts } from "../../pipeline/select";
 import { executeCreditsPlans } from "../../jobs/videoCreditsCreateExecute";
 import { findRecordingLinkedToYouTubeVideo } from "./recordingIntakeRepository";
@@ -137,11 +140,13 @@ export function buildPipelinePorts(scope: { youtubeVideoIds?: readonly string[] 
             videoRelation: c.videoRelation,
             status: c.status,
             retrievedAt: new Date(c.retrievedAt),
+            provenance: "api",
           })),
         }),
       ]);
     },
     loadClaims: loadDraftClaims,
+    loadEntityClaims,
     async loadCatalogueIndex(): Promise<CatalogueIndex> {
       const [composers, works, conductors, choirs, artists, venues, ensembles, persons, organisations] = await Promise.all([
         prisma.composer.findMany({ where: { archivedAt: null }, select: { id: true, name: true } }),
@@ -177,6 +182,77 @@ export function buildPipelinePorts(scope: { youtubeVideoIds?: readonly string[] 
   };
 }
 
+/** Entity-first claims (no pipelineVideoId) for these entity keys, oldest first. */
+export async function loadEntityClaims(entityKeys: readonly string[]): Promise<StoredEntityClaim[]> {
+  if (entityKeys.length === 0) return [];
+  const rows = await prisma.pipelineClaim.findMany({ where: { pipelineVideoId: null, subjectKey: { in: [...entityKeys] } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  return rows.map((r) => ({
+    dbId: r.id,
+    entityKey: r.subjectKey,
+    entityKind: (r.entityKind ?? "PERSON") as EntityKind,
+    entityName: r.entityName,
+    subjectKind: r.subjectKind,
+    workTitle: r.workTitle,
+    value: r.value,
+    statement: r.statement,
+    excerpt: r.excerpt,
+    sourceUrl: r.sourceUrl,
+    sourceTitle: r.sourceTitle,
+    sourceTier: r.sourceTier,
+    status: r.status,
+    provenance: r.provenance,
+  }));
+}
+
+/** Writes the checked claims of one manual entity-research import (PROPOSED or CONFLICT; never ACCEPTED: only the owner accepts). */
+export async function saveEntityClaims(claims: readonly ManualEntityClaim[]): Promise<number> {
+  const result = await prisma.pipelineClaim.createMany({
+    data: claims.map((c) => ({
+      pipelineVideoId: null,
+      subjectKey: c.entityKey,
+      entityKind: c.entityKind as PipelineEntityKind,
+      entityName: c.entityName,
+      subjectKind: c.subjectKind,
+      workTitle: c.workTitle,
+      value: c.value,
+      statement: c.statement,
+      sourceUrl: c.sourceUrl,
+      sourceTitle: c.sourceTitle,
+      excerpt: c.excerpt,
+      sourceTier: c.sourceTier,
+      videoRelation: "NOT_STATED",
+      status: c.status,
+      retrievedAt: new Date(c.retrievedAt),
+      provenance: c.provenance,
+    })),
+  });
+  return result.count;
+}
+
+/** Entity keys with at least one ACCEPTED claim: entity-first claims by their key, a video's own claims by their entity kind and name. */
+export async function listApprovedEntityKeys(): Promise<Set<string>> {
+  const rows = await prisma.pipelineClaim.findMany({ where: { status: "ACCEPTED" }, select: { pipelineVideoId: true, subjectKey: true, entityKind: true, entityName: true } });
+  return new Set(rows.map((r) => (r.pipelineVideoId === null ? r.subjectKey : r.entityKind ? entityKeyOf(r.entityKind as EntityKind, r.entityName) : "")).filter(Boolean));
+}
+
+/** A manual import's pipeline row for one YouTube video (null when the video has not been queued by a run yet). */
+export async function findPipelineVideoForImport(youtubeVideoId: string) {
+  const v = await prisma.pipelineVideo.findFirst({ where: { youtubeVideo: { youtubeVideoId } }, include: { youtubeVideo: { select: { youtubeVideoId: true, title: true, description: true, publishedAt: true, privacyStatus: true, observabilityState: true } } } });
+  return v ? { id: v.id, status: v.status, title: v.youtubeVideo.title, description: v.youtubeVideo.description, publishedAt: v.youtubeVideo.publishedAt?.toISOString() ?? null, privacyStatus: v.youtubeVideo.privacyStatus, observabilityState: v.youtubeVideo.observabilityState } : null;
+}
+
+/** An imported extraction moves a QUEUED video to EXTRACTED (only from QUEUED: a video further on is never rewound by an import). */
+export async function saveImportedExtraction(pipelineVideoId: string, extraction: unknown): Promise<boolean> {
+  const r = await prisma.pipelineVideo.updateMany({ where: { id: pipelineVideoId, status: "QUEUED" }, data: { status: "EXTRACTED", extraction: extraction as Prisma.InputJsonValue, lastErrorKind: null } });
+  return r.count === 1;
+}
+
+/** An imported summary replaces the bundle's video page draft (only while it awaits approval; nothing is approved or published). */
+export async function saveImportedVideoDraft(pipelineVideoId: string, draft: unknown): Promise<boolean> {
+  const r = await prisma.pipelineVideo.updateMany({ where: { id: pipelineVideoId, status: "AWAITING_APPROVAL" }, data: { draft: draft as Prisma.InputJsonValue } });
+  return r.count === 1;
+}
+
 async function loadDraftClaims(pipelineVideoId: string): Promise<DraftClaim[]> {
   const rows = await prisma.pipelineClaim.findMany({ where: { pipelineVideoId }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   return rows.map((r, i) => ({
@@ -192,6 +268,7 @@ async function loadDraftClaims(pipelineVideoId: string): Promise<DraftClaim[]> {
     sourceTier: r.sourceTier,
     videoRelation: r.videoRelation as DraftClaim["videoRelation"],
     status: r.status,
+    provenance: r.provenance,
   }));
 }
 
@@ -224,7 +301,15 @@ export async function listRecentPipelineRuns(take = 5) {
 export async function loadBundleForApproval(id: string): Promise<BundleForApproval | null> {
   const v = await prisma.pipelineVideo.findUnique({ where: { id }, include: { youtubeVideo: true } });
   if (!v || !v.extraction || !v.resolution || !v.draft) return null;
-  const claims = (await loadDraftClaims(id)) as Array<DraftClaim & { dbId: string }>;
+  const resolution = v.resolution as unknown as BundleForApproval["resolution"];
+  const extraction = v.extraction as unknown as BundleForApproval["extraction"];
+  const claims = attachEntityClaims({
+    videoClaims: await loadDraftClaims(id),
+    entityClaims: await loadEntityClaims(bundleEntityKeys(resolution)),
+    resolution,
+    video: { title: v.youtubeVideo.title, description: v.youtubeVideo.description },
+    checked: extraction.checked,
+  }) as Array<DraftClaim & { dbId: string }>;
   return {
     id: v.id,
     status: v.status,
@@ -333,8 +418,9 @@ export function buildApprovalDeps(): ApprovalDeps {
     },
     async decideClaims({ pipelineVideoId, accepted, rejected, actorId, at }) {
       await prisma.$transaction([
-        prisma.pipelineClaim.updateMany({ where: { pipelineVideoId, id: { in: accepted } }, data: { status: "ACCEPTED", decidedById: actorId, decidedAt: at } }),
-        prisma.pipelineClaim.updateMany({ where: { pipelineVideoId, id: { in: rejected } }, data: { status: "REJECTED", decidedById: actorId, decidedAt: at } }),
+        // The bundle's own claims, or entity-first claims (shared, no pipelineVideoId) that this bundle showed the owner.
+        prisma.pipelineClaim.updateMany({ where: { id: { in: accepted }, OR: [{ pipelineVideoId }, { pipelineVideoId: null }] }, data: { status: "ACCEPTED", decidedById: actorId, decidedAt: at } }),
+        prisma.pipelineClaim.updateMany({ where: { id: { in: rejected }, OR: [{ pipelineVideoId }, { pipelineVideoId: null }] }, data: { status: "REJECTED", decidedById: actorId, decidedAt: at } }),
       ]);
     },
     loadVideoPageFacts,
