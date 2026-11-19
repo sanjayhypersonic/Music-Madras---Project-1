@@ -43,3 +43,6 @@ next-env.d.ts
 # private keys and cloud service-account files
 *.pem
 *-service-account*.json
+
+# database fingerprint files from npm run ops:verify-database (restore points): never committed
+restore-point-*.json
