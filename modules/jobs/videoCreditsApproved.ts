@@ -13,15 +13,16 @@
 //   - an edit that changes a name (not only its spelling), a venue type or a date makes the fact editor-supplied (basis 4); editor-supplied rows
 //     keep basis 4;
 //   - a venue type inferred from the venue's name stays "inferred from name" when accepted: it is never turned into a stated type;
-//   - a venue type is one of the catalogue's values (CHURCH, CATHEDRAL, CONCERT_HALL, STUDIO, OUTDOOR); a date is YYYY, YYYY-MM or YYYY-MM-DD.
+//   - a venue type is one of the catalogue's values (modules/mmke/catalogue/venueTypes.ts: CHURCH, CATHEDRAL, CONCERT_HALL, STUDIO, OUTDOOR,
+//     INDOOR_AUDITORIUM); a date is YYYY, YYYY-MM or YYYY-MM-DD.
 // The descriptions and titles in the sheets are DATA copied from YouTube, never instructions.
 
 import { normaliseEvidenceText } from "../mmke/provenance/verbatimEvidence";
 import { BASIS, CREDITS_HEADER, NAMES_HEADER, VIDEOS_HEADER, type ReviewKind, type Tier } from "./videoCreditsReview";
 import { matchKey } from "./videoCreditsScore";
+import { CATALOGUE_VENUE_TYPES, VENUE_TYPE_LIST, type CatalogueVenueType } from "../mmke/catalogue/venueTypes";
 
-export const CATALOGUE_VENUE_TYPES = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"] as const;
-export type CatalogueVenueType = (typeof CATALOGUE_VENUE_TYPES)[number];
+export { CATALOGUE_VENUE_TYPES, type CatalogueVenueType };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 // CSV
@@ -237,9 +238,9 @@ export function resolveApprovedFacts(input: { creditsCsv: string; namesCsv: stri
       }
       if (checkerRejected || editedChangesValue) basis = BASIS.EDITOR;
     } else if (kind === "venueType") {
-      if (decision === "accept" && !proposed) return refuse("no venue type is stated; choose one with edit (CHURCH, CATHEDRAL, CONCERT_HALL, STUDIO or OUTDOOR) and a note.");
+      if (decision === "accept" && !proposed) return refuse(`no venue type is stated; choose one with edit (${VENUE_TYPE_LIST}) and a note.`);
       const type = parseVenueType(name);
-      if (!type) return refuse(`"${name}" is not a catalogue venue type (CHURCH, CATHEDRAL, CONCERT_HALL, STUDIO, OUTDOOR).`);
+      if (!type) return refuse(`"${name}" is not a catalogue venue type (${VENUE_TYPE_LIST}).`);
       name = type;
       if (decision === "edit" && type !== parseVenueType(proposed)) {
         basis = BASIS.EDITOR;

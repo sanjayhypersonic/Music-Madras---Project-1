@@ -4,6 +4,7 @@ import { getCurrentStudioSession } from "../../../../../../modules/auth/authServ
 import { can } from "../../../../../../modules/auth/policy";
 import { listVenuesForStudio } from "../../../../../../modules/db/repositories/venueRepository";
 import { StatusBadge } from "../../../../../../components/studio/StatusBadge";
+import { venueTypeLabel } from "../../../../../../modules/mmke/catalogue/venueTypes";
 
 // Phase 6G-4E — the Venue catalogue list, mirroring the Composer list's
 // shape exactly (search, active/archived, Organisation joined, a
@@ -63,7 +64,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
                   {venue.name}
                   {venue.city ? `, ${venue.city}` : ""}
                 </td>
-                <td>{venue.type}</td>
+                <td>{venueTypeLabel(venue.type)}</td>
                 <td>{venue.organisation?.name ?? "—"}</td>
                 <td><StatusBadge status={venue.archivedAt ? "Archived" : "Active"} /></td>
                 <td>

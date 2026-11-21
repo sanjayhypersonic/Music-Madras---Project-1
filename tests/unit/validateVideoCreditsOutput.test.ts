@@ -179,4 +179,11 @@ describe("helpers", () => {
     expect(quoteStatesVenueType("the Churchill Room", "CHURCH")).toBe(false);
     expect(quoteStatesVenueType("Bishop Heber Chapel", "CATHEDRAL")).toBe(false);
   });
+
+  it("an auditorium states INDOOR_AUDITORIUM, not CONCERT_HALL", () => {
+    expect(quoteStatesVenueType("Venue: the Fake College auditorium", "INDOOR_AUDITORIUM")).toBe(true);
+    expect(quoteStatesVenueType("an Indoor Auditorium in Chennai", "INDOOR_AUDITORIUM")).toBe(true);
+    expect(quoteStatesVenueType("Venue: the Fake College auditorium", "CONCERT_HALL")).toBe(false);
+    expect(quoteStatesVenueType("the Museum Concert Hall", "INDOOR_AUDITORIUM")).toBe(false);
+  });
 });

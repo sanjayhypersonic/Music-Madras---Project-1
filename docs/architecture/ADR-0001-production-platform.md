@@ -152,7 +152,7 @@ Reconciling the two incompatible models found in the audit (`src/mmke/types/enti
 - `RecordingRevision` — the actual canonical content (title, description, `performanceId`, media/works/participants links scoped to this revision) — see §5 for full definition.
 - `Artist`, `Choir`, `Conductor`, `Organisation` — participant entities, linked to a `Performance` (and, transitively, to whichever `RecordingRevision` references that performance) via join tables (`PerformancePerformer`, `PerformanceChoir`, `PerformanceConductor`) rather than free-text strings.
 - `Instrument` — linked to `Venue` (e.g., a pipe organ installation) and optionally to a `Performance`.
-- `Venue` / `Church` — one `Venue` table with a `type` enum (`CHURCH | CATHEDRAL | CONCERT_HALL | STUDIO | OUTDOOR`).
+- `Venue` / `Church` — one `Venue` table with a `type` enum (`CHURCH | CATHEDRAL | CONCERT_HALL | STUDIO | OUTDOOR | INDOOR_AUDITORIUM`; `INDOOR_AUDITORIUM` added 2026-11-21, R-35). The list, its labels and its schema.org mapping live in `modules/mmke/catalogue/venueTypes.ts`.
 - `Collection` — curated groupings of Recordings/Works (replaces the ad-hoc `Playlist` type; a `Collection` can optionally be *backed by* a `YouTubePlaylist` via the media layer).
 - `EducationalContent` / `LearningGuide` — structured guide content with `associatedWorkIds`/`associatedRecordingIds`.
 - `EditorialContent` — general articles/pages (the `/articles/[slug]` route type).

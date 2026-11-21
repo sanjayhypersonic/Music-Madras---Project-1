@@ -38,9 +38,10 @@ const ROLES_WITH_WORK: readonly VideoCreditRole[] = ["COMPOSER", "ARRANGER", "LY
 export const VENUE_TYPE_WORDS: Record<VideoVenueType, readonly string[]> = {
   CHURCH: ["church", "chapel", "parish"],
   CATHEDRAL: ["cathedral"],
-  CONCERT_HALL: ["concert hall", "auditorium", "hall"],
+  CONCERT_HALL: ["concert hall", "hall"],
   STUDIO: ["studio"],
   OUTDOOR: ["outdoor", "outdoors", "open-air", "open air"],
+  INDOOR_AUDITORIUM: ["auditorium", "indoor auditorium"],
 };
 
 export interface VideoCredit {

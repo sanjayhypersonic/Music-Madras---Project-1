@@ -6,6 +6,7 @@ import { can } from "../../../../../../../modules/auth/policy";
 import { createVenue } from "../../../../../../../modules/db/repositories/venueRepository";
 import { slugify } from "../../../../../../../modules/mmke/slug/slugify";
 import type { VenueType } from "@prisma/client";
+import { isCatalogueVenueType } from "../../../../../../../modules/mmke/catalogue/venueTypes";
 
 export async function createVenueForRecordingAction(recordingId: string, formData: FormData) {
   const session = await getCurrentStudioSession();
@@ -15,8 +16,8 @@ export async function createVenueForRecordingAction(recordingId: string, formDat
 
   const name = String(formData.get("name") ?? "").trim();
   const type = String(formData.get("type") ?? "") as VenueType;
-  if (!name || !type) {
-    redirect(`/studio/recordings/${recordingId}/venue?error=Name+and+type+are+required.`);
+  if (!name || !isCatalogueVenueType(type)) {
+    redirect(`/studio/recordings/${recordingId}/venue?error=Name+and+a+valid+type+are+required.`);
   }
 
   await createVenue({

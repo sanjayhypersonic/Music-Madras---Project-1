@@ -5,9 +5,10 @@ import { ReadOnlyStepNotice } from "../../../../../../../components/studio/ReadO
 import { listActiveVenues } from "../../../../../../../modules/db/repositories/venueRepository";
 import { createVenueForRecordingAction } from "./actions";
 import type { VenueType } from "@prisma/client";
+import { CATALOGUE_VENUE_TYPES, VENUE_TYPE_LABELS, venueTypeLabel } from "../../../../../../../modules/mmke/catalogue/venueTypes";
 import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
-const VENUE_TYPES: VenueType[] = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"];
+const VENUE_TYPES: readonly VenueType[] = CATALOGUE_VENUE_TYPES;
 
 export default async function VenueStepPage({
   params,
@@ -36,7 +37,7 @@ export default async function VenueStepPage({
       <ul>
         {venues.map((venue) => (
           <li key={venue.id}>
-            {venue.name} — {venue.type}
+            {venue.name} — {venueTypeLabel(venue.type)}
             {venue.city ? `, ${venue.city}` : ""}
           </li>
         ))}
@@ -58,7 +59,7 @@ export default async function VenueStepPage({
             <select name="type" required style={{ display: "block", width: "100%" }}>
               {VENUE_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {type}
+                  {VENUE_TYPE_LABELS[type]}
                 </option>
               ))}
             </select>

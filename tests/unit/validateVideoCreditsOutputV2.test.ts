@@ -9,7 +9,7 @@ import {
   type CheckedVideoCredits,
 } from "../../modules/ai/structuredOutput/validateVideoCreditsOutput";
 import { VIDEO_CREDITS_OUTPUT_SCHEMA_V2, VIDEO_CREDITS_PROMPT_V2, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V2 } from "../../modules/ai/prompts/videoCredits/videoCreditsPromptV2";
-import { VIDEO_CREDITS_PROMPT_V1, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V1 } from "../../modules/ai/prompts/videoCredits/videoCreditsPromptV1";
+import { VIDEO_CREDITS_OUTPUT_SCHEMA_V1, VIDEO_CREDITS_PROMPT_V1, VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V1 } from "../../modules/ai/prompts/videoCredits/videoCreditsPromptV1";
 import type { VideoText } from "../../modules/mmke/provenance/verbatimEvidence";
 
 // video-credits-v2: venue type from the venue's own name (fromName), original-script suggested titles with a transliterated alternate, and
@@ -77,10 +77,25 @@ describe("the v2 prompt", () => {
     expect(props.venueType.required).toContain("fromName");
     expect(props.suggestedTitle.required).toContain("alternateTitle");
   });
+
+  it("offers INDOOR_AUDITORIUM in v2, while v1's frozen schema keeps its five types", () => {
+    const v2 = VIDEO_CREDITS_OUTPUT_SCHEMA_V2.properties as Record<string, { properties: { value: { enum: unknown[] } } }>;
+    expect(v2.venueType.properties.value.enum).toEqual(["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR", "INDOOR_AUDITORIUM", null]);
+    const v1 = VIDEO_CREDITS_OUTPUT_SCHEMA_V1.properties as Record<string, { properties: { value: { enum: unknown[] } } }>;
+    expect(v1.venueType.properties.value.enum).toEqual(["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR", null]);
+    expect(VIDEO_CREDITS_SYSTEM_INSTRUCTIONS_V2).toContain("which is INDOOR_AUDITORIUM");
+  });
 });
 
 describe("venue type from the venue's own name (fromName)", () => {
   const venueType = (vt: object, credits: unknown[] = [BHC]) => check({ ...base, credits, venueType: vt });
+
+  it("accepts INDOOR_AUDITORIUM only when the text states an auditorium (and an auditorium is no longer a concert hall)", () => {
+    const r = venueType({ value: "INDOOR_AUDITORIUM", quote: "Venue: Bishop Heber Chapel, Madras Christian College (MCC)", field: "description", fromName: false });
+    expect(r.venueType).toMatchObject({ status: "REJECTED", reason: "VENUE_TYPE_NOT_STATED" });
+    expect(venueTypeProblem("INDOOR_AUDITORIUM", "recorded in the college auditorium", false, ["bishop heber chapel"])).toBeNull();
+    expect(venueTypeProblem("CONCERT_HALL", "recorded in the college auditorium", false, ["bishop heber chapel"])).toBe("VENUE_TYPE_NOT_STATED");
+  });
 
   it("rejects a type word that is only inside the venue's name when fromName is false", () => {
     const r = venueType({ value: "CHURCH", quote: "Venue: Bishop Heber Chapel, Madras Christian College (MCC)", field: "description", fromName: false });

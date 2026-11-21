@@ -8,10 +8,11 @@ import { findOrganisationById, listActiveOrganisations } from "../../../../../..
 import { getVenueRelatedContent } from "../../../../../../../modules/db/repositories/entityRelationshipsRepository";
 import { archiveVenueAction, restoreVenueAction, updateVenueAction } from "./actions";
 import type { VenueType } from "@prisma/client";
+import { CATALOGUE_VENUE_TYPES, VENUE_TYPE_LABELS } from "../../../../../../../modules/mmke/catalogue/venueTypes";
 import { StatusBadge } from "../../../../../../../components/studio/StatusBadge";
 import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
-const VENUE_TYPES: VenueType[] = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"];
+const VENUE_TYPES: readonly VenueType[] = CATALOGUE_VENUE_TYPES;
 
 // Phase 6G-4E — the Venue editorial management view, mirroring the
 // Composer detail page's shape (brief §2: "use Composer/MusicalWork as
@@ -80,7 +81,7 @@ export default async function VenueDetailPage({
             <select name="type" required defaultValue={venue.type} style={{ display: "block", width: "100%" }}>
               {VENUE_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {type}
+                  {VENUE_TYPE_LABELS[type]}
                 </option>
               ))}
             </select>

@@ -1,5 +1,6 @@
 import { getSiteOrigin } from "../../../../modules/config/siteOrigin";
 import { serializeJsonLd } from "../../../../modules/seo/serializeJsonLd";
+import { venueSchemaType, venueTypeLabel } from "../../../../modules/mmke/catalogue/venueTypes";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import { notFound } from "next/navigation";
@@ -66,7 +67,7 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
   );
 
   const location = formatLocation(venue);
-  const subtitleParts = [venue.venueDetails?.type, location].filter((part): part is string => Boolean(part));
+  const subtitleParts = [venueTypeLabel(venue.venueDetails?.type), location].filter((part): part is string => Boolean(part));
   const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" — ") : null;
 
   return (
@@ -228,7 +229,7 @@ export default async function VenuePage({ params }: { params: Promise<{ slug: st
         dangerouslySetInnerHTML={{
           __html: serializeJsonLd({
             "@context": "https://schema.org",
-            "@type": "Place",
+            "@type": venueSchemaType(venue.venueDetails?.type),
             name: venue.name,
             url: `${SITE_ORIGIN}/venues/${venue.slug}`,
             ...(location ? { address: location } : {}),

@@ -8,8 +8,9 @@ import { DuplicateEntityError } from "../../../../../../../modules/mmke/duplicat
 import { SlugConflictError } from "../../../../../../../modules/mmke/slug/SlugConflictError";
 import { slugify } from "../../../../../../../modules/mmke/slug/slugify";
 import type { VenueType } from "@prisma/client";
+import { CATALOGUE_VENUE_TYPES } from "../../../../../../../modules/mmke/catalogue/venueTypes";
 
-const VENUE_TYPES: VenueType[] = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"];
+const VENUE_TYPES: readonly VenueType[] = CATALOGUE_VENUE_TYPES;
 
 function errorRedirect(message: string): never {
   redirect(`/studio/catalogue/venues/new?error=${encodeURIComponent(message)}`);

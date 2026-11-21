@@ -106,6 +106,15 @@ describe("refusals", () => {
     expect(plan.venue).toMatchObject({ type: "CONCERT_HALL", typeBasis: "editor-chosen" });
   });
 
+  it("accepts an edit row with editedName INDOOR_AUDITORIUM (or 'Indoor Auditorium'), and lists it in the allowed values", () => {
+    for (const editedName of ["INDOOR_AUDITORIUM", "Indoor Auditorium", "indoor-auditorium"]) {
+      const rows = [...singleWork.filter((r) => r.kind !== "venueType"), { kind: "venueType" as const, name: "", venueTypeBasis: "missing", tier: "RED" as const, decision: "edit", editedName, notes: "the description says auditorium" }];
+      const plan = planVideo(resolveApprovedFacts({ creditsCsv: creditsCsv(rows), namesCsv: singleNames }).videos[0]);
+      expect(plan.venue).toMatchObject({ type: "INDOOR_AUDITORIUM", typeBasis: "editor-chosen" });
+    }
+    expect(refusedFor([{ kind: "venueType", name: "", decision: "edit", editedName: "auditorium", tier: "RED", notes: "x" }])[0]).toMatch(/CHURCH, CATHEDRAL, CONCERT_HALL, STUDIO, OUTDOOR or INDOOR_AUDITORIUM/);
+  });
+
   it("plans no Venue or Performance without an approved type, and moves the participants to the sidecar", () => {
     const plan = planVideo(resolveApprovedFacts({ creditsCsv: creditsCsv(singleWork.filter((r) => r.kind !== "venueType")), namesCsv: singleNames }).videos[0]);
     expect(plan.heldReasons).toEqual([]);

@@ -32,4 +32,5 @@ export const EXPECTED_MIGRATIONS: readonly string[] = [
   "20261024120000_incident_kind_unhandled_server_error",
   "20261118100000_upload_pipeline",
   "20261120100000_pipeline_manual_mode",
+  "20261121100000_venue_type_indoor_auditorium",
 ];

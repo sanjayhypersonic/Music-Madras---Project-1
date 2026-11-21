@@ -117,7 +117,7 @@ How the sheets are read (`modules/jobs/videoCreditsApproved.ts`):
 - A RED row needs a note. A credit the checker rejected cannot be accepted as it stands: `edit` it if you know it, and it becomes editor-supplied (basis 4).
 - Every person, group, work and venue must be decided in `review-names.csv` (`accept` or `merge`). Its `canonicalName` is the catalogue spelling. A name seen in several spellings needs a `canonicalName`. An `editedName` that contradicts the `canonicalName` is refused.
 - An edit that changes a name (not only its spelling), a venue type or a date makes the fact editor-supplied (basis 4). Editor-supplied rows keep basis 4.
-- **Venue type.** On a venue-type row, write `edit` with `CHURCH`, `CATHEDRAL`, `CONCERT_HALL`, `STUDIO` or `OUTDOOR`, and a note. This works for a RED row with no type, and records the type as "editor-chosen". Accepting a type inferred from the venue's name keeps it "inferred from name (editor-accepted)": it never becomes a stated type.
+- **Venue type.** On a venue-type row, write `edit` with `CHURCH`, `CATHEDRAL`, `CONCERT_HALL`, `STUDIO`, `OUTDOOR` or `INDOOR_AUDITORIUM` (for an indoor auditorium; "Indoor Auditorium" is read the same way), and a note. This works for a RED row with no type, and records the type as "editor-chosen". Accepting a type inferred from the venue's name keeps it "inferred from name (editor-accepted)": it never becomes a stated type.
 - **Medley.** A medley needs its Recording title approved: write `accept` on the video in `review-videos.csv`. The slug is built from that title and never changes.
 - **Transliteration.** It is approved when the row with the original-script work title is accepted, or when the video is accepted.
 

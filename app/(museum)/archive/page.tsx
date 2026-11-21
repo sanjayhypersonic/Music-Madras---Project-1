@@ -1,6 +1,7 @@
 import { getSiteOrigin } from "../../../modules/config/siteOrigin";
 import { normaliseSearchText } from "../../../modules/mmke/search/searchText";
 import { serializeJsonLd } from "../../../modules/seo/serializeJsonLd";
+import { venueTypeLabel } from "../../../modules/mmke/catalogue/venueTypes";
 import type { Metadata } from "next";
 import { after } from "next/server";
 import Link from "next/link";
@@ -236,7 +237,7 @@ function VenueResult({ result }: { result: ArchiveSearchResultVenue }) {
         <Link href={`/venues/${result.slug}`}>{result.name}</Link>
       </h3>
       <p className="museum-meta">
-        {result.venueType}
+        {venueTypeLabel(result.venueType)}
         {location ? ` — ${location}` : ""}
       </p>
     </li>

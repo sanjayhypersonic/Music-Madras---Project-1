@@ -7,6 +7,7 @@
 //
 // The quotation check itself lives in modules/mmke/provenance/verbatimEvidence.ts, shared with the video-credits extraction.
 
+import { CATALOGUE_VENUE_TYPES, type CatalogueVenueType } from "../mmke/catalogue/venueTypes";
 import { verifyEvidence as verifyQuotedEvidence, type Evidence, type VideoText } from "../mmke/provenance/verbatimEvidence";
 
 export type { Evidence };
@@ -20,7 +21,7 @@ export interface VenueSpec {
   city: string;
   country: string;
   /** null = the sources do not state the venue's type, so neither the Venue nor the Performance (which needs a Venue) is created. Fill it in only from a source. */
-  type: "CHURCH" | "CATHEDRAL" | "CONCERT_HALL" | "STUDIO" | "OUTDOOR" | null;
+  type: CatalogueVenueType | null;
   evidence: Evidence[];
 }
 export interface RecordingSpec {
@@ -45,7 +46,7 @@ export interface FixtureVideoText extends VideoText {
   privacyStatus: string | null;
 }
 
-const VENUE_TYPES = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"] as const;
+const VENUE_TYPES = CATALOGUE_VENUE_TYPES;
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);

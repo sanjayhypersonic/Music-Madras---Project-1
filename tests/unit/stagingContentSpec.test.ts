@@ -87,5 +87,8 @@ describe("parsing", () => {
     o.venue.type = "CONCERT_HALL";
     const r = parseStagingContentSpec(o);
     expect(r.ok && r.spec.venue.type).toBe("CONCERT_HALL");
+    o.venue.type = "INDOOR_AUDITORIUM";
+    const r2 = parseStagingContentSpec(o);
+    expect(r2.ok && r2.spec.venue.type).toBe("INDOOR_AUDITORIUM");
   });
 });

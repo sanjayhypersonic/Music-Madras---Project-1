@@ -8,15 +8,19 @@
 // cited field, the name must occur in the quotation), and a person reviews what survives before anything could reach the catalogue. Nothing in this
 // milestone writes anywhere but a local report file.
 
+import { CATALOGUE_VENUE_TYPES, type CatalogueVenueType } from "../../../mmke/catalogue/venueTypes";
+
 export const VIDEO_CREDITS_PROMPT_V1 = "video-credits-v1";
 
 /** The credit roles the model may use. ENSEMBLE and LYRICIST exist so an orchestra or a lyricist is not misfiled as a performer or composer. */
 export const VIDEO_CREDIT_ROLES = ["COMPOSER", "WORK", "PERFORMER", "ENSEMBLE", "CHOIR", "CONDUCTOR", "VENUE", "ARRANGER", "LYRICIST"] as const;
 export type VideoCreditRole = (typeof VIDEO_CREDIT_ROLES)[number];
 
-/** The catalogue's VenueType values (prisma/schema.prisma). */
-export const VIDEO_VENUE_TYPES = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"] as const;
-export type VideoVenueType = (typeof VIDEO_VENUE_TYPES)[number];
+/** The venue types exactly as v1 shipped them: v1's schema stays frozen (check reports reference "video-credits-v1"). */
+export const VIDEO_VENUE_TYPES_V1 = ["CHURCH", "CATHEDRAL", "CONCERT_HALL", "STUDIO", "OUTDOOR"] as const;
+/** Every catalogue VenueType (modules/mmke/catalogue/venueTypes.ts): what video-credits-v2 and the validators accept. */
+export const VIDEO_VENUE_TYPES = CATALOGUE_VENUE_TYPES;
+export type VideoVenueType = CatalogueVenueType;
 
 export const VIDEO_RECORDING_KINDS = ["PERFORMANCE", "NOT_A_PERFORMANCE", "UNCLEAR"] as const;
 export type VideoRecordingKind = (typeof VIDEO_RECORDING_KINDS)[number];
@@ -85,7 +89,7 @@ export const VIDEO_CREDITS_OUTPUT_SCHEMA_V1: Record<string, unknown> = {
       },
     },
     performanceDate: quotedValue({ type: ["string", "null"], description: "YYYY-MM-DD, YYYY-MM or YYYY, only when the text states the performance date." }, "The performance date, when stated."),
-    venueType: quotedValue({ type: ["string", "null"], enum: [...VIDEO_VENUE_TYPES, null] }, "The kind of venue, only when the text states it."),
+    venueType: quotedValue({ type: ["string", "null"], enum: [...VIDEO_VENUE_TYPES_V1, null] }, "The kind of venue, only when the text states it."),
     suggestedTitle: quotedValue({ type: ["string", "null"], description: "A short recording title taken from the text, or null." }, "A title for the recording."),
     gaps: {
       type: "array",

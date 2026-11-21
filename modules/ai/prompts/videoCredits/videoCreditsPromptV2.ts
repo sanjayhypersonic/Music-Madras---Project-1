@@ -35,7 +35,7 @@ Also report:
 - recordingKind: PERFORMANCE when the video is a recording of music being performed; NOT_A_PERFORMANCE for a trailer, announcement, interview or similar; UNCLEAR when the text does not say.
 - performanceDate: only when the text states the date of the performance, as YYYY-MM-DD, YYYY-MM or YYYY. A publication or upload date is not a performance date.
 - venueType, in one of two ways:
-  (a) fromName: false, when the text itself states what kind of place the venue is, outside the venue's name (for example a label "Church: …", or "recorded in the chapel"); the quotation must contain that word;
+  (a) fromName: false, when the text itself states what kind of place the venue is, outside the venue's name (for example a label "Church: …", "recorded in the chapel", or "in the auditorium of …", which is INDOOR_AUDITORIUM); the quotation must contain that word;
   (b) fromName: true, when the venue's own name, as the text writes it, contains the word (for example "Bishop Heber Chapel" or "TELC Arulnathar Lutheran Church"); the quotation must contain the venue's name, and the venue must also be listed as a VENUE credit.
   Never derive a venueType from what you know about the place, and never from another name (a choir called "… Cathedral Choir" says nothing about the venue).
 - suggestedTitle: a short title for the recording taken from the text (normally the work's title), or null. When the work's title is written in a non-Latin script (for example Tamil), suggestedTitle.value MUST be that original-script title, and the Latin transliteration, when the text states one, goes in suggestedTitle.alternateTitle with its own quotation; otherwise alternateTitle is all null.
