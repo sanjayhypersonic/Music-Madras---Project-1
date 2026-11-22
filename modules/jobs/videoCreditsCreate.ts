@@ -3,16 +3,21 @@
 //
 // From each video's approved facts (modules/jobs/videoCreditsApproved.ts) the planner decides, per the written exception
 // (docs/video-credits-review-and-approval.md section 5) and the schema mapping (project register R-31):
-//   - a video is HELD OUT entirely when any approved work lacks exactly one editor-approved composer (MusicalWork.composerId is required and a
-//     composer is never invented), when no work is approved, or when it has several works and no approved Recording title (the slug is immutable);
+//   - a video is HELD OUT entirely when any approved work has no editor-approved composer (a composer is never invented), when no work is
+//     approved, or when it has several works and no approved Recording title (the slug is immutable);
+//   - R-36: a work may have SEVERAL composers, kept in stated (sheet) order: the first is the primary composer (MusicalWork.composerId), the
+//     others are co-composers (musical_work_composers);
 //   - a medley is ONE Recording with its works in sheet order; each work keeps its own composer;
 //   - an original-script work title stays the title; its transliteration (approved) and an editor's Latin spelling become alternate titles;
 //   - a Venue is planned only with exactly one approved venue and one approved venue type; the type keeps its basis (an inferred type stays
 //     "inferred from name (editor-accepted)"); without a Venue there is no Performance, and its participants go to the sidecar;
 //   - a Performance needs a Programme (schema): one per Recording, titled with the approved Recording title, holding its works;
 //   - a performance date is stored only when complete (YYYY-MM-DD); a partial date goes to the sidecar (a DateTime would invent a day);
-//   - everything with no schema home (lyricist, arranger, ensemble, presenter, institution, translator, subtitle, published title, original
-//     performer, event, provenance) goes to the SIDECAR report with its basis and quote, never into a field that would distort it.
+//   - R-36: lyricists, arrangers and translators of a work are planned as its CONTRIBUTORS (musical_work_contributors, each a Person); an
+//     ensemble or orchestra is planned on the Performance (performance_ensembles);
+//   - only facts with NO schema home (presenter, institution, choreographer, original title, published title and other UNMODELLED facts), and
+//     facts that cannot be placed (a contributor of no approved work, a participant with no Performance, a partial date), go to the SIDECAR report
+//     with their basis and quote, never into a field that would distort them.
 
 import { canonicalSlugBase, hasNonLatinScript, type CanonicalSlugInput } from "../mmke/slug/canonicalSlug";
 import { looseNameKey, roleLabelLine, roleOf, type ApprovedFact, type CatalogueVenueType, type RefusedRow, type VideoFacts } from "./videoCreditsApproved";
@@ -23,11 +28,16 @@ export interface PlannedName {
   sheetRow: number;
 }
 
+export type PlannedContributorRole = "LYRICIST" | "ARRANGER" | "TRANSLATOR";
+
 export interface PlannedWork {
   title: string;
   alternateTitles: string[];
   basis: string;
-  composer: PlannedName;
+  /** R-36: every approved composer in stated order; [0] is the primary composer. Never empty for a planned work. */
+  composers: PlannedName[];
+  /** R-36: lyricists, arrangers and translators of this work, each found or created as a Person. */
+  contributors: Array<PlannedName & { role: PlannedContributorRole }>;
   sheetRow: number;
 }
 
@@ -53,6 +63,8 @@ export interface VideoCreatePlan {
   venue: { name: string; type: CatalogueVenueType; typeBasis: string; basis: string } | null;
   performance: { date: string | null } | null;
   choirs: PlannedName[];
+  /** R-36: ensembles and orchestras on the Performance. */
+  ensembles: PlannedName[];
   conductors: PlannedName[];
   performers: Array<PlannedName & { role: string | null }>;
   sidecar: SidecarFact[];
@@ -71,8 +83,6 @@ function sidecarOf(f: ApprovedFact, reason: string): SidecarFact {
 }
 
 const UNMODELLED_REASON: Record<string, string> = {
-  lyricist: "No lyricist relation: a MusicalWork has one composer and no other contributor.",
-  arranger: "No arranger relation: a MusicalWork has one composer and no other contributor.",
   presenter: "No presenter credit in the catalogue.",
   institution: "Venue.organisationId exists, but the sheet does not say whether the institution is the venue's or the choir's (Choir has no organisation relation).",
   "other unmodelled": "No catalogue field for this fact.",
@@ -89,6 +99,7 @@ export function planVideo(v: VideoFacts): VideoCreatePlan {
     venue: null,
     performance: null,
     choirs: [],
+    ensembles: [],
     conductors: [],
     performers: [],
     sidecar: [],
@@ -118,13 +129,26 @@ export function planVideo(v: VideoFacts): VideoCreatePlan {
       plan.heldReasons.push(`work "${title}" has no editor-approved composer (a composer is never invented).`);
       continue;
     }
-    if (names.length > 1) {
-      plan.heldReasons.push(`work "${title}" has several approved composers (${names.join(", ")}); the catalogue holds one per work.`);
+    // R-36: several approved composers are co-composers, in stated (sheet) order; the first is the primary composer.
+    const ordered = names.map((n) => candidates.filter((x) => same(x.name, n)).sort((a, b) => a.sheetRow - b.sheetRow)[0]).sort((a, b) => a.sheetRow - b.sheetRow);
+    candidates.forEach((x) => attributed.add(x));
+    plan.works.push({ title, alternateTitles: alternates, basis: w.basis, composers: ordered.map((c) => ({ name: c.name, basis: c.basis, sheetRow: c.sheetRow })), contributors: [], sheetRow: w.sheetRow });
+  }
+
+  // R-36: lyricists, arrangers and translators become the CONTRIBUTORS of the work they belong to (its title, or the video's only work).
+  const contributorFacts: Array<{ fact: ApprovedFact; role: PlannedContributorRole }> = [
+    ...of("lyricist").map((fact) => ({ fact, role: "LYRICIST" as const })),
+    ...of("arranger").map((fact) => ({ fact, role: "ARRANGER" as const })),
+    ...of("other unmodelled").filter((f) => /^TRANSLAT/.test(roleOf(f.roleLabel))).map((fact) => ({ fact, role: "TRANSLATOR" as const })),
+  ];
+  for (const { fact, role } of contributorFacts) {
+    const workIndex = fact.workTitle ? works.findIndex((w) => same(fact.workTitle, w.name) || same(fact.workTitle, w.proposedName)) : works.length === 1 ? 0 : -1;
+    const planned = workIndex >= 0 ? plan.works.find((pw) => pw.sheetRow === works[workIndex].sheetRow) : undefined;
+    if (!planned) {
+      plan.sidecar.push(sidecarOf(fact, fact.workTitle ? `${role.toLowerCase()} of "${fact.workTitle}", which is not a planned work of this video.` : `${role.toLowerCase()} not attributable to one work (several works, no work title).`));
       continue;
     }
-    const c = candidates.find((x) => same(x.name, names[0]))!;
-    candidates.forEach((x) => attributed.add(x));
-    plan.works.push({ title, alternateTitles: alternates, basis: w.basis, composer: { name: c.name, basis: c.basis, sheetRow: c.sheetRow }, sheetRow: w.sheetRow });
+    if (!planned.contributors.some((c) => c.role === role && same(c.name, fact.name))) planned.contributors.push({ name: fact.name, basis: fact.basis, sheetRow: fact.sheetRow, role });
   }
   for (const c of composers) if (!attributed.has(c)) plan.sidecar.push(sidecarOf(c, c.workTitle ? `Composer of "${c.workTitle}", which is not an approved work of this video.` : "Composer not attributable to one work (several works, no work title)."));
 
@@ -154,9 +178,9 @@ export function planVideo(v: VideoFacts): VideoCreatePlan {
 
   // Participants.
   for (const f of of("choir/ensemble")) {
-    if (roleOf(f.roleLabel) === "ENSEMBLE") plan.sidecar.push(sidecarOf(f, "No orchestra/ensemble model."));
-    else if (plan.performance) plan.choirs.push({ name: f.name, basis: f.basis, sheetRow: f.sheetRow });
-    else plan.sidecar.push(sidecarOf(f, "No Performance to attach the choir to (no Venue)."));
+    const ensemble = roleOf(f.roleLabel) === "ENSEMBLE";
+    if (plan.performance) (ensemble ? plan.ensembles : plan.choirs).push({ name: f.name, basis: f.basis, sheetRow: f.sheetRow });
+    else plan.sidecar.push(sidecarOf(f, `No Performance to attach the ${ensemble ? "ensemble" : "choir"} to (no Venue).`));
   }
   for (const f of of("conductor")) {
     if (plan.performance) plan.conductors.push({ name: f.name, basis: f.basis, sheetRow: f.sheetRow });
@@ -166,7 +190,7 @@ export function planVideo(v: VideoFacts): VideoCreatePlan {
     if (plan.performance) plan.performers.push({ name: f.name, basis: f.basis, sheetRow: f.sheetRow, role: roleLabelLine(f.roleLabel) });
     else plan.sidecar.push(sidecarOf(f, "No Performance to attach the performer to (no Venue)."));
   }
-  for (const kind of ["lyricist", "arranger", "presenter", "institution", "other unmodelled"] as const) for (const f of of(kind)) plan.sidecar.push(sidecarOf(f, UNMODELLED_REASON[kind]));
+  for (const kind of ["presenter", "institution", "other unmodelled"] as const) for (const f of of(kind)) if (!(kind === "other unmodelled" && /^TRANSLAT/.test(roleOf(f.roleLabel)))) plan.sidecar.push(sidecarOf(f, UNMODELLED_REASON[kind]));
   if (v.transliteration && translit && recordingTitle && hasNonLatinScript(recordingTitle)) {
     plan.sidecar.push({ youtubeVideoId: v.youtubeVideoId, kind: "transliteration", label: "TRANSLITERATION", name: translit, workTitle: recordingTitle, quote: "", basis: "", reason: "Kept as the work's alternate title; MusicalWork.alternateTitles cannot mark it as the transliteration, and a Recording has no alternate titles." });
   }
@@ -176,6 +200,7 @@ export function planVideo(v: VideoFacts): VideoCreatePlan {
     plan.venue = null;
     plan.performance = null;
     plan.choirs = [];
+    plan.ensembles = [];
     plan.conductors = [];
     plan.performers = [];
     return plan;
@@ -234,12 +259,14 @@ export function describePlan(plan: VideoCreatePlan): string[] {
   if (plan.recording) lines.push(`    Recording (DRAFT): title "${plan.recording.title ?? "(left empty)"}" [${plan.recording.titleBasis}], slug ${plan.recording.plannedSlug} (year then a number if taken)`);
   plan.works.forEach((w, i) => {
     lines.push(`    Work ${i + 1}: "${w.title}" [${w.basis}]${w.alternateTitles.length ? `, alternate titles: ${w.alternateTitles.map((a) => `"${a}"`).join(", ")}` : ""}`);
-    lines.push(`      Composer: ${w.composer.name} [${w.composer.basis}]  (find by exact normalised name, else create)`);
+    w.composers.forEach((c, j) => lines.push(`      ${j === 0 ? "Composer" : `Co-composer ${j + 1}`}: ${c.name} [${c.basis}]  (find by exact normalised name, else create; linked to its person)`));
+    for (const c of w.contributors) lines.push(`      ${c.role === "LYRICIST" ? "Lyricist" : c.role === "ARRANGER" ? "Arranger" : "Translator"}: ${c.name} [${c.basis}]  (person: exact name or approved alias, else create)`);
   });
   if (plan.programme) lines.push(`    Programme (schema container): "${plan.programme.title}" holding ${plan.works.length} work(s)`);
   if (plan.venue) lines.push(`    Venue: ${plan.venue.name} [${plan.venue.basis}], type ${plan.venue.type} [${plan.venue.typeBasis}]`);
   if (plan.performance) lines.push(`    Performance: date ${plan.performance.date ?? "not stored"}`);
   for (const c of plan.choirs) lines.push(`      Choir: ${c.name} [${c.basis}]`);
+  for (const e of plan.ensembles) lines.push(`      Ensemble: ${e.name} [${e.basis}]`);
   for (const c of plan.conductors) lines.push(`      Conductor: ${c.name} [${c.basis}]`);
   for (const p of plan.performers) lines.push(`      Performer: ${p.name}${p.role ? ` (${p.role})` : ""} [${p.basis}]`);
   for (const n of plan.notes) lines.push(`    note: ${n}`);

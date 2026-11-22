@@ -1,3 +1,4 @@
+import { composerWorks, orderContributors, orderWorkComposers } from "../../mmke/workPage/workCredits";
 import { prisma } from "../client";
 import { isPlausibleSlug } from "../../mmke/slug/isPlausibleSlug";
 import { dedupeById } from "../../mmke/relationships/formatComposerCredit";
@@ -274,10 +275,13 @@ export interface ComposerRelatedContent extends RelatedContent {
 export async function getComposerRelatedContent(composerId: string): Promise<ComposerRelatedContent> {
   // Phase 6J-1: only the composer's publicly ELIGIBLE works are listed (and so
   // linked) — never an archived work, or one no published content reaches.
-  const works = await prisma.musicalWork.findMany({
-    where: { AND: [{ composerId }, eligibleWorkWhere] },
+  // R-36: every work they composed OR co-composed (musical_work_composers), once each, by title (modules/mmke/workPage/workCredits.ts).
+  const rows = await prisma.musicalWork.findMany({
+    where: { AND: [{ OR: [{ composerId }, { composerCredits: { some: { composerId } } }] }, eligibleWorkWhere] },
+    include: { composerCredits: { select: { composerId: true, position: true } } },
     orderBy: { title: "asc" },
   });
+  const works: MusicalWork[] = composerWorks(composerId, rows).map((w) => rows.find((r) => r.id === w.id)!);
   const content = await resolveRelatedContent({ workIds: works.map((w) => w.id) });
   return { works, ...content };
 }
@@ -406,7 +410,15 @@ export async function getVenueEntityPageData(slug: string): Promise<EntityPageDa
  */
 export async function getPublicWorkPageData(slug: string): Promise<WorkPageData | null> {
   if (!isPlausibleSlug(slug)) return null; // a slug no page could have (control characters, absurd length): not found, never a database error
-  const work = await prisma.musicalWork.findFirst({ where: { AND: [{ slug }, eligibleWorkWhere] }, include: { composer: true } });
+  const work = await prisma.musicalWork.findFirst({
+    where: { AND: [{ slug }, eligibleWorkWhere] },
+    include: {
+      composer: true,
+      // R-36: every composer in stated order, and the lyricists, arrangers and translators (each a Person with one public page).
+      composerCredits: { include: { composer: { select: { id: true, slug: true, name: true, archivedAt: true } } } },
+      contributors: { include: { person: { select: { id: true, slug: true, name: true, archivedAt: true } } } },
+    },
+  });
   if (!work) return null;
 
   const content = await resolveRelatedContent({ workIds: [work.id] });
@@ -422,6 +434,8 @@ export async function getPublicWorkPageData(slug: string): Promise<WorkPageData 
     catalogueNumber: work.catalogueNumber,
     keySignature: work.keySignature,
     composer: { id: work.composer.id, slug: work.composer.slug, name: work.composer.name },
+    composers: orderWorkComposers(work.composer, work.composerCredits),
+    contributors: orderContributors(work.contributors),
     programmes: content.programmes,
     performances: content.performances,
     recordings: content.recordings,

@@ -1,3 +1,4 @@
+import { linkRoleToPerson } from "./peopleRepository";
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { DuplicateEntityError, findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
@@ -45,7 +46,9 @@ export async function createConductor(input: CreateConductorInput): Promise<Cond
     afterSnapshot: conductor,
   });
 
-  return conductor;
+  // R-36: one human, one person page: the new record is linked to its Person (exact name or approved alias, else created).
+  const person = await linkRoleToPerson("CONDUCTOR", conductor, input.actorId);
+  return person.personId ? { ...conductor, personId: person.personId } : conductor;
 }
 
 export function findConductorById(id: string): Promise<Conductor | null> {

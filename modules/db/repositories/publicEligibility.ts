@@ -104,9 +104,10 @@ export const eligibleWorkWhere: Prisma.MusicalWorkWhereInput = {
   ],
 };
 
+// R-36: a composer is public through a work they composed (MusicalWork.composerId) OR co-composed (musical_work_composers).
 export const eligibleComposerWhere: Prisma.ComposerWhereInput = {
   archivedAt: null,
-  works: { some: eligibleWorkWhere },
+  OR: [{ works: { some: eligibleWorkWhere } }, { workCredits: { some: { work: eligibleWorkWhere } } }],
 };
 
 // ---------------------------------------------------------------------------

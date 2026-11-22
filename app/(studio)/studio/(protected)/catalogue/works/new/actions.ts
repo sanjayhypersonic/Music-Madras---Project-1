@@ -30,6 +30,8 @@ export async function createWorkAction(formData: FormData) {
       slug: slugify(title),
       title,
       composerId,
+      // R-36: optional co-composers, in the order of the form's fields (empty ones and repeats of the primary are ignored).
+      coComposerIds: formData.getAll("coComposerId").map(String).filter((id) => id && id !== composerId),
       catalogueNumber: String(formData.get("catalogueNumber") ?? "") || undefined,
       keySignature: String(formData.get("keySignature") ?? "") || undefined,
       language: String(formData.get("language") ?? "") || undefined,

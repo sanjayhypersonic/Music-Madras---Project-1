@@ -1,4 +1,5 @@
-import type { WorkPageData, WorkPagePerformance, WorkPageVideo, WorkPageCollection, WorkPageLearningGuide } from "./workPageContract";
+import type { WorkContributor } from "./workCredits";
+import type { WorkPageComposer, WorkPageData, WorkPagePerformance, WorkPageVideo, WorkPageCollection, WorkPageLearningGuide } from "./workPageContract";
 
 // Phase 6G-6 — pure mapping from already-loaded, already-public-filtered
 // relationship data into the WorkPageData contract, mirroring
@@ -57,6 +58,10 @@ export interface AssembleWorkPageDataInput {
   catalogueNumber: string | null;
   keySignature: string | null;
   composer: { id: string; slug: string; name: string };
+  /** R-36: every composer in stated order (primary first). Defaults to the primary composer alone. */
+  composers?: WorkPageComposer[];
+  /** R-36: lyricists, arrangers and translators (modules/mmke/workPage/workCredits.ts). */
+  contributors?: WorkContributor[];
   programmes: RawProgramme[];
   performances: RawPerformance[];
   recordings: RawRecording[];
@@ -112,6 +117,8 @@ export function assembleWorkPageData(input: AssembleWorkPageDataInput): WorkPage
     catalogueNumber: input.catalogueNumber,
     keySignature: input.keySignature,
     composer: input.composer,
+    composers: input.composers && input.composers.length > 0 ? input.composers : [input.composer],
+    contributors: input.contributors ?? [],
     programmes: input.programmes.map(toProgramme),
     performances: input.performances.map(toPerformance),
     recordings: input.recordings.map(toRecording),

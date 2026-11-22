@@ -7,7 +7,6 @@ import type { PipelinePorts, PipelineVideoRow, QueueCandidate, StagePatch } from
 import type { ApprovalDeps, BundleForApproval } from "../../pipeline/approve";
 import type { AliasSeedRow } from "../../pipeline/aliasSeed";
 import type { CatalogueIndex, EntityKind } from "../../pipeline/resolve";
-import { nameKey } from "../../pipeline/resolve";
 import type { DraftClaim } from "../../pipeline/drafts";
 import { attachEntityClaims, bundleEntityKeys, type StoredEntityClaim } from "../../pipeline/entityClaims";
 import { entityKeyOf } from "../../pipeline/entities";
@@ -15,10 +14,9 @@ import type { ManualEntityClaim } from "../../pipeline/manualImport";
 import type { VideoRunFacts } from "../../pipeline/select";
 import { executeCreditsPlans } from "../../jobs/videoCreditsCreateExecute";
 import { findRecordingLinkedToYouTubeVideo } from "./recordingIntakeRepository";
-import { PublishCompanionRefusedError, editDraftPerformanceParticipants, publishRecordingDraft, updateDraftRevisionContent } from "./recordingRepository";
+import { PublishCompanionRefusedError, publishRecordingDraft, updateDraftRevisionContent } from "./recordingRepository";
 import { createDraftVideoPageIn, publishVideoPageIn } from "./youtubeVideoPageRepository";
 import type { VideoPageFacts } from "../../pipeline/videoPage";
-import { addWorkContributor, ensureEnsemble, ensurePerson, linkPersonIfUnset } from "./peopleRepository";
 
 // R-34: the database side of the upload-to-draft pipeline (docs/upload-pipeline.md). The pipeline's own tables (PipelineRun, PipelineVideo,
 // PipelineClaim, EntityAlias, EntityPageCopy) are written here; every CATALOGUE write goes through the existing repositories and services
@@ -337,54 +335,10 @@ export function buildApprovalDeps(): ApprovalDeps {
       const linked = await findRecordingLinkedToYouTubeVideo(youtubeVideoRowId);
       return linked ? { recordingId: linked.recordingId } : null;
     },
-    async linkContributorsAndPeople({ recordingId, actorId, checked, resolution }) {
-      const notes: string[] = [];
-      const recording = await prisma.recording.findUnique({
-        where: { id: recordingId },
-        select: { currentDraftRevision: { select: { id: true, performanceId: true, works: { select: { musicalWork: { select: { id: true, title: true, alternateTitles: true } } } } } } },
-      });
-      const draft = recording?.currentDraftRevision;
-      if (!draft) return ["no open draft: contributors and people were not linked"];
-      for (const c of checked.accepted) {
-        const e = resolution.entities.find((x) => x.role === c.role && nameKey(x.nameInVideo) === nameKey(c.name));
-        if (!e || e.status === "EXCEPTION") continue;
-        if (c.role === "ARRANGER" || c.role === "LYRICIST") {
-          const workTitle = c.workTitle ? resolution.entities.find((x) => x.role === "WORK" && nameKey(x.nameInVideo) === nameKey(c.workTitle!))?.canonicalName ?? c.workTitle : null;
-          const works = draft.works.map((w) => w.musicalWork);
-          const work = workTitle ? works.find((w) => nameKey(w.title) === nameKey(workTitle) || w.alternateTitles.some((t) => nameKey(t) === nameKey(workTitle))) : works.length === 1 ? works[0] : undefined;
-          if (!work) {
-            notes.push(`${c.role.toLowerCase()} ${e.canonicalName}: no single work to attach to; not linked`);
-            continue;
-          }
-          const { person } = await ensurePerson(e.canonicalName, actorId);
-          if (await addWorkContributor({ musicalWorkId: work.id, personId: person.id, role: c.role, actorId })) notes.push(`${c.role.toLowerCase()} ${person.name} linked to "${work.title}"`);
-        } else if (c.role === "ENSEMBLE") {
-          if (!draft.performanceId) {
-            notes.push(`ensemble ${e.canonicalName}: no Performance on the draft (venue or venue type missing); not linked`);
-            continue;
-          }
-          const { ensemble } = await ensureEnsemble(e.canonicalName, actorId);
-          await editDraftPerformanceParticipants({
-            recordingId,
-            expectedPerformanceId: draft.performanceId,
-            actorId,
-            change: async (tx, performanceId) => {
-              await tx.performanceEnsemble.upsert({ where: { performanceId_ensembleId: { performanceId, ensembleId: ensemble.id } }, create: { performanceId, ensembleId: ensemble.id }, update: {} });
-              await writeAuditLog({ actorId, action: "ENSEMBLE_LINKED_TO_PERFORMANCE", entityType: "Performance", entityId: performanceId, afterSnapshot: { ensembleId: ensemble.id } }, tx);
-            },
-          });
-          notes.push(`ensemble ${ensemble.name} linked`);
-        } else if (c.role === "COMPOSER" || c.role === "CONDUCTOR" || c.role === "PERFORMER") {
-          const kind = c.role === "PERFORMER" ? "ARTIST" : c.role;
-          const records = kind === "COMPOSER" ? await prisma.composer.findMany({ where: { archivedAt: null }, select: { id: true, name: true } }) : kind === "CONDUCTOR" ? await prisma.conductor.findMany({ where: { archivedAt: null }, select: { id: true, name: true } }) : await prisma.artist.findMany({ where: { archivedAt: null }, select: { id: true, name: true } });
-          const match = findExactNormalizedDuplicate(e.canonicalName, records.map((r) => r.name));
-          const record = match ? records.find((r) => r.name === match) : undefined;
-          if (!record) continue;
-          const { person } = await ensurePerson(e.canonicalName, actorId);
-          if (await linkPersonIfUnset(kind, record.id, person.id, actorId)) notes.push(`${kind.toLowerCase()} ${record.name} linked to person page ${person.slug}`);
-        }
-      }
-      return notes;
+    // R-36: the credits create tool (executeCreditsPlans, called above as executePlans) now writes contributors, ensembles and person links
+    // itself, for the pipeline and the operator tool alike; nothing is left to do here.
+    async linkContributorsAndPeople() {
+      return [];
     },
     async fillRecordingSeo({ recordingId, actorId, seoTitle, metaDescription, summary }) {
       const r = await prisma.recording.findUnique({ where: { id: recordingId }, select: { status: true, currentDraftRevision: { select: { id: true, updatedAt: true, seoMetaTitle: true, seoMetaDescription: true, description: true } } } });

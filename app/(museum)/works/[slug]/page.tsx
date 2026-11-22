@@ -1,3 +1,4 @@
+import { listNames, personHref, workJsonLd } from "../../../../modules/mmke/workPage/workCredits";
 import { getSiteOrigin } from "../../../../modules/config/siteOrigin";
 import { serializeJsonLd } from "../../../../modules/seo/serializeJsonLd";
 import type { Metadata } from "next";
@@ -27,7 +28,7 @@ function formatPerformanceDate(date: Date | null): string | null {
 }
 
 function buildDescription(work: WorkPageData): string {
-  return `${work.title} by ${work.composer.name} — documented in the Music Madras archive of Chennai's Western Classical Music heritage.`;
+  return `${work.title} by ${listNames(work.composers.map((c) => c.name))} — documented in the Music Madras archive of Chennai's Western Classical Music heritage.`;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -90,8 +91,19 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       <EntitySection id="identity" heading="About This Work">
         <ul className="museum-related-list">
           <li>
-            Composer — <Link href={`/composers/${work.composer.slug}`}>{work.composer.name}</Link>
+            {work.composers.length > 1 ? "Composers" : "Composer"} —{" "}
+            {work.composers.map((c, i) => (
+              <span key={c.id}>
+                {i > 0 && (i === work.composers.length - 1 ? " and " : ", ")}
+                <Link href={`/composers/${c.slug}`}>{c.name}</Link>
+              </span>
+            ))}
           </li>
+          {work.contributors.map((c) => (
+            <li key={`${c.role}-${c.person.id}`}>
+              {c.label} — <Link href={personHref(c.person.slug)}>{c.person.name}</Link>
+            </li>
+          ))}
           {work.alternateTitles.length > 0 && <li>Also known as: {work.alternateTitles.join(", ")}</li>}
           {work.language && <li>Language: {work.language}</li>}
           {work.notes && <li>{work.notes}</li>}
@@ -215,13 +227,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: serializeJsonLd({
-            "@context": "https://schema.org",
-            "@type": "MusicComposition",
-            name: work.title,
-            url: `${SITE_ORIGIN}/works/${work.slug}`,
-            composer: { "@type": "Person", name: work.composer.name },
-          }),
+          __html: serializeJsonLd(workJsonLd({ title: work.title, url: `${SITE_ORIGIN}/works/${work.slug}`, composers: work.composers, contributors: work.contributors })),
         }}
       />
     </article>

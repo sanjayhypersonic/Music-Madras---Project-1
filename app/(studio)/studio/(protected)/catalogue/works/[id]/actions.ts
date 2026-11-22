@@ -5,11 +5,13 @@ import { getCurrentStudioSession } from "../../../../../../../modules/auth/authS
 import { can } from "../../../../../../../modules/auth/policy";
 import {
   archiveMusicalWork,
-  changeMusicalWorkComposer,
   findMusicalWorkById,
+  listMusicalWorkComposerIds,
   restoreMusicalWork,
+  setMusicalWorkComposers,
   updateMusicalWork,
 } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
+import { changeComposerOrder, type ComposerOrderChange } from "../../../../../../../modules/mmke/workPage/workCredits";
 import { attachSourceToEntity, detachSourceFromEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { attachRightsInformationToEntity, detachRightsInformationFromEntity } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
 
@@ -24,9 +26,8 @@ export async function updateWorkAction(workId: string, formData: FormData) {
   }
 
   const title = String(formData.get("title") ?? "").trim();
-  const composerId = String(formData.get("composerId") ?? "");
-  if (!title || !composerId) {
-    errorRedirect(workId, "Title and composer are required.");
+  if (!title) {
+    errorRedirect(workId, "Title is required.");
   }
 
   const work = await findMusicalWorkById(workId);
@@ -43,18 +44,36 @@ export async function updateWorkAction(workId: string, formData: FormData) {
     actorId: session!.user.id,
   });
 
-  // Reassigning the canonical Composer is its own distinct, separately
-  // audited operation (brief §21) — only invoked when the picker's value
-  // actually changed, never when the same Composer was resubmitted.
-  if (composerId !== work!.composerId) {
-    try {
-      await changeMusicalWorkComposer(workId, composerId, session!.user.id);
-    } catch (err) {
-      errorRedirect(workId, err instanceof Error ? err.message : "Could not change the composer.");
-    }
-  }
-
   redirect(`/studio/catalogue/works/${workId}`);
+}
+
+/**
+ * R-36: add, remove or move one of the work's composers (musical_work_composers). The first composer is the primary composer
+ * (MusicalWork.composerId); each change is its own audited operation (MUSICAL_WORK_COMPOSERS_SET).
+ */
+async function applyComposerChange(workId: string, change: ComposerOrderChange) {
+  const session = await getCurrentStudioSession();
+  if (!session || !can(session.user.role, "CATALOGUE_WRITE")) {
+    errorRedirect(workId, "You do not have permission to edit this musical work.");
+  }
+  const next = changeComposerOrder(await listMusicalWorkComposerIds(workId), change);
+  if (!next.ok) errorRedirect(workId, next.reason);
+  try {
+    await setMusicalWorkComposers(workId, next.order, session!.user.id);
+  } catch (err) {
+    errorRedirect(workId, err instanceof Error ? err.message : "Could not change the composers.");
+  }
+  redirect(`/studio/catalogue/works/${workId}`);
+}
+
+/** Moves a composer up or down, or removes it (bound per composer). */
+export async function moveWorkComposerAction(workId: string, kind: "up" | "down" | "remove", composerId: string) {
+  await applyComposerChange(workId, { kind, composerId });
+}
+
+/** Adds the composer chosen in the form at the end of the list. */
+export async function addWorkComposerAction(workId: string, formData: FormData) {
+  await applyComposerChange(workId, { kind: "add", composerId: String(formData.get("composerId") ?? "") });
 }
 
 export async function archiveWorkAction(workId: string) {

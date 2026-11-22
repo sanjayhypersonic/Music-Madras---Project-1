@@ -33,4 +33,5 @@ export const EXPECTED_MIGRATIONS: readonly string[] = [
   "20261118100000_upload_pipeline",
   "20261120100000_pipeline_manual_mode",
   "20261121100000_venue_type_indoor_auditorium",
+  "20261122100000_musical_work_composers",
 ];

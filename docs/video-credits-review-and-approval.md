@@ -123,13 +123,16 @@ How the sheets are read (`modules/jobs/videoCreditsApproved.ts`):
 
 What is planned (`modules/jobs/videoCreditsCreate.ts`; the schema mapping is in project register R-31):
 - **Held out.** A video is held out entirely, and listed, when:
-  - any approved work lacks exactly one approved composer (a composer is never invented);
+  - any approved work has no approved composer (a composer is never invented). Several approved composers are no longer a reason (R-36, 2026-11-22): they are co-composers, in sheet order;
   - no work is approved;
   - it has several works and no approved Recording title.
-- **The Recording.** One DRAFT Recording per video, with its works in sheet order (a medley is one Recording). Each work keeps its own composer. An original-script title stays the title; the transliteration and an editor's Latin spelling become alternate titles.
+- **The Recording.** One DRAFT Recording per video, with its works in sheet order (a medley is one Recording). Each work keeps its own composers: the first approved composer is the primary composer (`musical_works.composerId`), the others are co-composers (`musical_work_composers`, by position). An existing work whose composers differ is reported, never changed. An original-script title stays the title; the transliteration and an editor's Latin spelling become alternate titles.
 - **Venue and Performance.** A Venue is planned only with exactly one approved venue and one approved type. Without a Venue there is no Performance, and its choir, conductor and performers go to the sidecar. A Performance needs a Programme (schema), so one Programme per Recording is created, titled with the Recording title.
 - **Dates.** A date is stored only when complete (`YYYY-MM-DD`). A partial date goes to the sidecar.
-- **Sidecar.** Facts with no schema home go to the report's `sidecar` list with their basis and quote, never into a field that would distort them: lyricist, arranger, ensemble, presenter, institution, translator, subtitle, published title, original performer.
+- **Contributors (R-36).** Lyricists, arrangers and translators (an UNMODELLED label starting "TRANSLAT") are linked to the work they belong to (its work title, or the video's only work) in `musical_work_contributors`, each as a Person found by exact normalised name or the approved alias table, else created. A contributor of no planned work goes to the sidecar.
+- **Ensembles (R-36).** An ensemble or orchestra is found or created in `ensembles` and linked to the Performance (`performance_ensembles`); without a Performance it goes to the sidecar.
+- **People (R-36).** Every Composer, Conductor and Artist the tool creates or finds is linked to its Person (exact name or approved alias, else created) when it has none, so one human has one public person page across roles.
+- **Sidecar.** Only facts with no schema home go to the report's `sidecar` list, with their basis and quote: presenter, institution, choreographer, original title, published title and other UNMODELLED facts, plus facts that cannot be placed (a participant with no Performance, a contributor of no planned work, a partial date).
 
 `--execute` (built, not yet run):
 

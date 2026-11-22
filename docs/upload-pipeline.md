@@ -94,7 +94,8 @@ The migration is purely additive; the project's own classifier rates it additive
 |---|---|
 | `youtube_videos.tags`, `youtube_videos.hashtags` (text[], default empty) | The uploader's tags and #hashtags, stored by the sync |
 | `persons` (id, slug, name, biography, archivedAt, audit columns) | One public page per human across roles |
-| `composers.personId`, `conductors.personId`, `artists.personId` (nullable) | Optional link from a role record to its person; never backfilled |
+| `composers.personId`, `conductors.personId`, `artists.personId` (nullable) | Link from a role record to its person: set when the record is created, and by the credits create tool for records it finds (R-36); never backfilled by SQL |
+| `musical_work_composers` (workId, composerId, position) | R-36: every composer of a work in stated order; position 1 is `musical_works.composerId` (migration `20261122100000_musical_work_composers`, with backfill) |
 | `musical_work_contributors` (musicalWorkId, personId, role ARRANGER/LYRICIST/TRANSLATOR) | Arrangers, lyricists and translators of a work |
 | `ensembles` (id, slug, name, description, …), `performance_ensembles` | Orchestras and instrumental groups (choirs stay `choirs`) |
 | `entity_aliases` (entityKind, alias, aliasKey, canonicalName, entityId, source, decidedBy) | Standing decisions that two spellings are one entity |

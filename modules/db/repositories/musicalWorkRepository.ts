@@ -8,7 +8,10 @@ import type { Composer, MusicalWork } from "@prisma/client";
 export interface CreateMusicalWorkInput {
   slug: string;
   title: string;
+  /** The primary composer (position 1). */
   composerId: string;
+  /** R-36: co-composers in stated order (positions 2, 3, …). Duplicates of the primary are ignored. */
+  coComposerIds?: string[];
   alternateTitles?: string[];
   language?: string;
   notes?: string;
@@ -45,21 +48,32 @@ export async function createMusicalWork(input: CreateMusicalWorkInput): Promise<
     throw new DuplicateEntityError("MusicalWork", duplicate);
   }
 
+  const composerIds = [...new Set([input.composerId, ...(input.coComposerIds ?? [])])];
+  if (composerIds.length > 1) {
+    const found = await prisma.composer.count({ where: { id: { in: composerIds } } });
+    if (found !== composerIds.length) throw new Error("A co-composer does not exist.");
+  }
+
   let work: MusicalWork;
   try {
-    work = await prisma.musicalWork.create({
-      data: {
-        slug: input.slug,
-        title: input.title,
-        composerId: input.composerId,
-        alternateTitles: input.alternateTitles ?? [],
-        language: input.language,
-        notes: input.notes,
-        catalogueNumber: input.catalogueNumber,
-        keySignature: input.keySignature,
-        createdById: input.actorId,
-        updatedById: input.actorId,
-      },
+    // R-36: the work and its composer rows (position 1 = the primary composer) are written together.
+    work = await prisma.$transaction(async (tx) => {
+      const created = await tx.musicalWork.create({
+        data: {
+          slug: input.slug,
+          title: input.title,
+          composerId: input.composerId,
+          alternateTitles: input.alternateTitles ?? [],
+          language: input.language,
+          notes: input.notes,
+          catalogueNumber: input.catalogueNumber,
+          keySignature: input.keySignature,
+          createdById: input.actorId,
+          updatedById: input.actorId,
+        },
+      });
+      await tx.musicalWorkComposer.createMany({ data: composerIds.map((composerId, i) => ({ workId: created.id, composerId, position: i + 1 })) });
+      return created;
     });
   } catch (err) {
     if (isUniqueConstraintViolation(err, "slug")) {
@@ -73,7 +87,7 @@ export async function createMusicalWork(input: CreateMusicalWorkInput): Promise<
     action: "MUSICAL_WORK_CREATED",
     entityType: "MusicalWork",
     entityId: work.id,
-    afterSnapshot: work,
+    afterSnapshot: { ...work, composerIds },
   });
 
   return work;
@@ -108,15 +122,17 @@ export function findMusicalWorkDetailForStudio(id: string) {
     where: { id },
     include: {
       composer: true,
+      composerCredits: { include: { composer: true }, orderBy: { position: "asc" } },
       programmeItems: { include: { programme: true }, orderBy: { order: "asc" } },
       recordingRevisionLinks: { include: { revision: { include: { recording: true } } } },
     },
   });
 }
 
+/** Active works this composer composed OR co-composed (R-36), by title. */
 export function listMusicalWorksByComposer(composerId: string): Promise<MusicalWork[]> {
   return prisma.musicalWork.findMany({
-    where: { composerId, archivedAt: null },
+    where: { OR: [{ composerId }, { composerCredits: { some: { composerId } } }], archivedAt: null },
     orderBy: { title: "asc" },
   });
 }
@@ -204,9 +220,13 @@ export async function changeMusicalWorkComposer(id: string, newComposerId: strin
     throw new Error(`Composer ${newComposerId} does not exist.`);
   }
 
-  const updated = await prisma.musicalWork.update({
-    where: { id },
-    data: { composerId: newComposerId, updatedById: actorId },
+  // R-36: the new primary takes position 1; the other co-composers keep their order behind it.
+  const order = [newComposerId, ...(await listMusicalWorkComposerIds(id)).filter((c) => c !== before.composerId && c !== newComposerId)];
+  const updated = await prisma.$transaction(async (tx) => {
+    const work = await tx.musicalWork.update({ where: { id }, data: { composerId: newComposerId, updatedById: actorId } });
+    await tx.musicalWorkComposer.deleteMany({ where: { workId: id } });
+    await tx.musicalWorkComposer.createMany({ data: order.map((composerId, i) => ({ workId: id, composerId, position: i + 1 })) });
+    return work;
   });
 
   await writeAuditLog({
@@ -251,4 +271,44 @@ export async function restoreMusicalWork(id: string, actorId: string): Promise<M
   });
 
   return work;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// R-36: co-composers. musical_work_composers holds every composer of a work in stated order; position 1 is always MusicalWork.composerId.
+
+/** The work's composer ids in stated order (position 1 first). A work with no rows (created before the backfill) reads as its primary alone. */
+export async function listMusicalWorkComposerIds(workId: string): Promise<string[]> {
+  const [work, rows] = await Promise.all([
+    prisma.musicalWork.findUnique({ where: { id: workId }, select: { composerId: true } }),
+    prisma.musicalWorkComposer.findMany({ where: { workId }, orderBy: { position: "asc" }, select: { composerId: true } }),
+  ]);
+  if (!work) return [];
+  const ids = rows.map((r) => r.composerId);
+  return ids.length > 0 && ids[0] === work.composerId ? ids : [work.composerId, ...ids.filter((c) => c !== work.composerId)];
+}
+
+/**
+ * Replaces a work's composers with `composerIds` in that order (Studio: add, remove, reorder). The first becomes the primary composer
+ * (MusicalWork.composerId), so every reader that knows only one composer stays right. Refuses an empty list, an unknown composer, or a new primary
+ * who already has another active work with this title (the same rule as changing the composer). Audited as MUSICAL_WORK_COMPOSERS_SET.
+ */
+export async function setMusicalWorkComposers(workId: string, composerIds: readonly string[], actorId: string): Promise<void> {
+  const order = [...new Set(composerIds.filter(Boolean))];
+  if (order.length === 0) throw new Error("A work needs at least one composer.");
+  const before = await prisma.musicalWork.findUnique({ where: { id: workId } });
+  if (!before) throw new Error(`MusicalWork ${workId} does not exist.`);
+  if ((await prisma.composer.count({ where: { id: { in: order } } })) !== order.length) throw new Error("A composer in the list does not exist.");
+  if (order[0] !== before.composerId) {
+    const clash = await prisma.musicalWork.findMany({ where: { composerId: order[0], archivedAt: null, id: { not: workId } }, select: { title: true } });
+    const duplicate = findExactNormalizedDuplicate(before.title, clash.map((w) => w.title));
+    if (duplicate) throw new DuplicateEntityError("MusicalWork", duplicate);
+  }
+  const previous = await listMusicalWorkComposerIds(workId);
+  await prisma.$transaction(async (tx) => {
+    if (order[0] !== before.composerId) await tx.musicalWork.update({ where: { id: workId }, data: { composerId: order[0], updatedById: actorId } });
+    else await tx.musicalWork.update({ where: { id: workId }, data: { updatedById: actorId } });
+    await tx.musicalWorkComposer.deleteMany({ where: { workId } });
+    await tx.musicalWorkComposer.createMany({ data: order.map((composerId, i) => ({ workId, composerId, position: i + 1 })) });
+  });
+  await writeAuditLog({ actorId, action: "MUSICAL_WORK_COMPOSERS_SET", entityType: "MusicalWork", entityId: workId, beforeSnapshot: { composerIds: previous }, afterSnapshot: { composerIds: order } });
 }

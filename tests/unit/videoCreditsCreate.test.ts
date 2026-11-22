@@ -66,10 +66,11 @@ describe("planning one approved single-work video", () => {
   it("plans a DRAFT Recording, the work with its approved composer, the venue, a dated performance and its participants", () => {
     expect(plan.heldReasons).toEqual([]);
     expect(plan.recording).toMatchObject({ title: "A Fake Carol", plannedSlug: "a-fake-carol", slug: { year: "2025" } });
-    expect(plan.works).toEqual([{ title: "A Fake Carol", alternateTitles: [], basis: "2 stated in description", composer: { name: "Ann Example", basis: "2 stated in description", sheetRow: 2 }, sheetRow: 1 }]);
+    expect(plan.works).toEqual([{ title: "A Fake Carol", alternateTitles: [], basis: "2 stated in description", composers: [{ name: "Ann Example", basis: "2 stated in description", sheetRow: 2 }], contributors: [{ name: "Cara Placeholder", basis: "2 stated in description", sheetRow: 10, role: "ARRANGER" }], sheetRow: 1 }]);
     expect(plan.programme).toEqual({ title: "A Fake Carol" });
     expect(plan.performance).toEqual({ date: "2025-12-12" });
     expect(plan.choirs.map((c) => c.name)).toEqual(["Fake Chapel Choir"]);
+    expect(plan.ensembles.map((c) => c.name)).toEqual(["Fake Orchestra"]);
     expect(plan.performers).toEqual([]); // no decision: ignored
     expect(plan.ignored).toBe(1);
   });
@@ -79,8 +80,8 @@ describe("planning one approved single-work video", () => {
     expect(plan.conductors).toEqual([{ name: "Ben Sample", basis: "4 editor-supplied", sheetRow: 5 }]);
   });
 
-  it("sends facts with no schema home to the sidecar instead of distorting a field", () => {
-    expect(plan.sidecar.map((s) => `${s.label}:${s.name}`).sort()).toEqual(["ARRANGER:Cara Placeholder", "ENSEMBLE:Fake Orchestra", "INSTITUTION:Fake College"]);
+  it("sends only facts with no schema home to the sidecar (the arranger and the orchestra now have homes)", () => {
+    expect(plan.sidecar.map((s) => `${s.label}:${s.name}`).sort()).toEqual(["INSTITUTION:Fake College"]);
   });
 });
 
@@ -156,7 +157,7 @@ describe("medleys, missing composers and original-script titles", () => {
     const plan = planVideo(resolveApprovedFacts({ creditsCsv: creditsCsv(rows), namesCsv: medleyNames, videosCsv }).videos[0]);
     expect(plan.heldReasons).toEqual([]);
     expect(plan.recording).toMatchObject({ title: "Fake Carol Medley", plannedSlug: "fake-carol-medley" });
-    expect(plan.works.map((w) => `${w.title} / ${w.composer.name}`)).toEqual(["First Fake Carol / Gus Maker", "Second Fake Carol / Eve Writer"]);
+    expect(plan.works.map((w) => `${w.title} / ${w.composers.map((c) => c.name).join(", ")}`)).toEqual(["First Fake Carol / Gus Maker", "Second Fake Carol / Eve Writer"]);
   });
 
   it("keeps an original-script title as the title and its transliteration as an alternate title and slug source", () => {

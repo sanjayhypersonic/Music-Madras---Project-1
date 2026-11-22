@@ -1,7 +1,8 @@
 import { findExactNormalizedDuplicate } from "../mmke/duplicate-detection/detectDuplicateName";
 import { resolveCanonicalSlug } from "../mmke/slug/canonicalSlug";
 import { createComposer, listActiveComposers } from "../db/repositories/composerRepository";
-import { createMusicalWork, listMusicalWorksByComposer } from "../db/repositories/musicalWorkRepository";
+import { createMusicalWork, listMusicalWorkComposerIds, listMusicalWorksByComposer } from "../db/repositories/musicalWorkRepository";
+import { addEnsembleToPerformance, addWorkContributor, ensureEnsemble, ensurePerson, linkRoleToPerson } from "../db/repositories/peopleRepository";
 import { createChoir, listActiveChoirs } from "../db/repositories/choirRepository";
 import { createConductor, listActiveConductors } from "../db/repositories/conductorRepository";
 import { createArtist, listActiveArtists } from "../db/repositories/artistRepository";
@@ -26,6 +27,11 @@ import type { VideoCreatePlan } from "./videoCreditsCreate";
 //     the canonical slug rule; an existing record is never modified (a differing venue type or missing alternate title is reported, not changed);
 //   - only EMPTY draft slots are filled: title, works (in plan order), performance; participants are added only to a Performance created in this
 //     same run, through the copy-on-write participant service;
+//   - R-36: a work's composers are written in stated order (the first is MusicalWork.composerId; co-composers go to musical_work_composers); an
+//     EXISTING work whose composers differ is reported, never changed. Lyricists, arrangers and translators are linked to the work as
+//     contributors (musical_work_contributors), each a Person found by exact normalised name or the approved alias table, else created; links
+//     are additive and idempotent. Ensembles and orchestras are found or created and linked to the Performance made in this run. Every Composer,
+//     Conductor and Artist the run creates or finds is linked to its Person when it has none (one human, one person page across roles);
 //   - it never publishes, never creates a video page, exposure approval or review, and never writes anything YouTube-controlled.
 // Idempotent: a second run finds everything and reports it EXISTING. A failure stops the run; what was made is a valid draft the next run completes.
 
@@ -46,6 +52,12 @@ export interface ExecuteDeps {
   createComposer: typeof createComposer;
   listMusicalWorksByComposer: typeof listMusicalWorksByComposer;
   createMusicalWork: typeof createMusicalWork;
+  listMusicalWorkComposerIds: typeof listMusicalWorkComposerIds;
+  ensurePerson: (name: string, actorId: string) => Promise<{ person: { id: string; name: string; slug: string }; created: boolean }>;
+  linkRoleToPerson: (kind: "COMPOSER" | "CONDUCTOR" | "ARTIST", record: { id: string; name: string; personId: string | null }, actorId: string) => Promise<{ personId: string | null; personCreated: boolean; linked: boolean }>;
+  addWorkContributor: (input: { musicalWorkId: string; personId: string; role: "LYRICIST" | "ARRANGER" | "TRANSLATOR"; actorId: string }) => Promise<boolean>;
+  ensureEnsemble: (name: string, actorId: string) => Promise<{ ensemble: { id: string; name: string; slug: string }; created: boolean }>;
+  addEnsembleToPerformance: typeof addEnsembleToPerformance;
   listActiveChoirs: typeof listActiveChoirs;
   createChoir: typeof createChoir;
   listActiveConductors: typeof listActiveConductors;
@@ -77,6 +89,12 @@ export const defaultExecuteDeps: ExecuteDeps = {
   createComposer,
   listMusicalWorksByComposer,
   createMusicalWork,
+  listMusicalWorkComposerIds,
+  ensurePerson: (name, actorId) => ensurePerson(name, actorId),
+  linkRoleToPerson: (kind, record, actorId) => linkRoleToPerson(kind, record, actorId),
+  addWorkContributor: (input) => addWorkContributor(input),
+  ensureEnsemble: (name, actorId) => ensureEnsemble(name, actorId),
+  addEnsembleToPerformance,
   listActiveChoirs,
   createChoir,
   listActiveConductors,
@@ -148,6 +166,12 @@ export async function executeCreditsPlans(
     return created;
   }
 
+  /** R-36: one human, one person page: links a role record (created or found) to its Person when it has none. */
+  async function linkPerson(vid: string, kind: "COMPOSER" | "CONDUCTOR" | "ARTIST", role: { id: string; name: string; personId?: string | null }) {
+    const link = await d.linkRoleToPerson(kind, { id: role.id, name: role.name, personId: role.personId ?? null }, actorId);
+    if (link.linked) record({ youtubeVideoId: vid, entity: `${kind === "COMPOSER" ? "Composer" : kind === "CONDUCTOR" ? "Conductor" : "Artist"}.person`, outcome: "FILLED", name: role.name, detail: link.personCreated ? "new person page" : "existing person page" });
+  }
+
   for (const plan of ready) {
     const vid = plan.youtubeVideoId;
     const stored = states.get(vid);
@@ -170,14 +194,36 @@ export async function executeCreditsPlans(
     // Catalogue.
     const workIds: string[] = [];
     for (const w of plan.works) {
-      const composer = await findOrCreate(vid, "Composer", w.composer.name, w.composer.basis, d.listActiveComposers, (c) => c.name, async () =>
-        d.createComposer({ slug: await slug("composer", w.composer.name, "composer"), name: w.composer.name, actorId })
+      // R-36: every composer in stated order; the first is the primary composer.
+      const composers: Array<{ id: string; name: string }> = [];
+      for (const pc of w.composers) {
+        const composer = await findOrCreate(vid, "Composer", pc.name, pc.basis, d.listActiveComposers, (c) => c.name, async () =>
+          d.createComposer({ slug: await slug("composer", pc.name, "composer"), name: pc.name, actorId })
+        );
+        await linkPerson(vid, "COMPOSER", composer);
+        composers.push(composer);
+      }
+      const [primary, ...coComposers] = composers;
+      const work = await findOrCreate(vid, "MusicalWork", w.title, w.basis, () => d.listMusicalWorksByComposer(primary.id), (x) => x.title, async () =>
+        d.createMusicalWork({ slug: await slug("musicalWork", w.title, "work", { transliteration: w.alternateTitles[0] ?? null }), title: w.title, composerId: primary.id, coComposerIds: coComposers.map((c) => c.id), alternateTitles: w.alternateTitles, actorId })
       );
-      const work = await findOrCreate(vid, "MusicalWork", w.title, w.basis, () => d.listMusicalWorksByComposer(composer.id), (x) => x.title, async () =>
-        d.createMusicalWork({ slug: await slug("musicalWork", w.title, "work", { transliteration: w.alternateTitles[0] ?? null }), title: w.title, composerId: composer.id, alternateTitles: w.alternateTitles, actorId })
-      );
+      const workExisted = steps.at(-1)?.outcome === "EXISTING";
       const missingAlternates = w.alternateTitles.filter((a) => !work.alternateTitles.includes(a));
-      if (missingAlternates.length > 0 && steps.at(-1)?.outcome === "EXISTING") record({ youtubeVideoId: vid, entity: "MusicalWork.alternateTitles", outcome: "REPORTED", name: work.title, detail: `not added to the existing work (an existing record is never modified): ${missingAlternates.join(", ")}` });
+      if (missingAlternates.length > 0 && workExisted) record({ youtubeVideoId: vid, entity: "MusicalWork.alternateTitles", outcome: "REPORTED", name: work.title, detail: `not added to the existing work (an existing record is never modified): ${missingAlternates.join(", ")}` });
+      if (workExisted) {
+        const stored = await d.listMusicalWorkComposerIds(work.id);
+        const wanted = composers.map((c) => c.id);
+        if (stored.join("\u0000") !== wanted.join("\u0000")) record({ youtubeVideoId: vid, entity: "MusicalWork.composers", outcome: "REPORTED", name: work.title, detail: `the existing work credits ${stored.length} composer(s) in another order or set; the sheet says ${composers.map((c) => c.name).join(", ")}. Not changed (Studio → the work → Composers).` });
+      } else if (coComposers.length > 0) {
+        record({ youtubeVideoId: vid, entity: "MusicalWork.composers", outcome: "FILLED", name: work.title, detail: `${composers.map((c, i) => `${i + 1}. ${c.name}`).join("; ")}` });
+      }
+      // R-36: lyricists, arrangers and translators: a Person each, linked to the work (additive and idempotent).
+      for (const c of w.contributors) {
+        const { person, created } = await d.ensurePerson(c.name, actorId);
+        record({ youtubeVideoId: vid, entity: "Person", outcome: created ? "CREATED" : "EXISTING", name: person.name, basis: c.basis });
+        const linked = await d.addWorkContributor({ musicalWorkId: work.id, personId: person.id, role: c.role, actorId });
+        record({ youtubeVideoId: vid, entity: `MusicalWorkContributor.${c.role}`, outcome: linked ? "FILLED" : "EXISTING", name: `${person.name} → ${work.title}`, basis: c.basis });
+      }
       workIds.push(work.id);
     }
     let venueId: string | null = null;
@@ -256,12 +302,19 @@ export async function executeCreditsPlans(
       const choir = await findOrCreate(vid, "Choir", c.name, c.basis, d.listActiveChoirs, (x) => x.name, async () => d.createChoir({ slug: await slug("choir", c.name, "choir"), name: c.name, actorId }));
       await participant("PerformanceChoir", choir.name, c.basis, (tx, pid) => d.addChoirToPerformance(pid, choir.id, actorId, tx));
     }
+    for (const e of plan.ensembles ?? []) {
+      const { ensemble, created } = await d.ensureEnsemble(e.name, actorId);
+      record({ youtubeVideoId: vid, entity: "Ensemble", outcome: created ? "CREATED" : "EXISTING", name: ensemble.name, basis: e.basis });
+      await participant("PerformanceEnsemble", ensemble.name, e.basis, (tx, pid) => d.addEnsembleToPerformance(pid, ensemble.id, actorId, tx));
+    }
     for (const c of plan.conductors) {
       const conductor = await findOrCreate(vid, "Conductor", c.name, c.basis, d.listActiveConductors, (x) => x.name, async () => d.createConductor({ slug: await slug("conductor", c.name, "conductor"), name: c.name, actorId }));
+      await linkPerson(vid, "CONDUCTOR", conductor);
       await participant("PerformanceConductor", conductor.name, c.basis, (tx, pid) => d.addConductorToPerformance(pid, conductor.id, actorId, tx));
     }
     for (const p of plan.performers) {
       const artist = await findOrCreate(vid, "Artist", p.name, p.basis, d.listActiveArtists, (x) => x.name, async () => d.createArtist({ slug: await slug("artist", p.name, "artist"), name: p.name, actorId }));
+      await linkPerson(vid, "ARTIST", artist);
       await participant("PerformancePerformer", artist.name, p.basis, (tx, pid) => d.addPerformerToPerformance(pid, artist.id, p.role ?? undefined, actorId, tx));
     }
   }

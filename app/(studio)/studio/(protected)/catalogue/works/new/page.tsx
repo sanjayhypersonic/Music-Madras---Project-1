@@ -32,7 +32,7 @@ export default async function NewMusicalWorkPage({ searchParams }: { searchParam
       ) : (
         <form action={createWorkAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}>
           <label>
-            Composer
+            Composer (primary)
             <select name="composerId" required style={{ display: "block", width: "100%" }}>
               {composers.map((composer) => (
                 <option key={composer.id} value={composer.id}>
@@ -41,6 +41,19 @@ export default async function NewMusicalWorkPage({ searchParams }: { searchParam
               ))}
             </select>
           </label>
+          {[2, 3, 4].map((position) => (
+            <label key={position}>
+              Co-composer {position} (optional)
+              <select name="coComposerId" defaultValue="" style={{ display: "block", width: "100%" }}>
+                <option value="">—</option>
+                {composers.map((composer) => (
+                  <option key={composer.id} value={composer.id}>
+                    {composer.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
           <label>
             Title
             <input name="title" required style={{ display: "block", width: "100%" }} />

@@ -8,6 +8,8 @@
 // resolveRelatedContent core — this contract just shapes the result
 // differently. Pure types only, Prisma-free (ADR §3 boundary rule).
 
+import type { WorkContributor } from "./workCredits";
+
 export interface WorkPageComposer {
   id: string;
   slug: string;
@@ -74,7 +76,12 @@ export interface WorkPageData {
   notes: string | null;
   catalogueNumber: string | null;
   keySignature: string | null;
+  /** The primary composer (MusicalWork.composerId). */
   composer: WorkPageComposer;
+  /** R-36: every composer in stated order, the primary first. */
+  composers: WorkPageComposer[];
+  /** R-36: lyricists, arrangers and translators, each linking to their person page. */
+  contributors: WorkContributor[];
 
   programmes: WorkPageProgramme[];
   performances: WorkPagePerformance[];

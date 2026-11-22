@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { isPlausibleSlug } from "../../../../../../../modules/mmke/slug/isPlausibleSlug";
 import { getCurrentStudioSession } from "../../../../../../../modules/auth/authService";
 import { can } from "../../../../../../../modules/auth/policy";
-import { listActiveComposers, findComposerById } from "../../../../../../../modules/db/repositories/composerRepository";
+import { listActiveComposers } from "../../../../../../../modules/db/repositories/composerRepository";
 import { findMusicalWorkDetailForStudio } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { listSources, listSourcesForEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { listRightsForEntity, listRightsInformation } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
@@ -16,6 +16,8 @@ import {
   detachSourceAction,
   restoreWorkAction,
   updateWorkAction,
+  addWorkComposerAction,
+  moveWorkComposerAction,
 } from "./actions";
 import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
 
@@ -46,11 +48,9 @@ export default async function MusicalWorkDetailPage({
 
   const canWrite = can(session.user.role, "CATALOGUE_WRITE");
   const composers = await listActiveComposers();
-  // The work's current composer may itself be archived — always include
-  // it in the picker's options so saving the form without changing the
-  // composer doesn't silently reassign it to whatever is first in the list.
-  const currentComposerStillActive = composers.some((c) => c.id === work.composerId);
-  const currentComposer = currentComposerStillActive ? null : await findComposerById(work.composerId);
+  // R-36: the work's composers in stated order (position 1 is the primary). A work created before the backfill has no rows: its primary stands alone.
+  const credited = work.composerCredits.length > 0 ? work.composerCredits.map((c) => c.composer) : [work.composer];
+  const addable = composers.filter((c) => !credited.some((x) => x.id === c.id));
   const [allSources, attachedSources, allRights, attachedRights] = await Promise.all([
     listSources(),
     listSourcesForEntity("WORK", work.id),
@@ -73,8 +73,55 @@ export default async function MusicalWorkDetailPage({
         <br />
         Slug: <code>{work.slug}</code>
         <br />
-        Composer: <Link href={`/studio/catalogue/composers/${work.composer.id}`}>{work.composer.name}</Link>
+        {credited.length > 1 ? "Composers" : "Composer"}:{" "}
+        {credited.map((c, i) => (
+          <span key={c.id}>
+            {i > 0 && ", "}
+            <Link href={`/studio/catalogue/composers/${c.id}`}>{c.name}</Link>
+          </span>
+        ))}
       </p>
+
+      <h2>Composers ({credited.length})</h2>
+      <p className="studio-muted">In stated order. The first is the primary composer; co-composers follow. Every composer&apos;s public page lists this work.</p>
+      <ol>
+        {credited.map((c, i) => (
+          <li key={c.id}>
+            <Link href={`/studio/catalogue/composers/${c.id}`}>{c.name}</Link>
+            {c.archivedAt ? " (archived)" : ""}
+            {i === 0 ? " — primary" : ""}
+            {canWrite && (
+              <span style={{ display: "inline-flex", gap: "0.25rem", marginLeft: "0.5rem" }}>
+                <form action={moveWorkComposerAction.bind(null, work.id, "up", c.id)}>
+                  <button type="submit" disabled={i === 0} aria-label={`Move ${c.name} up`}>↑</button>
+                </form>
+                <form action={moveWorkComposerAction.bind(null, work.id, "down", c.id)}>
+                  <button type="submit" disabled={i === credited.length - 1} aria-label={`Move ${c.name} down`}>↓</button>
+                </form>
+                <form action={moveWorkComposerAction.bind(null, work.id, "remove", c.id)}>
+                  <button type="submit" className="studio-button--danger" disabled={credited.length === 1}>Remove</button>
+                </form>
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      {canWrite && addable.length > 0 && (
+        <form action={addWorkComposerAction.bind(null, work.id)} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", maxWidth: "32rem" }}>
+          <label>
+            Add a composer
+            <select name="composerId" required defaultValue="" style={{ display: "block", width: "100%" }}>
+              <option value="" disabled>Choose…</option>
+              {addable.map((composer) => (
+                <option key={composer.id} value={composer.id}>
+                  {composer.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit">Add</button>
+        </form>
+      )}
 
       <h2>Edit</h2>
       {canWrite ? (
@@ -82,19 +129,6 @@ export default async function MusicalWorkDetailPage({
           action={updateWorkAction.bind(null, work.id)}
           style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "24rem" }}
         >
-          <label>
-            Composer
-            <select name="composerId" required defaultValue={work.composerId} style={{ display: "block", width: "100%" }}>
-              {currentComposer && (
-                <option value={currentComposer.id}>{currentComposer.name} (archived)</option>
-              )}
-              {composers.map((composer) => (
-                <option key={composer.id} value={composer.id}>
-                  {composer.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <label>
             Title
             <input name="title" required defaultValue={work.title} style={{ display: "block", width: "100%" }} />

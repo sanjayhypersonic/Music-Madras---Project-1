@@ -1,3 +1,4 @@
+import { linkRoleToPerson } from "./peopleRepository";
 import { prisma } from "../client";
 import { writeAuditLog } from "../../audit/writeAuditLog";
 import { DuplicateEntityError, findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
@@ -64,7 +65,9 @@ export async function createComposer(input: CreateComposerInput): Promise<Compos
     afterSnapshot: composer,
   });
 
-  return composer;
+  // R-36: one human, one person page: the new record is linked to its Person (exact name or approved alias, else created).
+  const person = await linkRoleToPerson("COMPOSER", composer, input.actorId);
+  return person.personId ? { ...composer, personId: person.personId } : composer;
 }
 
 export function findComposerById(id: string): Promise<Composer | null> {

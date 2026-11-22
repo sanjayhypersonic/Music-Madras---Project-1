@@ -384,9 +384,11 @@ model Composer {
   updatedBy StudioUser @relation("ComposerUpdatedBy", fields: [updatedById], references: [id])
 
   works          MusicalWork[]
+  // R-36: every work this composer composed or co-composed (MusicalWork.composerId is the primary composer only).
+  workCredits    MusicalWorkComposer[]
   // R-34: the human this composer is (see Conductor.personId).
   personId       String?
-  person         Person?         @relation(fields: [personId], references: [id], onDelete: SetNull)
+  person         Person?               @relation(fields: [personId], references: [id], onDelete: SetNull)
   mediaResources MediaResource[]
 
   @@index([archivedAt])
@@ -419,6 +421,8 @@ model MusicalWork {
   programmeItems         ProgrammeItem[]
   // R-34: arrangers, lyricists and translators of this work (the composer stays MusicalWork.composerId).
   contributors           MusicalWorkContributor[]
+  // R-36: every composer of this work in stated order (position 1 = composerId, the primary composer, kept in step by the repository).
+  composerCredits        MusicalWorkComposer[]
   recordingRevisionLinks RecordingRevisionWork[]
   sheetMusicRequests     SheetMusicRequest[]
   learningGuideLinks     LearningGuideWork[]
@@ -2719,6 +2723,23 @@ model Person {
 
   @@index([archivedAt])
   @@map("persons")
+}
+
+// R-36: the composers of a work in stated order. Position 1 is always MusicalWork.composerId (the primary composer); co-composers follow.
+// One row per work and composer. Written only through musicalWorkRepository (createMusicalWork, setMusicalWorkComposers).
+model MusicalWorkComposer {
+  workId     String
+  composerId String
+  position   Int
+  createdAt  DateTime @default(now())
+
+  work     MusicalWork @relation(fields: [workId], references: [id], onDelete: Cascade)
+  composer Composer    @relation(fields: [composerId], references: [id], onDelete: Restrict)
+
+  @@id([workId, composerId])
+  @@index([composerId])
+  @@index([workId, position])
+  @@map("musical_work_composers")
 }
 
 model MusicalWorkContributor {
