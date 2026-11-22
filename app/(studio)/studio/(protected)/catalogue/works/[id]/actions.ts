@@ -12,6 +12,7 @@ import {
   updateMusicalWork,
 } from "../../../../../../../modules/db/repositories/musicalWorkRepository";
 import { changeComposerOrder, type ComposerOrderChange } from "../../../../../../../modules/mmke/workPage/workCredits";
+import { alternateTitlesProblem, parseAlternateTitles } from "../../../../../../../modules/mmke/workPage/alternateTitles";
 import { attachSourceToEntity, detachSourceFromEntity } from "../../../../../../../modules/db/repositories/sourceRepository";
 import { attachRightsInformationToEntity, detachRightsInformationFromEntity } from "../../../../../../../modules/db/repositories/rightsInformationRepository";
 
@@ -35,8 +36,14 @@ export async function updateWorkAction(workId: string, formData: FormData) {
     errorRedirect(workId, "This musical work no longer exists.");
   }
 
+  // R-37: saving rewrites the whole list (one title per line); the audit entry (MUSICAL_WORK_UPDATED) records the list before and after.
+  const alternateTitles = parseAlternateTitles(String(formData.get("alternateTitles") ?? ""));
+  const alternateProblem = alternateTitlesProblem(alternateTitles);
+  if (alternateProblem) errorRedirect(workId, alternateProblem);
+
   await updateMusicalWork(workId, {
     title,
+    alternateTitles,
     catalogueNumber: String(formData.get("catalogueNumber") ?? "") || null,
     keySignature: String(formData.get("keySignature") ?? "") || null,
     language: String(formData.get("language") ?? "") || null,

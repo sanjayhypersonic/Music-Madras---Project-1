@@ -54,6 +54,8 @@ The same fact often appears twice: in a sentence ("Performed by the Bishop Heber
 - Public pages load Noto Sans Tamil and Noto Serif Tamil after the Latin fonts (2026-11-17), so Tamil titles render in a matching face.
 - Slugs keep only Latin letters. Records made by `npm run ai:video-credits-create` get their slug from the transliteration when the title is non-Latin, so *பாலன் பிறந்த ராவில்* becomes `paalan-pirandha-raavil` (rule in `modules/mmke/slug/canonicalSlug.ts`; project register R-31). Studio's create forms still slug a Tamil-only name to an empty string.
 - Archive search finds a work, and a published Recording of it, by any part of an alternate title, ignoring letter case ("pirandha", "dingiri dingale").
+- **Editing them (R-37, 2026-11-22).** Studio → Musical Works → new or edit: the "Alternate titles" box takes one title per line. Each line is trimmed, blank lines are dropped, and a title already listed (ignoring letter case) is dropped, keeping the first spelling typed; original-script titles and Latin transliterations are kept exactly as typed. Saving rewrites the whole list, and the audit log records it before and after (MUSICAL_WORK_UPDATED). At most 30 titles of at most 300 characters each. The work's Studio page lists them above the Edit form.
+- **Where they appear.** The public work page lists them as "Also known as", and its JSON-LD carries them as `alternateName` (an array, only when there are any).
 
 ## 6. Medleys
 

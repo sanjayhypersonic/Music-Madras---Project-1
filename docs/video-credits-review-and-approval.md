@@ -143,7 +143,7 @@ STAGING_DATABASE_URL=<direct url of the STAGING database> npm run ai:video-credi
 - **Target guard.** Same as the staging content loader: STAGING_DATABASE_URL only, a direct Neon host, "staging" in the database name, `--confirm-host` typed exactly, not a configured real database, NODE_ENV not production, all migrations applied.
 - **Author.** Records are created by the non-login import actor.
 - **Videos.** A video must be stored as public and OBSERVED.
-- **Existing records.** Catalogue records are matched by exact normalised name and created only when absent. An existing record is never modified; a differing venue type or a missing alternate title is reported. Slugs follow the new-record rule (`modules/mmke/slug/canonicalSlug.ts`).
+- **Existing records.** Catalogue records are matched by exact normalised name and created only when absent. An existing record is never modified; a differing venue type or a missing alternate title is reported (an editor adds it in Studio → the work → "Alternate titles", R-37). Slugs follow the new-record rule (`modules/mmke/slug/canonicalSlug.ts`).
 - **Editor-changed Recordings.** A linked Recording is touched only while it is DRAFT and its draft was last changed by the import actor. Once an editor has saved anything, it is left alone.
 - **Empty slots only.** Only empty draft slots are filled: title, works, performance. Participants are added only to a Performance created in the same run, through the copy-on-write participant service.
 - **Never.** It never publishes, never creates a video page or exposure approval, and never writes anything YouTube-controlled. A re-run creates nothing twice. Each step is printed as it happens and saved in `credits-create-execute-<time>.json`.

@@ -227,7 +227,7 @@ export default async function WorkPage({ params }: { params: Promise<{ slug: str
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: serializeJsonLd(workJsonLd({ title: work.title, url: `${SITE_ORIGIN}/works/${work.slug}`, composers: work.composers, contributors: work.contributors })),
+          __html: serializeJsonLd(workJsonLd({ title: work.title, url: `${SITE_ORIGIN}/works/${work.slug}`, composers: work.composers, contributors: work.contributors, alternateTitles: work.alternateTitles })),
         }}
       />
     </article>

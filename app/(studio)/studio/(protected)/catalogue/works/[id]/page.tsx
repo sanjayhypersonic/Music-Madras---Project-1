@@ -20,6 +20,7 @@ import {
   moveWorkComposerAction,
 } from "./actions";
 import { decodeMessage } from "../../../../../../../modules/studio/decodeMessage";
+import { formatAlternateTitles } from "../../../../../../../modules/mmke/workPage/alternateTitles";
 
 // Phase 6G-4C — the Musical Work editorial management view. No public
 // /works/[slug] route exists yet (deliberately deferred, per 6G-4A/4B),
@@ -123,6 +124,17 @@ export default async function MusicalWorkDetailPage({
         </form>
       )}
 
+      <h2>Alternate titles ({work.alternateTitles.length})</h2>
+      {work.alternateTitles.length > 0 ? (
+        <ul>
+          {work.alternateTitles.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="studio-empty">No alternate titles. Add an original-script title or a transliteration in the form below, one per line.</p>
+      )}
+
       <h2>Edit</h2>
       {canWrite ? (
         <form
@@ -132,6 +144,10 @@ export default async function MusicalWorkDetailPage({
           <label>
             Title
             <input name="title" required defaultValue={work.title} style={{ display: "block", width: "100%" }} />
+          </label>
+          <label>
+            Alternate titles (one per line: an original-script title, a transliteration, another known title)
+            <textarea name="alternateTitles" rows={4} defaultValue={formatAlternateTitles(work.alternateTitles)} style={{ display: "block", width: "100%" }} />
           </label>
           <label>
             Catalogue number

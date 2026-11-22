@@ -27,6 +27,8 @@ import type { VideoCreatePlan } from "./videoCreditsCreate";
 //     the canonical slug rule; an existing record is never modified (a differing venue type or missing alternate title is reported, not changed);
 //   - only EMPTY draft slots are filled: title, works (in plan order), performance; participants are added only to a Performance created in this
 //     same run, through the copy-on-write participant service;
+//   - R-36: when the Recording already has a Performance, its participants are left alone, but the plan's conductors and performers are still
+//     FOUND by exact normalised name and linked to their Person (nothing is created, added or changed);
 //   - R-36: a work's composers are written in stated order (the first is MusicalWork.composerId; co-composers go to musical_work_composers); an
 //     EXISTING work whose composers differ is reported, never changed. Lyricists, arrangers and translators are linked to the work as
 //     contributors (musical_work_contributors), each a Person found by exact normalised name or the approved alias table, else created; links
@@ -172,6 +174,20 @@ export async function executeCreditsPlans(
     if (link.linked) record({ youtubeVideoId: vid, entity: `${kind === "COMPOSER" ? "Composer" : kind === "CONDUCTOR" ? "Conductor" : "Artist"}.person`, outcome: "FILLED", name: role.name, detail: link.personCreated ? "new person page" : "existing person page" });
   }
 
+  /** R-36: an EXISTING conductor or artist record, found by exact normalised name only (nothing is created or changed), linked to its Person. */
+  async function linkExistingRole(vid: string, kind: "CONDUCTOR" | "ARTIST", name: string, basis: string, list: () => Promise<Array<{ id: string; name: string; personId?: string | null }>>) {
+    const entity = kind === "CONDUCTOR" ? "Conductor" : "Artist";
+    const rows = await list();
+    const match = findExactNormalizedDuplicate(name, rows.map((r) => r.name));
+    const found = match ? rows.find((r) => r.name === match) : undefined;
+    if (!found) {
+      record({ youtubeVideoId: vid, entity, outcome: "REPORTED", name, basis, detail: "no existing record with this name; not created (the Performance already exists, so participants are left to the editor)" });
+      return;
+    }
+    record({ youtubeVideoId: vid, entity, outcome: "EXISTING", name: found.name, basis, detail: "found to link its person; the Performance is unchanged" });
+    await linkPerson(vid, kind, found);
+  }
+
   for (const plan of ready) {
     const vid = plan.youtubeVideoId;
     const stored = states.get(vid);
@@ -275,6 +291,10 @@ export async function executeCreditsPlans(
     state = (await d.getCreditsDraftState(recordingId)) ?? state;
     if (state.performanceId !== null) {
       record({ youtubeVideoId: vid, entity: "Performance", outcome: "EXISTING", name: recordingSlug, detail: "participants are left to the editor (only a Performance made in this run gets them)" });
+      // R-36: the people are still linked. Each conductor and performer of the plan is FOUND by exact normalised name (never created, never
+      // added to the Performance, never changed) and linked to its Person when it has none, so one human keeps one person page across roles.
+      for (const c of plan.conductors) await linkExistingRole(vid, "CONDUCTOR", c.name, c.basis, d.listActiveConductors);
+      for (const p of plan.performers) await linkExistingRole(vid, "ARTIST", p.name, p.basis, d.listActiveArtists);
       continue;
     }
     let programme = await d.findReusableImportProgramme(plan.programme.title, actorId, workIds);

@@ -353,3 +353,55 @@ describe("work credits, people and Studio ordering rules", () => {
     expect(matchPerson("Alan Samuel", persons, aliases)).toEqual({ kind: "new", name: "Alan Samuel", viaAlias: false });
   });
 });
+
+describe("a rerun on a Recording whose Performance already exists", () => {
+  it("still finds the conductor and performer records and links each to its Person, adding no participant and creating no role record", async () => {
+    const cat = new FakeCatalogue();
+    const recordingByVideo = new Map<string, string>();
+    const base = cat.deps() as unknown as Record<string, (...args: never[]) => Promise<unknown>>;
+    const remember = {
+      createRecordingFromYouTubeVideo: async (input: { youtubeVideoId: string; slugSource: { title: string } }) => {
+        const result = (await (base.createRecordingFromYouTubeVideo as unknown as (i: typeof input) => Promise<{ ok: true; recording: { id: string; slug: string } }>)(input));
+        recordingByVideo.set(input.youtubeVideoId, result.recording.id);
+        return result;
+      },
+    };
+    // First run as it happened on staging before R-36: the records are created, but no role record is linked to a person.
+    await executeCreditsPlans([planVideo(lullaby)], { ...cat.deps(), ...remember, linkRoleToPerson: async () => ({ personId: null, personCreated: false, linked: false }) } as unknown as Partial<ExecuteDeps>);
+    expect(cat.persons).toHaveLength(0);
+    expect(cat.conductors.map((c) => [c.name, c.personId])).toEqual([["Finley Abraham", null]]);
+    const before = { conductors: cat.conductors.length, artists: cat.artists.length, performanceConductors: cat.performanceConductors.length, performancePerformers: cat.performancePerformers.length };
+
+    // The rerun: the Recording is linked to the video and already has its Performance (last changed by the import actor).
+    const { steps } = await executeCreditsPlans([planVideo(lullaby)], {
+      ...cat.deps(),
+      findRecordingLinkedToYouTubeVideo: async (youtubeVideoRowId: string) => {
+        const recordingId = recordingByVideo.get(youtubeVideoRowId);
+        return recordingId ? { recordingId, slug: cat.recordings.get(recordingId)!.slug } : null;
+      },
+    } as unknown as Partial<ExecuteDeps>);
+
+    expect(steps.find((s) => s.entity === "Performance")).toMatchObject({ outcome: "EXISTING" });
+    expect(steps.filter((s) => s.entity === "Conductor" || s.entity === "Artist").map((s) => `${s.entity}:${s.outcome}:${s.name}`)).toEqual(["Conductor:EXISTING:Finley Abraham", "Artist:EXISTING:Allen Samuel"]);
+    // One person for Finley Abraham across composer and conductor; Allen Samuel linked to Allan Samuel through the approved alias.
+    const finley = cat.persons.filter((p) => p.name === "Finley Abraham");
+    expect(finley).toHaveLength(1);
+    expect(cat.composers.find((c) => c.name === "Finley Abraham")!.personId).toBe(finley[0].id);
+    expect(cat.conductors.find((c) => c.name === "Finley Abraham")!.personId).toBe(finley[0].id);
+    expect(cat.artists.find((a) => a.name === "Allen Samuel")!.personId).toBe(cat.persons.find((p) => p.name === "Allan Samuel")!.id);
+    expect(cat.personPage("Finley Abraham").roles.map((r) => r.role)).toEqual(["Composer", "Conductor"]);
+    // Nothing added to the Performance, no role record created.
+    expect({ conductors: cat.conductors.length, artists: cat.artists.length, performanceConductors: cat.performanceConductors.length, performancePerformers: cat.performancePerformers.length }).toEqual(before);
+    expect(steps.some((s) => s.entity === "PerformanceConductor" || s.entity === "PerformancePerformer")).toBe(false);
+  });
+
+  it("reports, and never creates, a conductor with no existing record", async () => {
+    const cat = new FakeCatalogue();
+    const recordingId = "recording-existing";
+    cat.recordings.set(recordingId, { id: recordingId, slug: "fake-lullaby", title: "Fake Lullaby", workIds: ["work-x"], performanceId: "performance-existing" });
+    const { steps } = await executeCreditsPlans([planVideo(lullaby)], { ...cat.deps(), findRecordingLinkedToYouTubeVideo: async () => ({ recordingId, slug: "fake-lullaby" }) } as unknown as Partial<ExecuteDeps>);
+    expect(steps.find((s) => s.entity === "Conductor")).toMatchObject({ outcome: "REPORTED", name: "Finley Abraham", detail: expect.stringMatching(/not created/) });
+    expect(cat.conductors).toHaveLength(0);
+    expect(cat.artists).toHaveLength(0);
+  });
+});

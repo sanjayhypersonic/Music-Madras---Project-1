@@ -59,6 +59,10 @@ export default async function NewMusicalWorkPage({ searchParams }: { searchParam
             <input name="title" required style={{ display: "block", width: "100%" }} />
           </label>
           <label>
+            Alternate titles (one per line: an original-script title, a transliteration, another known title)
+            <textarea name="alternateTitles" rows={4} style={{ display: "block", width: "100%" }} />
+          </label>
+          <label>
             Catalogue number (e.g. &quot;BWV 232&quot;)
             <input name="catalogueNumber" style={{ display: "block", width: "100%" }} />
           </label>

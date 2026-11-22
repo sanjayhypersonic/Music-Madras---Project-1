@@ -50,9 +50,10 @@ export const listNames = (names: readonly string[]): string => (names.length <= 
 
 /**
  * The work page's MusicComposition JSON-LD: `composer` is ALWAYS an array (one Person per composer, in order); lyricists are `lyricist`;
- * arrangers and translators are `contributor` (schema.org has no arranger property).
+ * arrangers and translators are `contributor` (schema.org has no arranger property); the alternate titles are `alternateName` (an array,
+ * only when there are any, in the stored order and spelling: original script and transliterations alike).
  */
-export function workJsonLd(input: { title: string; url: string; composers: readonly CreditedEntity[]; contributors?: readonly WorkContributor[] }): Record<string, unknown> {
+export function workJsonLd(input: { title: string; url: string; composers: readonly CreditedEntity[]; contributors?: readonly WorkContributor[]; alternateTitles?: readonly string[] }): Record<string, unknown> {
   const person = (p: CreditedEntity) => ({ "@type": "Person", name: p.name });
   const lyricists = (input.contributors ?? []).filter((c) => c.role === "LYRICIST").map((c) => person(c.person));
   const others = (input.contributors ?? []).filter((c) => c.role !== "LYRICIST").map((c) => person(c.person));
@@ -60,6 +61,7 @@ export function workJsonLd(input: { title: string; url: string; composers: reado
     "@context": "https://schema.org",
     "@type": "MusicComposition",
     name: input.title,
+    ...((input.alternateTitles ?? []).length ? { alternateName: [...input.alternateTitles!] } : {}),
     url: input.url,
     composer: input.composers.map(person),
     ...(lyricists.length ? { lyricist: lyricists } : {}),
