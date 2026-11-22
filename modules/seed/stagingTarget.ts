@@ -5,8 +5,13 @@ import { parseBackfillDatabaseUrl, parseStrictBackfillUrl, type ParsedDatabaseTa
 //
 //   1. The target comes ONLY from STAGING_DATABASE_URL. There is no fallback to DATABASE_URL, DIRECT_URL or anything else, ever.
 //   2. The environment is not a production one (NODE_ENV).
-//   3. The URL has the strict form postgresql://user[:password]@host:port/database (no query string, fragment or missing port, so the driver can never be steered
-//      somewhere other than what was validated). The loader builds the connection from these validated fields, never from the raw string.
+//   3. The URL has the strict form postgresql://user[:password]@host:port/database, so the driver can never be steered somewhere other than what was
+//      validated. The loader builds the connection from these validated fields, never from the raw string. Two allowances, so the address Neon's
+//      console gives can be used as it is (normaliseStagingUrl, below; the backfill's own guard stays fully strict):
+//        - a query string is accepted only when EVERY setting in it is sslmode (require or verify-full) or channel_binding; anything else (host=,
+//          port=, options=, ...) is refused as before. The accepted settings are then dropped: the built connection sets its own sslmode=require;
+//        - a missing port is taken as 5432 (Neon's port), written explicitly, so the driver never takes it from PGPORT.
+//      A fragment is refused as before.
 //   4. The host is a Neon host (*.neon.tech) and the DIRECT one (no "-pooler"): a loopback, private or unrecognised host is refused.
 //   5. The database name carries the word "staging", and neither "test" nor "prod"/"production".
 //   6. --confirm-host equals host:port/database exactly (the operator typed the target).
@@ -38,13 +43,74 @@ export type StagingTargetResolution = ({ ok: true; clientConfig: StagingClientCo
 
 export const describeStagingTarget = (target: ParsedDatabaseTarget): string => `${target.host}:${target.port}/${target.database}`;
 
+/** The port a Neon address without one uses. */
+export const NEON_DEFAULT_PORT = "5432";
+/** The only settings accepted after "?" in STAGING_DATABASE_URL, with their accepted values. */
+const ALLOWED_SETTINGS: Readonly<Record<string, readonly string[]>> = {
+  sslmode: ["require", "verify-full"],
+  channel_binding: ["require", "prefer", "disable"],
+};
+
+/**
+ * Rule 3's two allowances: the standard Neon address (…neon.tech/db?sslmode=require&channel_binding=require, no port) becomes the strict form
+ * postgresql://user[:password]@host:5432/db, which the backfill's strict parser then validates. Every other query setting, a repeated setting, an
+ * unaccepted value or a fragment is refused. Messages name the setting, never a value or a credential.
+ */
+export function normaliseStagingUrl(raw: string): { ok: true; url: string } | { ok: false; reason: string } {
+  if (raw.includes("#")) return { ok: true, url: raw }; // the strict parser refuses it with its own message
+  const q = raw.indexOf("?");
+  let base = raw;
+  if (q >= 0) {
+    base = raw.slice(0, q);
+    const query = raw.slice(q + 1);
+    const seen = new Set<string>();
+    for (const part of query.split("&")) {
+      const eq = part.indexOf("=");
+      let key: string;
+      let value: string;
+      try {
+        key = decodeURIComponent(eq >= 0 ? part.slice(0, eq) : part);
+        value = eq >= 0 ? decodeURIComponent(part.slice(eq + 1)) : "";
+      } catch {
+        return { ok: false, reason: "STAGING_DATABASE_URL has a query string with an invalid percent-encoding." };
+      }
+      const allowed = Object.prototype.hasOwnProperty.call(ALLOWED_SETTINGS, key) ? ALLOWED_SETTINGS[key] : undefined;
+      if (!allowed) {
+        return {
+          ok: false,
+          reason:
+            `STAGING_DATABASE_URL may carry only sslmode (require or verify-full) and channel_binding after "?"; the setting "${key.slice(0, 40)}" is refused, ` +
+            "because the PostgreSQL driver lets URL parameters (for example host= or port=) override the host and port that were validated.",
+        };
+      }
+      if (seen.has(key)) return { ok: false, reason: `STAGING_DATABASE_URL gives the setting "${key}" more than once; refused.` };
+      seen.add(key);
+      if (!allowed.includes(value)) return { ok: false, reason: `STAGING_DATABASE_URL: ${key} must be ${allowed.join(" or ")}; refused.` };
+    }
+  }
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return { ok: true, url: base }; // the strict parser refuses it with its own message
+  }
+  if (url.hostname && !url.port) {
+    url.port = NEON_DEFAULT_PORT;
+    if (url.port !== NEON_DEFAULT_PORT) return { ok: true, url: base }; // could not be set: the strict parser refuses the missing port
+    return { ok: true, url: url.toString() };
+  }
+  return { ok: true, url: base };
+}
+
 export function resolveStagingTarget(input: StagingTargetInput): StagingTargetResolution {
   const fail = (reason: string): StagingTargetResolution => ({ ok: false, reason });
   const raw = input.env.STAGING_DATABASE_URL?.trim();
   if (!raw) return fail("STAGING_DATABASE_URL is not set. The loader never falls back to DATABASE_URL, DIRECT_URL or any other variable: name the staging database explicitly.");
   if (input.env.NODE_ENV === "production") return fail("NODE_ENV is production. The staging loader does not run in a production environment.");
 
-  const strict = parseStrictBackfillUrl(raw);
+  const normalised = normaliseStagingUrl(raw);
+  if (!normalised.ok) return fail(normalised.reason);
+  const strict = parseStrictBackfillUrl(normalised.url);
   if (!strict.ok) return fail(strict.reason.replaceAll("BACKFILL_DATABASE_URL", "STAGING_DATABASE_URL"));
   const target: ParsedDatabaseTarget = { host: strict.host, port: strict.port, database: strict.database };
   const named = describeStagingTarget(target);

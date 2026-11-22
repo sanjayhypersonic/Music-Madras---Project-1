@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildStagingConnectionString, describeStagingTarget, resolveStagingTarget } from "../../modules/seed/stagingTarget";
+import { parseStrictBackfillUrl, resolveBackfillTarget } from "../../modules/backfill/revisionRelationships/backfillTarget";
 
 // Which database the staging content loader may write to. Synthetic hosts and credentials only: no real database is ever named here.
 
@@ -38,10 +39,11 @@ describe("refusals", () => {
   });
 
   it.each([
-    ["a query string", `${STAGING}?sslmode=require`],
+    ["a query string with another setting", `${STAGING}?options=-c%20search_path%3Devil`],
     ["a fragment", `${STAGING}#x`],
-    ["a missing port", `postgresql://u:p@ep-a.us-east-2.aws.neon.tech/music_madras_staging`],
+    ["a fragment after an accepted setting", `${STAGING}?sslmode=require#x`],
     ["no user", `postgresql://ep-a.us-east-2.aws.neon.tech:5432/music_madras_staging`],
+    ["no user and no port", `postgresql://ep-a.us-east-2.aws.neon.tech/music_madras_staging`],
     ["not a URL", "not a url"],
     ["a different scheme", `mysql://u:p@ep-a.us-east-2.aws.neon.tech:5432/music_madras_staging`],
   ])("refuses %s, and says STAGING_DATABASE_URL (not another variable)", (_label, url) => {
@@ -91,13 +93,107 @@ describe("refusals", () => {
       reason(resolve({ url: `postgresql://app_user:${PASSWORD}@ep-quiet-wave-123456-pooler.us-east-2.aws.neon.tech:5432/music_madras_staging`, confirmHost: undefined })),
       reason(resolve({ url: `postgresql://app_user:${PASSWORD}@db.example.com:5432/music_madras_staging` })),
       reason(resolve({ url: `postgresql://app_user:${PASSWORD}@ep-a.us-east-2.aws.neon.tech:5432/music_madras_test` })),
-      reason(resolve({ url: `${STAGING}?sslmode=require` })),
+      reason(resolve({ url: `${STAGING}?host=evil.example` })),
+      reason(resolve({ url: `${STAGING}?sslmode=disable` })),
     ];
     for (const m of messages) {
       expect(m.length).toBeGreaterThan(0);
       expect(m).not.toContain(PASSWORD);
       expect(m).not.toContain("app_user");
       expect(m).not.toContain(STAGING);
+    }
+  });
+});
+
+describe("the standard Neon address (query settings and no port)", () => {
+  const NO_PORT = `postgresql://app_user:${PASSWORD}@ep-quiet-wave-123456.us-east-2.aws.neon.tech/music_madras_staging`;
+
+  it.each([
+    ["sslmode=require", `${STAGING}?sslmode=require`],
+    ["sslmode=verify-full", `${STAGING}?sslmode=verify-full`],
+    ["channel_binding=require", `${STAGING}?channel_binding=require`],
+    ["both, as Neon's console gives them", `${STAGING}?sslmode=require&channel_binding=require`],
+    ["both, in the other order", `${STAGING}?channel_binding=prefer&sslmode=require`],
+  ])("accepts %s and validates the same target", (_label, url) => {
+    const r = resolve({ url });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(describeStagingTarget(r)).toBe(CONFIRM);
+      expect(r.clientConfig).toEqual({ host: "ep-quiet-wave-123456.us-east-2.aws.neon.tech", port: 5432, database: "music_madras_staging", user: "app_user", password: PASSWORD });
+    }
+  });
+
+  it("drops the accepted settings: the connection handed to the client is built from the validated fields with its own sslmode=require", () => {
+    const r = resolve({ url: `${NO_PORT}?sslmode=verify-full&channel_binding=require` });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(buildStagingConnectionString(r.clientConfig)).toBe(`postgresql://app_user:${PASSWORD}@ep-quiet-wave-123456.us-east-2.aws.neon.tech:5432/music_madras_staging?sslmode=require`);
+  });
+
+  it("treats a missing port as 5432, so --confirm-host names :5432", () => {
+    for (const url of [NO_PORT, `${NO_PORT}?sslmode=require&channel_binding=require`]) {
+      const r = resolve({ url });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.port).toBe("5432");
+      expect(reason(resolve({ url, confirmHost: undefined }))).toMatch(/--confirm-host ep-quiet-wave-123456\.us-east-2\.aws\.neon\.tech:5432\/music_madras_staging/);
+    }
+    // An explicit port other than 5432 is kept as it is (and must be confirmed as it is).
+    expect(reason(resolve({ url: STAGING.replace(":5432/", ":6543/") }))).toMatch(/does not match/);
+  });
+
+  it.each([
+    ["host=", "host=evil.example"],
+    ["port=", "port=6543"],
+    ["host= next to an accepted setting", "sslmode=require&host=evil.example"],
+    ["port= next to accepted settings", "sslmode=require&channel_binding=require&port=6543"],
+    ["an encoded host=", "sslmode=require&%68ost=evil.example"],
+    ["dbname=", "dbname=music_madras_production"],
+    ["user=", "user=postgres"],
+    ["options=", "options=-c%20default_transaction_read_only%3Doff"],
+    ["sslrootcert=", "sslmode=require&sslrootcert=/tmp/x"],
+    ["a setting in capitals", "SSLMODE=require"],
+    ["an empty setting", "sslmode=require&"],
+    ["a bare question mark", ""],
+  ])("refuses %s", (_label, query) => {
+    for (const base of [STAGING, NO_PORT]) {
+      const r = resolve({ url: `${base}?${query}` });
+      expect(r.ok).toBe(false);
+      expect(reason(r)).toMatch(/STAGING_DATABASE_URL may carry only sslmode/);
+      expect(reason(r)).not.toContain(PASSWORD);
+    }
+  });
+
+  it.each([
+    ["sslmode=disable", "sslmode=disable", /sslmode must be require or verify-full/],
+    ["sslmode=prefer", "sslmode=prefer", /sslmode must be require or verify-full/],
+    ["sslmode with no value", "sslmode", /sslmode must be require or verify-full/],
+    ["channel_binding=maybe", "channel_binding=maybe", /channel_binding must be require or prefer or disable/],
+    ["sslmode given twice", "sslmode=require&sslmode=require", /more than once/],
+  ])("refuses %s", (_label, query, message) => {
+    expect(reason(resolve({ url: `${STAGING}?${query}` }))).toMatch(message);
+  });
+
+  it("still refuses a pooled endpoint and a non-staging database given in the standard form", () => {
+    expect(reason(resolve({ url: "postgresql://u:p@ep-quiet-wave-123456-pooler.us-east-2.aws.neon.tech/music_madras_staging?sslmode=require&channel_binding=require" }))).toMatch(/pooled endpoint/);
+    expect(resolve({ url: "postgresql://u:p@ep-a.us-east-2.aws.neon.tech/neondb?sslmode=require", confirmHost: "ep-a.us-east-2.aws.neon.tech:5432/neondb" }).ok).toBe(false);
+  });
+});
+
+describe("the backfill's guard stays strict (the allowances are the staging check's only)", () => {
+  it.each([
+    ["sslmode=require", "postgresql://postgres@127.0.0.1:54329/music_madras_test?sslmode=require"],
+    ["channel_binding=require", "postgresql://postgres@127.0.0.1:54329/music_madras_test?channel_binding=require"],
+    ["a missing port", "postgresql://postgres@127.0.0.1/music_madras_test"],
+  ])("parseStrictBackfillUrl still refuses %s", (_label, url) => {
+    const r = parseStrictBackfillUrl(url);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/BACKFILL_DATABASE_URL/);
+  });
+
+  it("resolveBackfillTarget still refuses a query string and a missing port", () => {
+    for (const url of ["postgresql://postgres@127.0.0.1:54329/music_madras_test?sslmode=require", "postgresql://postgres@127.0.0.1/music_madras_test"]) {
+      const r = resolveBackfillTarget({ env: { BACKFILL_DATABASE_URL: url }, realUrls: [] });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toMatch(/query string or fragment is refused|must give the port explicitly/);
     }
   });
 });
