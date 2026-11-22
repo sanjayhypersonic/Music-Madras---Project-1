@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ApprovedFact, VideoFacts } from "../../modules/jobs/videoCreditsApproved";
 import { planVideo, describePlan, type VideoCreatePlan } from "../../modules/jobs/videoCreditsCreate";
-import { executeCreditsPlans, type ExecuteDeps } from "../../modules/jobs/videoCreditsCreateExecute";
+import { executeCreditsPlans, existingDraftSkipReason, type ExecuteDeps } from "../../modules/jobs/videoCreditsCreateExecute";
 import { changeComposerOrder, composerWorks, orderContributors, orderWorkComposers, workJsonLd } from "../../modules/mmke/workPage/workCredits";
 import { matchPerson, type PersonAlias } from "../../modules/mmke/people/personMatch";
 import { assemblePersonPageParts } from "../../modules/mmke/people/personPage";
@@ -403,6 +403,69 @@ describe("a rerun on a Recording whose Performance already exists", () => {
     expect(steps.find((s) => s.entity === "Conductor")).toMatchObject({ outcome: "REPORTED", name: "Finley Abraham", detail: expect.stringMatching(/not created/) });
     expect(cat.conductors).toHaveLength(0);
     expect(cat.artists).toHaveLength(0);
+  });
+});
+
+describe("R-34: a Studio Pipeline approval over a Recording draft the credits tool already made", () => {
+  const IMPORT_ACTOR = "import-actor";
+  const APPROVER = "editor-approver";
+  const OTHER_EDITOR = "editor-other";
+
+  // The Recording exists as the credits tool left it (title, no works yet, no Performance); its draft was last changed by `lastEditor`.
+  async function approveOver(lastEditor: string) {
+    const cat = new FakeCatalogue();
+    const recordingId = "recording-existing";
+    cat.recordings.set(recordingId, { id: recordingId, slug: "fake-lullaby", title: "Fake Lullaby", workIds: [], performanceId: null });
+    const base = cat.deps() as unknown as { getCreditsDraftState: (id: string) => Promise<Record<string, unknown>> };
+    const { steps } = await executeCreditsPlans(
+      [planVideo(lullaby)],
+      {
+        ...cat.deps(),
+        findImportActorId: async () => IMPORT_ACTOR,
+        findRecordingLinkedToYouTubeVideo: async () => ({ recordingId, slug: "fake-lullaby" }),
+        getCreditsDraftState: async (id: string) => ({ ...(await base.getCreditsDraftState(id)), revisionUpdatedById: lastEditor }),
+      } as unknown as Partial<ExecuteDeps>,
+      undefined,
+      { actorId: APPROVER }
+    );
+    return { cat, steps, recording: cat.recordings.get(recordingId)! };
+  }
+
+  it("does not skip a draft last changed by the import account: its empty slots are filled", async () => {
+    const { steps, recording } = await approveOver(IMPORT_ACTOR);
+    expect(steps.find((s) => s.entity === "Recording")).toMatchObject({ outcome: "EXISTING", name: "fake-lullaby" });
+    expect(steps.some((s) => s.outcome === "SKIPPED")).toBe(false);
+    expect(steps.find((s) => s.entity === "RecordingRevision.works")).toMatchObject({ outcome: "FILLED" });
+    expect(recording.workIds).toHaveLength(1);
+    expect(recording.performanceId).not.toBeNull();
+  });
+
+  it("does not skip a draft last changed by the approving editor", async () => {
+    const { steps, recording } = await approveOver(APPROVER);
+    expect(steps.find((s) => s.entity === "Recording")).toMatchObject({ outcome: "EXISTING" });
+    expect(steps.some((s) => s.outcome === "SKIPPED")).toBe(false);
+    expect(recording.workIds).toHaveLength(1);
+  });
+
+  it("skips a draft another editor changed, with the note, and changes nothing on it", async () => {
+    const { steps, recording } = await approveOver(OTHER_EDITOR);
+    expect(steps.find((s) => s.entity === "Recording")).toEqual({ youtubeVideoId: LULLABY, entity: "Recording", outcome: "SKIPPED", name: "fake-lullaby", detail: "another editor has changed its draft; left untouched" });
+    expect(steps.some((s) => s.entity.startsWith("RecordingRevision") || s.entity === "Performance")).toBe(false);
+    expect(recording).toMatchObject({ workIds: [], performanceId: null });
+  });
+
+  it("the rule itself: the note names another editor only when one really changed the draft", () => {
+    const state = { recordingId: "r", status: "DRAFT", revisionId: "rev", revisionUpdatedAt: new Date(0), revisionUpdatedById: IMPORT_ACTOR, title: "t", performanceId: null, workIds: [] };
+    const writers = { actorId: APPROVER, importActorId: IMPORT_ACTOR };
+    expect(existingDraftSkipReason(state, writers)).toBeNull();
+    expect(existingDraftSkipReason({ ...state, revisionUpdatedById: APPROVER }, writers)).toBeNull();
+    expect(existingDraftSkipReason({ ...state, revisionUpdatedById: OTHER_EDITOR }, writers)).toBe("another editor has changed its draft");
+    // No import account on this database: only the approving editor's own drafts count as untouched.
+    expect(existingDraftSkipReason(state, { actorId: APPROVER, importActorId: null })).toBe("another editor has changed its draft");
+    // Not a draft any more, or no open draft: that reason, never "another editor".
+    expect(existingDraftSkipReason({ ...state, status: "PUBLISHED" }, writers)).toBe("it is PUBLISHED or has no open draft");
+    expect(existingDraftSkipReason({ ...state, revisionId: null }, writers)).toBe("it is DRAFT or has no open draft");
+    expect(existingDraftSkipReason(null, writers)).toBe("it is missing or has no open draft");
   });
 });
 

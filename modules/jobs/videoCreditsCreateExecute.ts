@@ -12,8 +12,8 @@ import { addProgrammeItem, createProgramme } from "../db/repositories/programmeR
 import { addChoirToPerformance, addConductorToPerformance, addPerformerToPerformance } from "../db/repositories/performanceRepository";
 import { createRecordingFromYouTubeVideo, findRecordingLinkedToYouTubeVideo } from "../db/repositories/recordingIntakeRepository";
 import { attachWorkToRevision, createPerformanceForDraft, editDraftPerformanceParticipants, updateDraftRevisionContent } from "../db/repositories/recordingRepository";
-import { ensureImportActor, findMirroredVideoStates } from "../db/repositories/stagingSeedRepository";
-import { findReusableImportProgramme, getCreditsDraftState, isSlugTaken, type SluggedEntity } from "../db/repositories/creditsCreateRepository";
+import { ensureImportActor, findImportActorId, findMirroredVideoStates } from "../db/repositories/stagingSeedRepository";
+import { findReusableImportProgramme, getCreditsDraftState, isSlugTaken, type CreditsDraftState, type SluggedEntity } from "../db/repositories/creditsCreateRepository";
 import type { VideoCreatePlan } from "./videoCreditsCreate";
 
 // Credits pipeline, Phase B2: CARRY OUT reviewed plans (modules/jobs/videoCreditsCreate.ts) against the database the application's client is already
@@ -22,8 +22,8 @@ import type { VideoCreatePlan } from "./videoCreditsCreate";
 //
 // Rules, for every READY video in turn:
 //   - the video must be in the database, public and OBSERVED (stored state, never the sheet's claim); otherwise the video is skipped;
-//   - an existing linked Recording is touched only while it is DRAFT with an open draft LAST CHANGED BY THE IMPORT ACTOR: once an editor has saved
-//     anything, the Recording is left exactly as it is;
+//   - an existing linked Recording is touched only while it is DRAFT with an open draft LAST CHANGED BY THE IMPORT ACTOR or by the actor of this
+//     run (R-34: the approving editor in the Studio Pipeline): once any other editor has saved anything, the Recording is left exactly as it is;
 //   - catalogue records are matched by exact normalised name (title for a work, within its composer) and created only when absent, with slugs from
 //     the canonical slug rule; an existing record is never modified (a differing venue type or missing alternate title is reported, not changed);
 //   - only EMPTY draft slots are filled: title, works (in plan order), performance; participants are added only to a Performance created in this
@@ -51,6 +51,7 @@ export interface ExecuteStep {
 export interface ExecuteDeps {
   findMirroredVideoStates: typeof findMirroredVideoStates;
   ensureImportActor: typeof ensureImportActor;
+  findImportActorId: typeof findImportActorId;
   listActiveComposers: typeof listActiveComposers;
   createComposer: typeof createComposer;
   listMusicalWorksByComposer: typeof listMusicalWorksByComposer;
@@ -88,6 +89,7 @@ export interface ExecuteDeps {
 export const defaultExecuteDeps: ExecuteDeps = {
   findMirroredVideoStates,
   ensureImportActor,
+  findImportActorId,
   listActiveComposers,
   createComposer,
   listMusicalWorksByComposer,
@@ -127,6 +129,19 @@ export interface ExecuteReport {
   steps: ExecuteStep[];
 }
 
+/**
+ * Why an existing linked Recording must be left untouched, or null when this run may fill its empty slots. Its open draft counts as untouched
+ * while it was last changed by the import actor (the tool's own earlier run) or by the actor of this run (R-34: the approving editor, re-running
+ * over a draft they already approved into); any other last editor means someone has worked on it.
+ */
+export function existingDraftSkipReason(state: CreditsDraftState | null, writers: { actorId: string; importActorId: string | null }): string | null {
+  if (!state || state.status !== "DRAFT" || !state.revisionId) return `it is ${state?.status ?? "missing"} or has no open draft`;
+  const lastEditor = state.revisionUpdatedById;
+  if (lastEditor === null) return "its open draft has no recorded last editor";
+  if (lastEditor === writers.actorId || (writers.importActorId !== null && lastEditor === writers.importActorId)) return null;
+  return "another editor has changed its draft";
+}
+
 export async function executeCreditsPlans(
   plans: readonly VideoCreatePlan[],
   overrides: Partial<ExecuteDeps> = {},
@@ -144,7 +159,9 @@ export async function executeCreditsPlans(
   const states = await d.findMirroredVideoStates(ready.map((p) => p.youtubeVideoId));
   const actor = options.actorId ? { id: options.actorId, created: false } : await d.ensureImportActor();
   const actorId = actor.id;
-  const slug = (entity: SluggedEntity, title: string, fallback: string, extra: { transliteration?: string | null; year?: string | null } = {}) =>
+  // Run as the import actor, it is the actor; run as an approving editor, look it up (read only, never created here).
+  const importActorId = options.actorId ? await d.findImportActorId() : actorId;
+  const slug =(entity: SluggedEntity, title: string, fallback: string, extra: { transliteration?: string | null; year?: string | null } = {}) =>
     resolveCanonicalSlug({ title, fallback, ...extra }, (candidate) => d.isSlugTaken(entity, candidate));
 
   /** Exact normalised match among `existing`, else create. */
@@ -199,11 +216,10 @@ export async function executeCreditsPlans(
       continue;
     }
 
-    // An existing Recording an editor has worked on is never touched (checked before anything is created for it).
+    // An existing Recording another editor has worked on is never touched (checked before anything is created for it).
     const linkedBefore = await d.findRecordingLinkedToYouTubeVideo(stored.id);
     if (linkedBefore) {
-      const state = await d.getCreditsDraftState(linkedBefore.recordingId);
-      const why = !state || state.status !== "DRAFT" || !state.revisionId ? `it is ${state?.status ?? "missing"} or has no open draft` : state.revisionUpdatedById !== actorId ? "an editor has changed its draft" : null;
+      const why = existingDraftSkipReason(await d.getCreditsDraftState(linkedBefore.recordingId), { actorId, importActorId });
       if (why) {
         record({ youtubeVideoId: vid, entity: "Recording", outcome: "SKIPPED", name: linkedBefore.slug, detail: `${why}; left untouched` });
         continue;

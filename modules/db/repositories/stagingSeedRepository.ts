@@ -112,6 +112,12 @@ export async function findMirroredVideoStates(youtubeVideoIds: string[]): Promis
 }
 
 /** The non-login author of imported rows. Created once; an existing user with the address is returned untouched. */
+/** The import actor's id when it exists, else null. Read only: never creates it (the Studio Pipeline approval uses this to recognise the tool's own drafts). */
+export async function findImportActorId(): Promise<string | null> {
+  const existing = await prisma.studioUser.findUnique({ where: { email: IMPORT_ACTOR_EMAIL }, select: { id: true } });
+  return existing?.id ?? null;
+}
+
 export async function ensureImportActor(): Promise<{ id: string; created: boolean }> {
   const existing = await prisma.studioUser.findUnique({ where: { email: IMPORT_ACTOR_EMAIL }, select: { id: true } });
   if (existing) return { id: existing.id, created: false };
