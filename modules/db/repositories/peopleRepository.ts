@@ -3,6 +3,7 @@ import { writeAuditLog } from "../../audit/writeAuditLog";
 import { findExactNormalizedDuplicate } from "../../mmke/duplicate-detection/detectDuplicateName";
 import { resolveCanonicalSlug } from "../../mmke/slug/canonicalSlug";
 import { matchPerson } from "../../mmke/people/personMatch";
+import { isNonPersonName } from "../../mmke/people/personNames";
 import type { Ensemble, Person, Prisma, WorkContributorRole } from "@prisma/client";
 
 // R-34: Person (one public page per human across roles) and Ensemble (orchestras and instrumental groups), with the same rules as every other
@@ -16,6 +17,8 @@ type Client = Prisma.TransactionClient | typeof prisma;
  * alias's canonical spelling when an alias matched). Rules: modules/mmke/people/personMatch.ts.
  */
 export async function ensurePerson(name: string, actorId: string, client: Client = prisma): Promise<{ person: Person; created: boolean }> {
+  // R-38: never a Person for "Traditional", "Anonymous", "Unknown" or "Various" (callers check first; this is the last guard).
+  if (isNonPersonName(name)) throw new Error(`"${name}" is not a person's name; no Person is created for it.`);
   const [existing, aliases] = await Promise.all([client.person.findMany({ where: { archivedAt: null } }), client.entityAlias.findMany({ where: { entityKind: "PERSON" }, select: { aliasKey: true, canonicalName: true } })]);
   const match = matchPerson(name, existing, aliases);
   if (match.kind !== "new") return { person: match.person, created: false };
@@ -67,6 +70,8 @@ export async function linkRoleToPerson(
   client: Client = prisma
 ): Promise<{ personId: string | null; personCreated: boolean; linked: boolean }> {
   if (record.personId) return { personId: record.personId, personCreated: false, linked: false };
+  // R-38: a Composer, Conductor or Artist named "Traditional", "Anonymous", "Unknown" or "Various" is kept, but never linked to a Person.
+  if (isNonPersonName(record.name)) return { personId: null, personCreated: false, linked: false };
   const { person, created } = await ensurePerson(record.name, actorId, client);
   const linked = await linkPersonIfUnset(kind, record.id, person.id, actorId, client);
   return { personId: linked ? person.id : null, personCreated: created, linked };

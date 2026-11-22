@@ -405,3 +405,47 @@ describe("a rerun on a Recording whose Performance already exists", () => {
     expect(cat.artists).toHaveLength(0);
   });
 });
+
+describe("R-38: no Person for a translated title or for Traditional / Anonymous / Unknown / Various", () => {
+  const HYMN = "fakeHymn001";
+  const hymn = video(HYMN, "A Fake Hymn | Fake Choir", [
+    fact(HYMN, "work", "A Fake Hymn"),
+    fact(HYMN, "composer", "Traditional", { workTitle: "A Fake Hymn" }),
+    fact(HYMN, "lyricist", "Anonymous", { workTitle: "A Fake Hymn", roleLabel: "LYRICIST" }),
+    fact(HYMN, "other unmodelled", "Gerry Translator", { workTitle: "A Fake Hymn", roleLabel: "UNMODELLED Translator" }),
+    fact(HYMN, "other unmodelled", "Praise the Fake Lord", { workTitle: "A Fake Hymn", roleLabel: "UNMODELLED Translation" }),
+    fact(HYMN, "conductor", "Unknown"),
+    fact(HYMN, "venue", "Fake Chapel"),
+    fact(HYMN, "venueType", "CHURCH", { venueTypeBasis: "inferred from name (editor-accepted)" }),
+  ]);
+
+  it("the planner keeps a translated title and a non-person contributor in the sidecar, and marks a Traditional composer as no person page", () => {
+    const plan = planVideo(hymn);
+    expect(plan.works[0].composers.map((c) => c.name)).toEqual(["Traditional"]);
+    expect(plan.works[0].contributors.map((c) => `${c.role}:${c.name}`)).toEqual(["TRANSLATOR:Gerry Translator"]);
+    expect(plan.sidecar.map((s) => `${s.label}:${s.name}`).sort()).toEqual(["LYRICIST:Anonymous", "TRANSLATION:Praise the Fake Lord"]);
+    expect(plan.sidecar.find((s) => s.name === "Praise the Fake Lord")?.reason).toMatch(/translated title, not a person/);
+    expect(describePlan(plan).join("\n")).toContain("Composer: Traditional [2 stated in description]  (find by exact normalised name, else create; not a person's name: no person page)");
+  });
+
+  it("the executor creates the Traditional composer and the Unknown conductor but never a Person for them; the real translator gets one", async () => {
+    const cat = new FakeCatalogue();
+    await executeCreditsPlans([planVideo(hymn)], cat.deps());
+    expect(cat.composers.map((c) => [c.name, c.personId])).toEqual([["Traditional", null]]);
+    expect(cat.conductors.map((c) => [c.name, c.personId])).toEqual([["Unknown", null]]);
+    expect(cat.persons.map((p) => p.name)).toEqual(["Gerry Translator"]);
+    expect(cat.contributors.map((c) => c.role)).toEqual(["TRANSLATOR"]);
+  });
+
+  it("the rerun path for an existing Performance links nobody named Unknown either", async () => {
+    const cat = new FakeCatalogue();
+    cat.conductors.push({ id: "conductor-unknown", slug: "unknown", name: "Unknown", personId: null, archivedAt: null });
+    const recordingId = "recording-existing";
+    cat.recordings.set(recordingId, { id: recordingId, slug: "a-fake-hymn", title: "A Fake Hymn", workIds: ["work-x"], performanceId: "performance-existing" });
+    const { steps } = await executeCreditsPlans([planVideo(hymn)], { ...cat.deps(), findRecordingLinkedToYouTubeVideo: async () => ({ recordingId, slug: "a-fake-hymn" }) } as unknown as Partial<ExecuteDeps>);
+    expect(steps.find((s) => s.entity === "Conductor")).toMatchObject({ outcome: "EXISTING", name: "Unknown" });
+    expect(steps.some((s) => s.entity === "Conductor.person" || s.entity === "Composer.person")).toBe(false);
+    expect(cat.conductors[0].personId).toBeNull();
+    expect(cat.persons.map((p) => p.name)).toEqual(["Gerry Translator"]);
+  });
+});

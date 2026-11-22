@@ -3,6 +3,7 @@ import { resolveCanonicalSlug } from "../mmke/slug/canonicalSlug";
 import { createComposer, listActiveComposers } from "../db/repositories/composerRepository";
 import { createMusicalWork, listMusicalWorkComposerIds, listMusicalWorksByComposer } from "../db/repositories/musicalWorkRepository";
 import { addEnsembleToPerformance, addWorkContributor, ensureEnsemble, ensurePerson, linkRoleToPerson } from "../db/repositories/peopleRepository";
+import { isNonPersonName } from "../mmke/people/personNames";
 import { createChoir, listActiveChoirs } from "../db/repositories/choirRepository";
 import { createConductor, listActiveConductors } from "../db/repositories/conductorRepository";
 import { createArtist, listActiveArtists } from "../db/repositories/artistRepository";
@@ -170,6 +171,8 @@ export async function executeCreditsPlans(
 
   /** R-36: one human, one person page: links a role record (created or found) to its Person when it has none. */
   async function linkPerson(vid: string, kind: "COMPOSER" | "CONDUCTOR" | "ARTIST", role: { id: string; name: string; personId?: string | null }) {
+    // R-38: "Traditional", "Anonymous", "Unknown" and "Various" never get a Person (the role record itself is kept as it is).
+    if (isNonPersonName(role.name)) return;
     const link = await d.linkRoleToPerson(kind, { id: role.id, name: role.name, personId: role.personId ?? null }, actorId);
     if (link.linked) record({ youtubeVideoId: vid, entity: `${kind === "COMPOSER" ? "Composer" : kind === "CONDUCTOR" ? "Conductor" : "Artist"}.person`, outcome: "FILLED", name: role.name, detail: link.personCreated ? "new person page" : "existing person page" });
   }
@@ -235,6 +238,7 @@ export async function executeCreditsPlans(
       }
       // R-36: lyricists, arrangers and translators: a Person each, linked to the work (additive and idempotent).
       for (const c of w.contributors) {
+        if (isNonPersonName(c.name)) continue; // R-38: the planner already keeps these in the sidecar; never a Person
         const { person, created } = await d.ensurePerson(c.name, actorId);
         record({ youtubeVideoId: vid, entity: "Person", outcome: created ? "CREATED" : "EXISTING", name: person.name, basis: c.basis });
         const linked = await d.addWorkContributor({ musicalWorkId: work.id, personId: person.id, role: c.role, actorId });

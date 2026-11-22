@@ -20,6 +20,7 @@
 //     with their basis and quote, never into a field that would distort them.
 
 import { canonicalSlugBase, hasNonLatinScript, type CanonicalSlugInput } from "../mmke/slug/canonicalSlug";
+import { isNonPersonName, isTranslatedTitleLabel, isTranslatorLabel } from "../mmke/people/personNames";
 import { looseNameKey, roleLabelLine, roleOf, type ApprovedFact, type CatalogueVenueType, type RefusedRow, type VideoFacts } from "./videoCreditsApproved";
 
 export interface PlannedName {
@@ -139,9 +140,15 @@ export function planVideo(v: VideoFacts): VideoCreatePlan {
   const contributorFacts: Array<{ fact: ApprovedFact; role: PlannedContributorRole }> = [
     ...of("lyricist").map((fact) => ({ fact, role: "LYRICIST" as const })),
     ...of("arranger").map((fact) => ({ fact, role: "ARRANGER" as const })),
-    ...of("other unmodelled").filter((f) => /^TRANSLAT/.test(roleOf(f.roleLabel))).map((fact) => ({ fact, role: "TRANSLATOR" as const })),
+    // R-38: only a "Translator" or "Translated by" label is a translator (a person); "Translation" and the like carry a translated title.
+    ...of("other unmodelled").filter((f) => isTranslatorLabel(roleOf(f.roleLabel))).map((fact) => ({ fact, role: "TRANSLATOR" as const })),
   ];
   for (const { fact, role } of contributorFacts) {
+    // R-38: "Traditional", "Anonymous", "Unknown" and "Various" are not people: no Person, no contributor link.
+    if (isNonPersonName(fact.name)) {
+      plan.sidecar.push(sidecarOf(fact, `"${fact.name}" is not a person's name: no person page and no ${role.toLowerCase()} link.`));
+      continue;
+    }
     const workIndex = fact.workTitle ? works.findIndex((w) => same(fact.workTitle, w.name) || same(fact.workTitle, w.proposedName)) : works.length === 1 ? 0 : -1;
     const planned = workIndex >= 0 ? plan.works.find((pw) => pw.sheetRow === works[workIndex].sheetRow) : undefined;
     if (!planned) {
@@ -190,7 +197,12 @@ export function planVideo(v: VideoFacts): VideoCreatePlan {
     if (plan.performance) plan.performers.push({ name: f.name, basis: f.basis, sheetRow: f.sheetRow, role: roleLabelLine(f.roleLabel) });
     else plan.sidecar.push(sidecarOf(f, "No Performance to attach the performer to (no Venue)."));
   }
-  for (const kind of ["presenter", "institution", "other unmodelled"] as const) for (const f of of(kind)) if (!(kind === "other unmodelled" && /^TRANSLAT/.test(roleOf(f.roleLabel)))) plan.sidecar.push(sidecarOf(f, UNMODELLED_REASON[kind]));
+  for (const kind of ["presenter", "institution", "other unmodelled"] as const)
+    for (const f of of(kind)) {
+      if (kind === "other unmodelled" && isTranslatorLabel(roleOf(f.roleLabel))) continue; // planned as a translator above
+      if (kind === "other unmodelled" && isTranslatedTitleLabel(roleOf(f.roleLabel))) plan.sidecar.push(sidecarOf(f, "A translated title, not a person: no catalogue field (an editor may add it to the work's alternate titles)."));
+      else plan.sidecar.push(sidecarOf(f, UNMODELLED_REASON[kind]));
+    }
   if (v.transliteration && translit && recordingTitle && hasNonLatinScript(recordingTitle)) {
     plan.sidecar.push({ youtubeVideoId: v.youtubeVideoId, kind: "transliteration", label: "TRANSLITERATION", name: translit, workTitle: recordingTitle, quote: "", basis: "", reason: "Kept as the work's alternate title; MusicalWork.alternateTitles cannot mark it as the transliteration, and a Recording has no alternate titles." });
   }
@@ -259,7 +271,7 @@ export function describePlan(plan: VideoCreatePlan): string[] {
   if (plan.recording) lines.push(`    Recording (DRAFT): title "${plan.recording.title ?? "(left empty)"}" [${plan.recording.titleBasis}], slug ${plan.recording.plannedSlug} (year then a number if taken)`);
   plan.works.forEach((w, i) => {
     lines.push(`    Work ${i + 1}: "${w.title}" [${w.basis}]${w.alternateTitles.length ? `, alternate titles: ${w.alternateTitles.map((a) => `"${a}"`).join(", ")}` : ""}`);
-    w.composers.forEach((c, j) => lines.push(`      ${j === 0 ? "Composer" : `Co-composer ${j + 1}`}: ${c.name} [${c.basis}]  (find by exact normalised name, else create; linked to its person)`));
+    w.composers.forEach((c, j) => lines.push(`      ${j === 0 ? "Composer" : `Co-composer ${j + 1}`}: ${c.name} [${c.basis}]  (find by exact normalised name, else create; ${isNonPersonName(c.name) ? "not a person's name: no person page" : "linked to its person"})`));
     for (const c of w.contributors) lines.push(`      ${c.role === "LYRICIST" ? "Lyricist" : c.role === "ARRANGER" ? "Arranger" : "Translator"}: ${c.name} [${c.basis}]  (person: exact name or approved alias, else create)`);
   });
   if (plan.programme) lines.push(`    Programme (schema container): "${plan.programme.title}" holding ${plan.works.length} work(s)`);
